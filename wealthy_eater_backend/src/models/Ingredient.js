@@ -26,7 +26,9 @@ const IngredientSchema = new mongoose.Schema({
   carbs: { 
     type: Number, 
     default: 0 
-  }
+  }, 
+  description: { type: String },
+  unit: { type: String, required: true },
 });
 
 module.exports = mongoose.model('Ingredient', IngredientSchema);
