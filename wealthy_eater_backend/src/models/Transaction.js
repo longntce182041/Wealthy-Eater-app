@@ -9,7 +9,7 @@ const TransactionSchema = new mongoose.Schema({
     type: String, 
     ref: 'ConsultationContract', 
     required: true 
-}, // Đã chuẩn hóa chính tả "consultation"
+}, 
   payos_order_code: { 
     type: String, 
     required: true 

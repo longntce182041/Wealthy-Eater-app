@@ -5,12 +5,12 @@ const MealPlanItemSchema = new mongoose.Schema({
     type: String, 
     default: () => new mongoose.Types.ObjectId().toString() 
   },
-  meal_plan_id_fk: { 
+  meal_plan_id: { 
     type: String, 
     ref: 'MealPlan', 
     required: true 
   },
-  recipe_id_fk: { 
+  recipe_id: { 
     type: String, 
     ref: 'Recipe', 
     required: true 

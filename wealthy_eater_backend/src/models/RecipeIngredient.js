@@ -5,10 +5,10 @@ const RecipeIngredientSchema = new mongoose.Schema({
     type: String, 
     default: () => new mongoose.Types.ObjectId().toString() 
   },
-  recipe_id_fk: { 
+  recipe_id: { 
     type: String, ref: 'Recipe', required: true 
   },
-  ingredient_id_fk: { 
+  ingredient_id: { 
     type: String, ref: 'Ingredient', required: true 
   },
   base_quantity: { 

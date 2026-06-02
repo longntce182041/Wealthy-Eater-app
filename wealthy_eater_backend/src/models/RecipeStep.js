@@ -5,7 +5,7 @@ const RecipeStepSchema = new mongoose.Schema({
     type: String, 
     default: () => new mongoose.Types.ObjectId().toString() 
   },
-  recipe_id_fk: { 
+  recipe_id: { 
     type: String, ref: 'Recipe', required: true 
   },
   step_number: { 

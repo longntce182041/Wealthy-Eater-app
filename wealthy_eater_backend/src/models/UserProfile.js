@@ -5,7 +5,7 @@ const UserProfileSchema = new mongoose.Schema({
     type: String, 
     default: () => new mongoose.Types.ObjectId().toString() 
   },
-  user_id_fk: { 
+  user_id: { 
     type: String, 
     ref: 'User', 
     required: true 
