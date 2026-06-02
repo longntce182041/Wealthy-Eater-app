@@ -5,7 +5,7 @@ const UserDietarySchema = new mongoose.Schema({
     type: String, 
     default: () => new mongoose.Types.ObjectId().toString() 
   },
-  user_id_fk: { 
+  user_id: { 
     type: String, 
     ref: 'User', 
     required: true 
@@ -15,7 +15,7 @@ const UserDietarySchema = new mongoose.Schema({
     ref: 'MedicalCondition' 
   },
   allergies: [{ type: String }],
-  dislike_ingredients: [{ type: String }], // Khớp với dislike_increadients trong ERD
+  dislike_ingredients: [{ type: String }], 
   cooking_skill_level: { 
     type: String 
   },

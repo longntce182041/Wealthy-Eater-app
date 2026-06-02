@@ -4,13 +4,13 @@ const ShoppingListSchema = new mongoose.Schema({
   _id: { 
     type: String, 
     default: () => new mongoose.Types.ObjectId().toString() 
-  }, // Khớp với shopping_list_id_pk
-  user_id_fk: { 
+  }, 
+  user_id: { 
     type: String, 
     ref: 'User', 
     required: true 
 },
-  ingredient_id_fk: { 
+  ingredient_id: { 
     type: String, 
     ref: 'Ingredient', 
     required: true 
@@ -19,7 +19,7 @@ const ShoppingListSchema = new mongoose.Schema({
     type: String, 
     required: true 
 },
-  recipe_id_fk: { 
+  recipe_id: { 
     type: String, 
     ref: 'Recipe', 
     required: true 

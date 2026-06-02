@@ -5,10 +5,10 @@ const RecipeMicronutrientValueSchema = new mongoose.Schema({
     type: String, 
     default: () => new mongoose.Types.ObjectId().toString() 
   },
-  recipe_id_fk: { 
+  recipe_id: { 
     type: String, ref: 'Recipe', required: true 
   },
-  micronutrient_id_fk: { 
+  micronutrient_id: { 
     type: String, ref: 'Micronutrient', required: true 
   },
   amount: { 

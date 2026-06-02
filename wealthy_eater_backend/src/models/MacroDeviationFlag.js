@@ -5,12 +5,12 @@ const MacroDeviationFlagSchema = new mongoose.Schema({
     type: String, 
     default: () => new mongoose.Types.ObjectId().toString() 
   },
-  customer_meal_log_fk: { 
+  customer_meal_log: { 
     type: String, 
     ref: 'CustomerMealLog', 
     required: true
    },
-  contract_id_fk: { 
+  contract_id: { 
     type: String, 
     ref: 'ConsultationContract', 
     required: true 

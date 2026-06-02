@@ -5,10 +5,10 @@ const RecipeReviewSchema = new mongoose.Schema({
     type: String, 
     default: () => new mongoose.Types.ObjectId().toString() 
   },
-  user_id_fk: { 
+  user_id: { 
     type: String, ref: 'User', required: true 
   },
-  recipe_id_fk: { 
+  recipe_id: { 
     type: String, ref: 'Recipe', required: true 
   },
   rating: { 
