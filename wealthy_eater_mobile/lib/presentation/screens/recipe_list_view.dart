@@ -53,42 +53,21 @@ class _RecipeListViewState extends State<RecipeListView> {
                     TextField(
                       controller: _searchController,
                       onChanged: provider.updateSearch,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        hintText: 'Search recipes, ingredients, or descriptions',
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.tune),
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => _RecipeFilterBottomSheet(provider: provider),
+                            );
+                          },
+                        ),
+                        hintText: 'Search recipes...',
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        _FilterChip(
-                          label: 'All status',
-                          selected: provider.selectedStatus.isEmpty,
-                          onSelected: () => provider.updateStatusFilter(''),
-                        ),
-                        _FilterChip(
-                          label: 'Published',
-                          selected: provider.selectedStatus.toLowerCase() == 'published',
-                          onSelected: () => provider.updateStatusFilter('Published'),
-                        ),
-                        _FilterChip(
-                          label: 'Easy',
-                          selected: provider.selectedDifficulty.toLowerCase() == 'easy',
-                          onSelected: () => provider.updateDifficultyFilter('Easy'),
-                        ),
-                        _FilterChip(
-                          label: 'Medium',
-                          selected: provider.selectedDifficulty.toLowerCase() == 'medium',
-                          onSelected: () => provider.updateDifficultyFilter('Medium'),
-                        ),
-                        _FilterChip(
-                          label: 'Hard',
-                          selected: provider.selectedDifficulty.toLowerCase() == 'hard',
-                          onSelected: () => provider.updateDifficultyFilter('Hard'),
-                        ),
-                      ],
                     ),
                     const SizedBox(height: 20),
                     if (provider.listState == RecipeViewState.loading) ...[
@@ -338,6 +317,190 @@ class _ErrorView extends StatelessWidget {
           const SizedBox(height: 16),
           ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
         ],
+      ),
+    );
+  }
+}
+
+class _RecipeFilterBottomSheet extends StatefulWidget {
+  final RecipeProvider provider;
+
+  const _RecipeFilterBottomSheet({required this.provider});
+
+  @override
+  State<_RecipeFilterBottomSheet> createState() => _RecipeFilterBottomSheetState();
+}
+
+class _RecipeFilterBottomSheetState extends State<_RecipeFilterBottomSheet> {
+  late String status;
+  late String difficulty;
+  late int? minTime;
+  late int? maxTime;
+  late int? minCalories;
+  late int? maxCalories;
+  late String sortBy;
+
+  final minTimeController = TextEditingController();
+  final maxTimeController = TextEditingController();
+  final minCalController = TextEditingController();
+  final maxCalController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.provider;
+    status = p.selectedStatus;
+    difficulty = p.selectedDifficulty;
+    minTime = p.minTime;
+    maxTime = p.maxTime;
+    minCalories = p.minCalories;
+    maxCalories = p.maxCalories;
+    sortBy = p.sortBy ?? 'name_asc';
+
+    if (minTime != null) minTimeController.text = minTime.toString();
+    if (maxTime != null) maxTimeController.text = maxTime.toString();
+    if (minCalories != null) minCalController.text = minCalories.toString();
+    if (maxCalories != null) maxCalController.text = maxCalories.toString();
+  }
+
+  @override
+  void dispose() {
+    minTimeController.dispose();
+    maxTimeController.dispose();
+    minCalController.dispose();
+    maxCalController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Filters & Sort', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            
+            // Sort
+            Text('Sort By', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(label: const Text('A-Z'), selected: sortBy == 'name_asc', onSelected: (v) => setState(() => sortBy = 'name_asc')),
+                ChoiceChip(label: const Text('Z-A'), selected: sortBy == 'name_desc', onSelected: (v) => setState(() => sortBy = 'name_desc')),
+                ChoiceChip(label: const Text('Time (Fast)'), selected: sortBy == 'time_asc', onSelected: (v) => setState(() => sortBy = 'time_asc')),
+                ChoiceChip(label: const Text('Time (Slow)'), selected: sortBy == 'time_desc', onSelected: (v) => setState(() => sortBy = 'time_desc')),
+                ChoiceChip(label: const Text('Newest'), selected: sortBy == 'newest', onSelected: (v) => setState(() => sortBy = 'newest')),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Status
+            Text('Status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(label: const Text('All'), selected: status == '', onSelected: (v) => setState(() => status = '')),
+                ChoiceChip(label: const Text('Published'), selected: status.toLowerCase() == 'published', onSelected: (v) => setState(() => status = 'Published')),
+                ChoiceChip(label: const Text('Draft'), selected: status.toLowerCase() == 'draft', onSelected: (v) => setState(() => status = 'Draft')),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Difficulty
+            Text('Difficulty', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(label: const Text('All'), selected: difficulty == '', onSelected: (v) => setState(() => difficulty = '')),
+                ChoiceChip(label: const Text('Easy'), selected: difficulty.toLowerCase() == 'easy', onSelected: (v) => setState(() => difficulty = 'Easy')),
+                ChoiceChip(label: const Text('Medium'), selected: difficulty.toLowerCase() == 'medium', onSelected: (v) => setState(() => difficulty = 'Medium')),
+                ChoiceChip(label: const Text('Hard'), selected: difficulty.toLowerCase() == 'hard', onSelected: (v) => setState(() => difficulty = 'Hard')),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Time
+            Text('Cooking Time (mins)', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: TextField(controller: minTimeController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Min', isDense: true))),
+                const SizedBox(width: 16),
+                Expanded(child: TextField(controller: maxTimeController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Max', isDense: true))),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Calories
+            Text('Calories (kcal)', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: TextField(controller: minCalController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Min', isDense: true))),
+                const SizedBox(width: 16),
+                Expanded(child: TextField(controller: maxCalController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Max', isDense: true))),
+              ],
+            ),
+            const SizedBox(height: 32),
+
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      widget.provider.clearFilters();
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Clear All'),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      widget.provider.applyAdvancedFilters(
+                        status: status,
+                        difficulty: difficulty,
+                        newMinTime: int.tryParse(minTimeController.text),
+                        newMaxTime: int.tryParse(maxTimeController.text),
+                        newMinCalories: int.tryParse(minCalController.text),
+                        newMaxCalories: int.tryParse(maxCalController.text),
+                        newSortBy: sortBy,
+                      );
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Apply'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

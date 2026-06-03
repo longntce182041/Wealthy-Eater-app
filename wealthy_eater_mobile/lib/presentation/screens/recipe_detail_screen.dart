@@ -33,7 +33,9 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
               SliverAppBar(
                 pinned: true,
                 expandedHeight: 320,
-                title: const Text('Recipe detail'),
+                foregroundColor: Colors.white,
+                backgroundColor: Theme.of(context).colorScheme.tertiary, // primaryDark
+                title: const Text('Recipe detail', style: TextStyle(fontWeight: FontWeight.w600)),
                 flexibleSpace: FlexibleSpaceBar(
                   background: recipe == null
                       ? Container(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12))
@@ -43,6 +45,20 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                             recipe.imageUrl.isNotEmpty
                                 ? Image.network(recipe.imageUrl, fit: BoxFit.cover)
                                 : Container(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)),
+                            // Top gradient for app bar text visibility
+                            Positioned(
+                              top: 0, left: 0, right: 0, height: 100,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [Colors.black.withValues(alpha: 0.5), Colors.transparent],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // Bottom gradient for recipe name visibility
                             Container(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
