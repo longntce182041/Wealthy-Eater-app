@@ -1,0 +1,58 @@
+const jwt = require("jsonwebtoken");
+const { jwtConfig } = require("../utils/jwt");
+
+function protect(req, res, next) {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  if (!token) {
+    return res.status(401).json({ message: "Authentication token missing" });
+  }
+
+  try {
+    const payload = jwt.verify(token, jwtConfig.secret);
+    req.user = {
+      ...payload,
+      id: payload.id || payload.sub || payload.userId,
+    };
+    return next();
+  } catch (err) {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
+}
+
+function authorize(...roles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    if (roles.length && !roles.includes(req.user.role)) {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: insufficient permissions" });
+    }
+    return next();
+  };
+}
+
+function adminOnly(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ message: "Forbidden: Admin access required" });
+  }
+  return next();
+}
+
+function nutritionistOnly(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  if (req.user.role !== "nutritionist") {
+    return res.status(403).json({ message: "Forbidden: Nutritionist access required" });
+  }
+  return next();
+}
+
+module.exports = { protect, authorize, adminOnly, nutritionistOnly };
