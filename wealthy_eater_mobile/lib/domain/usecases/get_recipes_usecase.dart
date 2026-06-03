@@ -10,11 +10,21 @@ class GetRecipesUseCase {
     String search = '',
     String status = '',
     String difficulty = '',
+    int? minTime,
+    int? maxTime,
+    int? minCalories,
+    int? maxCalories,
+    String? sortBy,
   }) {
     return repository.fetchRecipes(
       search: search,
       status: status,
       difficulty: difficulty,
+      minTime: minTime,
+      maxTime: maxTime,
+      minCalories: minCalories,
+      maxCalories: maxCalories,
+      sortBy: sortBy,
     );
   }
 }

@@ -18,17 +18,22 @@ function buildFilter(query) {
       { name: { $regex: escapeRegex(search), $options: 'i' } },
       { description: { $regex: escapeRegex(search), $options: 'i' } },
       { level_cooking: { $regex: escapeRegex(search), $options: 'i' } },
+      { cooking_step: { $regex: escapeRegex(search), $options: 'i' } },
     ];
   }
 
   if (query.status) {
-    // Case-insensitive match so mobile can send 'Published' while DB stores 'published'
     filter.status = { $regex: `^${escapeRegex(String(query.status).trim())}$`, $options: 'i' };
   }
 
   if (query.level) {
-    // Case-insensitive match so mobile can send 'Easy' while DB stores 'easy'
     filter.level_cooking = { $regex: `^${escapeRegex(String(query.level).trim())}$`, $options: 'i' };
+  }
+
+  if (query.minTime || query.maxTime) {
+    filter.cooking_time = {};
+    if (query.minTime) filter.cooking_time.$gte = Number(query.minTime);
+    if (query.maxTime) filter.cooking_time.$lte = Number(query.maxTime);
   }
 
   return filter;
@@ -77,12 +82,60 @@ function mapRecipe(recipe, extras = {}) {
 async function list(req, res) {
   try {
     const filter = buildFilter(req.query || {});
+    
+    // 1. Handle Nutrition Filtering via RecipeNutrition
+    if (req.query.minCalories || req.query.maxCalories || req.query.minProtein || req.query.maxProtein) {
+      const nutritionFilter = {};
+      if (req.query.minCalories || req.query.maxCalories) {
+        nutritionFilter.calories = {};
+        if (req.query.minCalories) nutritionFilter.calories.$gte = Number(req.query.minCalories);
+        if (req.query.maxCalories) nutritionFilter.calories.$lte = Number(req.query.maxCalories);
+      }
+      if (req.query.minProtein || req.query.maxProtein) {
+        nutritionFilter.protein = {};
+        if (req.query.minProtein) nutritionFilter.protein.$gte = Number(req.query.minProtein);
+        if (req.query.maxProtein) nutritionFilter.protein.$lte = Number(req.query.maxProtein);
+      }
+      
+      const matchedNutritions = await RecipeNutrition.find(nutritionFilter).select('recipe_id').lean();
+      const validRecipeIds = matchedNutritions.map(n => n.recipe_id);
+      
+      if (filter._id) {
+        // If there's already an _id filter, we'd need to intersect, but usually there isn't in list()
+        filter._id = { $in: validRecipeIds };
+      } else {
+        filter._id = { $in: validRecipeIds };
+      }
+    }
+
+    // 2. Handle Sorting
+    let sortObj = { name: 1 }; // Default
+    const sortBy = req.query.sortBy || 'name_asc';
+    switch (sortBy) {
+      case 'newest':
+        sortObj = { _id: -1 };
+        break;
+      case 'time_asc':
+        sortObj = { cooking_time: 1 };
+        break;
+      case 'time_desc':
+        sortObj = { cooking_time: -1 };
+        break;
+      case 'name_desc':
+        sortObj = { name: -1 };
+        break;
+      case 'name_asc':
+      default:
+        sortObj = { name: 1 };
+        break;
+    }
+
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const skip = (page - 1) * limit;
 
     const [recipes, total] = await Promise.all([
-      Recipe.find(filter).sort({ name: 1 }).skip(skip).limit(limit).lean(),
+      Recipe.find(filter).sort(sortObj).skip(skip).limit(limit).lean(),
       Recipe.countDocuments(filter),
     ]);
 
