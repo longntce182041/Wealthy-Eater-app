@@ -1,61 +1,56 @@
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
+/**
+ * server.js — Application entry point.
+ *
+ * Responsibilities:
+ *  1. Connect to MongoDB
+ *  2. Start the HTTP server
+ *
+ * All Express configuration lives in src/app.js so it can be
+ * imported independently by test runners without starting the server.
+ */
 
-dotenv.config();
+const app            = require('./app');
+const connectDatabase = require('./config/database');
 
-const app = express();
-app.use(express.json());
+const PORT = parseInt(process.env.PORT || '5000', 10);
 
-// CORS - allow development origins and preflight
-const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : [];
+async function bootstrap() {
+  // Connect to MongoDB first — crash fast if DB is unavailable
+  await connectDatabase();
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (curl, mobile native, or same-origin server requests)
-    if (!origin) return callback(null, true);
-
-    // allow any localhost or 127.0.0.1 origin (different dev ports) in development
-    if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
-      return callback(null, true);
-    }
-
-    // allow emulator host used by Android emulator
-    if (origin === 'http://10.0.2.2:5000') return callback(null, true);
-
-    // allow explicit origins set via CORS_ORIGIN env (comma separated)
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.indexOf('*') !== -1) {
-      return callback(null, true);
-    }
-
-    return callback(new Error('CORS not allowed'), false);
-  },
-  credentials: true
-}));
-
-// mount application routes
-const routes = require('./routes');
-app.use(routes);
-
-const PORT = process.env.PORT || 5000;
-
-app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Wealthy Eater API is running',
+  const server = app.listen(PORT, () => {
+    console.log(`✔ Server running on http://localhost:${PORT} [${process.env.NODE_ENV || 'development'}]`);
   });
-});
 
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log('MongoDB connected successfully');
+  // ── Graceful Shutdown ────────────────────────────────────────────────────────
+  // Allows in-flight requests to complete before the process exits.
 
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+  function shutdown(signal) {
+    console.log(`\n${signal} received. Shutting down gracefully…`);
+    server.close(() => {
+      console.log('HTTP server closed.');
+      process.exit(0);
     });
-  })
-  .catch((error) => {
-    console.error('MongoDB connection failed:', error);
+
+    // Force-exit after 10 seconds if requests do not drain
+    setTimeout(() => {
+      console.error('Forced exit after timeout.');
+      process.exit(1);
+    }, 10_000);
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT',  () => shutdown('SIGINT'));
+
+  // Catch unhandled promise rejections and uncaught exceptions
+  process.on('unhandledRejection', (reason) => {
+    console.error('[UnhandledRejection]', reason);
   });
+
+  process.on('uncaughtException', (err) => {
+    console.error('[UncaughtException]', err);
+    process.exit(1);
+  });
+}
+
+bootstrap();
