@@ -1,4 +1,6 @@
+// ignore: dangling_library_doc_comments
 /// Represents an authenticated user in the domain layer.
+// ignore: unintended_html_in_doc_comment
 /// Mapped from API response by [AuthProvider] — never use raw Map<String, dynamic>.
 class UserEntity {
   final String id;

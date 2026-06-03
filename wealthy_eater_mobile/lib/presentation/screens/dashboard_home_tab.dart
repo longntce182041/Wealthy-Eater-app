@@ -1,3 +1,5 @@
+// ignore_for_file: use_null_aware_elements, unnecessary_underscores
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
