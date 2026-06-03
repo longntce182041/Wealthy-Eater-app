@@ -1,0 +1,316 @@
+{
+  "manifest": {
+    "generated_at": "2026-06-03T07:04:28.930Z",
+    "scale": "realistic-curated",
+    "counts": {
+      "AuditLog": 2,
+      "ConsultationContract": 3,
+      "ConsultationMessage": 3,
+      "CustomerMealLog": 2,
+      "Ingredient": 15,
+      "IngredientMicronutrientValue": 24,
+      "MacroDeviationFlag": 1,
+      "MealPlan": 2,
+      "MealPlanItem": 5,
+      "MedicalCondition": 3,
+      "Micronutrient": 5,
+      "NutritionAssessment": 2,
+      "Nutritionist": 3,
+      "Recipe": 6,
+      "RecipeIngredient": 21,
+      "RecipeMicronutrientValue": 7,
+      "RecipeNutrition": 6,
+      "RecipeReview": 3,
+      "RecipeStep": 15,
+      "ShoppingList": 2,
+      "Transaction": 2,
+      "User": 9,
+      "UserDietary": 5,
+      "UserProfile": 5
+    },
+    "sampleIds": {
+      "User": [
+        "6a1fd1ed8d00c1c2a12e1a4f",
+        "6a1fd1ed8d00c1c2a12e1a50",
+        "6a1fd1ed8d00c1c2a12e1a52",
+        "6a1fd1ed8d00c1c2a12e1a54",
+        "6a1fd1ed8d00c1c2a12e1a56"
+      ],
+      "Recipe": [
+        "6a1fd1ed8d00c1c2a12e1a72",
+        "6a1fd1ed8d00c1c2a12e1a73",
+        "6a1fd1ed8d00c1c2a12e1a74",
+        "6a1fd1ed8d00c1c2a12e1a75",
+        "6a1fd1ed8d00c1c2a12e1a76"
+      ],
+      "Ingredient": [
+        "6a1fd1ed8d00c1c2a12e1a63",
+        "6a1fd1ed8d00c1c2a12e1a64",
+        "6a1fd1ed8d00c1c2a12e1a65",
+        "6a1fd1ed8d00c1c2a12e1a66",
+        "6a1fd1ed8d00c1c2a12e1a67"
+      ],
+      "Nutritionist": [
+        "6a1fd1ed8d00c1c2a12e1a51",
+        "6a1fd1ed8d00c1c2a12e1a53",
+        "6a1fd1ed8d00c1c2a12e1a55"
+      ],
+      "ConsultationContract": [
+        "6a1fd1ed8d00c1c2a12e1a78",
+        "6a1fd1ed8d00c1c2a12e1a79",
+        "6a1fd1ed8d00c1c2a12e1a7a"
+      ]
+    },
+    "validations": [
+      {
+        "model": "Nutritionist",
+        "field": "user_id",
+        "ref": "User",
+        "checked": 3,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "UserProfile",
+        "field": "user_id",
+        "ref": "User",
+        "checked": 5,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "UserDietary",
+        "field": "user_id",
+        "ref": "User",
+        "checked": 5,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "UserDietary",
+        "field": "medical_condition_id",
+        "ref": "MedicalCondition",
+        "checked": 5,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "RecipeStep",
+        "field": "recipe_id",
+        "ref": "Recipe",
+        "checked": 15,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "RecipeIngredient",
+        "field": "recipe_id",
+        "ref": "Recipe",
+        "checked": 21,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "RecipeIngredient",
+        "field": "ingredient_id",
+        "ref": "Ingredient",
+        "checked": 21,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "RecipeNutrition",
+        "field": "recipe_id",
+        "ref": "Recipe",
+        "checked": 6,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "RecipeMicronutrientValue",
+        "field": "recipe_id",
+        "ref": "Recipe",
+        "checked": 7,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "RecipeMicronutrientValue",
+        "field": "micronutrient_id",
+        "ref": "Micronutrient",
+        "checked": 7,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "IngredientMicronutrientValue",
+        "field": "ingredient_id",
+        "ref": "Ingredient",
+        "checked": 24,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "IngredientMicronutrientValue",
+        "field": "micronutrient_id",
+        "ref": "Micronutrient",
+        "checked": 24,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "NutritionAssessment",
+        "field": "user_id",
+        "ref": "User",
+        "checked": 2,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "NutritionAssessment",
+        "field": "nutritionist_id",
+        "ref": "Nutritionist",
+        "checked": 2,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "MealPlan",
+        "field": "user_id",
+        "ref": "User",
+        "checked": 2,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "MealPlan",
+        "field": "nutritionist_id",
+        "ref": "Nutritionist",
+        "checked": 2,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "MealPlanItem",
+        "field": "meal_plan_id",
+        "ref": "MealPlan",
+        "checked": 5,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "MealPlanItem",
+        "field": "recipe_id",
+        "ref": "Recipe",
+        "checked": 5,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "ConsultationContract",
+        "field": "user_id",
+        "ref": "User",
+        "checked": 3,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "ConsultationMessage",
+        "field": "contract_id",
+        "ref": "ConsultationContract",
+        "checked": 3,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "ConsultationMessage",
+        "field": "sender_id",
+        "ref": "User",
+        "checked": 3,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "CustomerMealLog",
+        "field": "user_id",
+        "ref": "User",
+        "checked": 2,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "CustomerMealLog",
+        "field": "recipe_id",
+        "ref": "Recipe",
+        "checked": 2,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "MacroDeviationFlag",
+        "field": "customer_meal_log",
+        "ref": "CustomerMealLog",
+        "checked": 1,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "MacroDeviationFlag",
+        "field": "contract_id",
+        "ref": "ConsultationContract",
+        "checked": 1,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "ShoppingList",
+        "field": "user_id",
+        "ref": "User",
+        "checked": 2,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "ShoppingList",
+        "field": "ingredient_id",
+        "ref": "Ingredient",
+        "checked": 2,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "ShoppingList",
+        "field": "recipe_id",
+        "ref": "Recipe",
+        "checked": 2,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "RecipeReview",
+        "field": "user_id",
+        "ref": "User",
+        "checked": 3,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "RecipeReview",
+        "field": "recipe_id",
+        "ref": "Recipe",
+        "checked": 3,
+        "missing": 0,
+        "examples": []
+      },
+      {
+        "model": "Transaction",
+        "field": "consultation_contracts_id_fk",
+        "ref": "ConsultationContract",
+        "checked": 2,
+        "missing": 0,
+        "examples": []
+      }
+    ]
+  },
+  "sha": "f623eb1384911a36dd2a5cb105b5344b912be95ef4b1fa4f806ae26197b7a40d"
+}

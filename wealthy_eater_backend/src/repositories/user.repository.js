@@ -1,4 +1,4 @@
-const User = require('../models/user.model');
+const User = require('../models/User');
 
 class UserRepository {
   static findByEmail(email) {
@@ -7,10 +7,6 @@ class UserRepository {
 
   static findById(id) {
     return User.findById(id).exec();
-  }
-  
-  static findByGoogleId(googleId) {
-    return User.findOne({ googleId }).exec();
   }
 
   static create(userObj) {

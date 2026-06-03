@@ -1,143 +1,136 @@
 const bcrypt = require('bcryptjs');
-const UserRepository = require('../repositories/user.repository');
-const { signAccessToken } = require('../utils/jwt');
 const { OAuth2Client } = require('google-auth-library');
+const UserRepository = require('../repositories/user.repository');
+const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt');
+const AppError = require('../utils/AppError');
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
+// ─── Helper ──────────────────────────────────────────────────────────────────
 
-class AuthService {
-  static async login(email, password) {
-    const user = await UserRepository.findByEmail(email);
-    if (!user) {
-      const err = new Error('User not found');
-      err.status = 404;
-      throw err;
-    }
-
-    if (user.isActive === false || user.status === 'inactive') {
-      const err = new Error('User is inactive');
-      err.status = 403;
-      throw err;
-    }
-
-    // support both `password` and legacy `passwordHash` field names in DB
-    const hash = user.password || user.passwordHash || user.password_hash;
-    const matched = await bcrypt.compare(password, hash || '');
-    if (!matched) {
-      const err = new Error('Invalid email or password');
-      err.status = 401;
-      throw err;
-    }
-
-    const payload = {
-      sub: user._id.toString(),
-      email: user.email,
-      role: user.role
-    };
-
-    const accessToken = signAccessToken(payload, process.env.JWT_EXPIRES_IN || '1h');
-
-    return {
-      accessToken,
-      user: {
-        id: user._id.toString(),
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role
-      }
-    };
-  }
+/** Builds the standardised user response object sent to clients. */
+function formatUser(user) {
+  return {
+    id:    user._id.toString(),
+    email: user.email,
+    role:  user.role,
+  };
 }
 
-AuthService.googleLogin = async function (idToken) {
-  if (!GOOGLE_CLIENT_ID) {
-    const err = new Error('GOOGLE_CLIENT_ID not configured');
-    err.status = 500;
-    throw err;
-  }
-
-  const client = new OAuth2Client(GOOGLE_CLIENT_ID);
-  let ticket;
-  try {
-    ticket = await client.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
-  } catch (e) {
-    const err = new Error('Invalid Google idToken');
-    err.status = 401;
-    throw err;
-  }
-
-  const payload = ticket.getPayload();
-  const googleId = payload.sub;
-  const email = payload.email;
-  const fullName = payload.name || payload.given_name || '';
-  const avatar = payload.picture || '';
-
-  if (!email) {
-    const err = new Error('Google token does not contain email');
-    err.status = 400;
-    throw err;
-  }
-
-  // try find existing user by email first
-  let user = await UserRepository.findByEmail(email);
-
-  if (!user) {
-    // create new user
-    const newUser = {
-      fullName: fullName || email.split('@')[0],
-      email,
-      provider: 'google',
-      googleId,
-      avatar,
-      role: 'customer',
-      status: 'active',
-      isActive: true
-    };
-
-    user = await UserRepository.create(newUser);
-  } else {
-    // if user exists but doesn't have googleId set, set it
-    let shouldSave = false;
-    if (!user.googleId) {
-      user.googleId = googleId;
-      shouldSave = true;
-    }
-    if (!user.provider || user.provider !== 'google') {
-      user.provider = 'google';
-      shouldSave = true;
-    }
-    if (avatar && !user.avatar) {
-      user.avatar = avatar;
-      shouldSave = true;
-    }
-    if (shouldSave) await user.save();
-  }
-
-  if (user.isActive === false || user.status === 'inactive') {
-    const err = new Error('User is inactive');
-    err.status = 403;
-    throw err;
-  }
-
-  const tokenPayload = {
-    sub: user._id.toString(),
+/** Issues both access and refresh tokens for a user. */
+function issueTokens(user) {
+  const payload = {
+    sub:   user._id.toString(),
     email: user.email,
-    role: user.role
+    role:  user.role,
   };
-
-  const accessToken = signAccessToken(tokenPayload, process.env.JWT_EXPIRES_IN || '1h');
-
   return {
-    accessToken,
-    user: {
-      id: user._id.toString(),
-      email: user.email,
-      fullName: user.fullName,
-      role: user.role,
-      provider: user.provider
-    }
+    accessToken:  signAccessToken(payload),
+    refreshToken: signRefreshToken({ sub: user._id.toString() }),
+    user:         formatUser(user),
   };
-};
+}
+
+// ─── AuthService ─────────────────────────────────────────────────────────────
+
+class AuthService {
+  // ── Email / Password Login ─────────────────────────────────────────────────
+
+  static async login(email, password) {
+    if (!email || !password) {
+      throw new AppError('Email and password are required', 400);
+    }
+
+    const user = await UserRepository.findByEmail(email.toLowerCase().trim());
+    if (!user) {
+      // Generic message to prevent user enumeration
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    const hash = user.password_hash;
+    if (!hash) {
+      throw new AppError('This account does not have a password. Please contact support.', 400);
+    }
+
+    const matched = await bcrypt.compare(password, hash);
+    if (!matched) {
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    return issueTokens(user);
+  }
+
+  // ── Google Sign-In ─────────────────────────────────────────────────────────
+
+  static async googleLogin(idToken) {
+    if (!GOOGLE_CLIENT_ID) {
+      throw new AppError('Google login is not configured on this server', 500);
+    }
+
+    const client = new OAuth2Client(GOOGLE_CLIENT_ID);
+    let googlePayload;
+
+    try {
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: GOOGLE_CLIENT_ID,
+      });
+      googlePayload = ticket.getPayload();
+    } catch {
+      throw new AppError('Invalid or expired Google ID token', 401);
+    }
+
+    const { email } = googlePayload;
+
+    if (!email) {
+      throw new AppError('Google account does not have an email address', 400);
+    }
+
+    let user = await UserRepository.findByEmail(email.toLowerCase());
+
+    if (!user) {
+      // Auto-register with only the fields allowed by schema
+      user = await UserRepository.create({
+        email: email.toLowerCase(),
+        role:  'customer',
+        // password_hash left null — Google-only account
+      });
+    }
+
+    return issueTokens(user);
+  }
+
+  // ── Refresh Access Token ────────────────────────────────────────────────────
+
+  static async refresh(refreshToken) {
+    let payload;
+    try {
+      payload = verifyRefreshToken(refreshToken);
+    } catch {
+      throw new AppError('Invalid or expired refresh token', 401);
+    }
+
+    const user = await UserRepository.findById(payload.sub);
+    if (!user || !user.is_active) {
+      throw new AppError('User not found or account deactivated', 401);
+    }
+
+    return {
+      accessToken: signAccessToken({
+        sub:   user._id.toString(),
+        email: user.email,
+        role:  user.role,
+      }),
+    };
+  }
+
+  // ── Get Current User ────────────────────────────────────────────────────────
+
+  static async getMe(userId) {
+    const user = await UserRepository.findById(userId);
+    if (!user) throw new AppError('User not found', 404);
+    return formatUser(user);
+  }
+}
 
 module.exports = AuthService;
