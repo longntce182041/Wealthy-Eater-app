@@ -6,11 +6,11 @@ class EnvConfig {
   static String get baseUrl {
     switch (environment) {
       case Environment.prod:
-        return 'https://api.wealthyeater.com/api/v1';
+        return 'https://api.wealthyeater.com';
       case Environment.staging:
-        return 'https://staging-api.wealthyeater.com/api/v1';
+        return 'https://staging-api.wealthyeater.com';
       case Environment.dev:
-        return 'http://10.0.2.2:5000/api/v1'; // Special loop redirection endpoint for Android emulators
+        return 'http://10.0.2.2:5000';
     }
   }
 
