@@ -5,8 +5,8 @@ class AppTheme {
   static ThemeData build() {
     const background = Color.fromARGB(255, 247, 250, 245);
     const surface = Color(0xFFFFFCF7);
-    const primary = Color(0xFF2E7D5B);
-    const primaryDark = Color(0xFF174C38);
+    const primary = Color(0xFF67c18c);
+    const primaryDark = Color.fromARGB(255, 73, 110, 94);
     const accent = Color(0xFFEA8C2A);
 
     final colorScheme = ColorScheme.fromSeed(

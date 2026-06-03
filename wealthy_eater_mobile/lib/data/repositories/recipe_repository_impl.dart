@@ -11,7 +11,16 @@ class RecipeRepositoryImpl implements RecipeRepository {
   RecipeRepositoryImpl({required this.apiClient});
 
   @override
-  Future<List<RecipeEntity>> fetchRecipes({String search = '', String status = '', String difficulty = ''}) async {
+  Future<List<RecipeEntity>> fetchRecipes({
+    String search = '', 
+    String status = '', 
+    String difficulty = '',
+    int? minTime,
+    int? maxTime,
+    int? minCalories,
+    int? maxCalories,
+    String? sortBy,
+  }) async {
     try {
       final response = await apiClient.get(
         '/api/recipes',
@@ -19,6 +28,11 @@ class RecipeRepositoryImpl implements RecipeRepository {
           if (search.trim().isNotEmpty) 'search': search.trim(),
           if (status.trim().isNotEmpty) 'status': status.trim(),
           if (difficulty.trim().isNotEmpty) 'level': difficulty.trim(),
+          if (minTime != null) 'minTime': minTime,
+          if (maxTime != null) 'maxTime': maxTime,
+          if (minCalories != null) 'minCalories': minCalories,
+          if (maxCalories != null) 'maxCalories': maxCalories,
+          if (sortBy != null && sortBy.isNotEmpty) 'sortBy': sortBy,
           'limit': 50,
         },
       );

@@ -21,6 +21,13 @@ class RecipeProvider extends ChangeNotifier {
   String searchQuery = '';
   String selectedStatus = '';
   String selectedDifficulty = '';
+  
+  // Advanced filters
+  int? minTime;
+  int? maxTime;
+  int? minCalories;
+  int? maxCalories;
+  String? sortBy = 'name_asc';
 
   List<RecipeEntity> recipes = const [];
   RecipeEntity? selectedRecipe;
@@ -38,6 +45,11 @@ class RecipeProvider extends ChangeNotifier {
         search: searchQuery,
         status: selectedStatus,
         difficulty: selectedDifficulty,
+        minTime: minTime,
+        maxTime: maxTime,
+        minCalories: minCalories,
+        maxCalories: maxCalories,
+        sortBy: sortBy,
       );
       recipes = recipes.map((recipe) => recipe.copyWith(isFavorite: favoriteRecipeIds.contains(recipe.id))).toList();
       listState = RecipeViewState.success;
@@ -71,6 +83,25 @@ class RecipeProvider extends ChangeNotifier {
     loadRecipes();
   }
 
+  void applyAdvancedFilters({
+    String? status,
+    String? difficulty,
+    int? newMinTime,
+    int? newMaxTime,
+    int? newMinCalories,
+    int? newMaxCalories,
+    String? newSortBy,
+  }) {
+    if (status != null) selectedStatus = status;
+    if (difficulty != null) selectedDifficulty = difficulty;
+    minTime = newMinTime;
+    maxTime = newMaxTime;
+    minCalories = newMinCalories;
+    maxCalories = newMaxCalories;
+    if (newSortBy != null) sortBy = newSortBy;
+    loadRecipes();
+  }
+
   void updateStatusFilter(String value) {
     selectedStatus = value;
     loadRecipes();
@@ -85,6 +116,11 @@ class RecipeProvider extends ChangeNotifier {
     searchQuery = '';
     selectedStatus = '';
     selectedDifficulty = '';
+    minTime = null;
+    maxTime = null;
+    minCalories = null;
+    maxCalories = null;
+    sortBy = 'name_asc';
     loadRecipes();
   }
 
