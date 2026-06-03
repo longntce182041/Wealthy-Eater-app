@@ -41,10 +41,10 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> googleSignIn() async {
-    final GoogleSignIn _googleSignIn = kIsWeb
-      ? GoogleSignIn(clientId: GOOGLE_CLIENT_ID)
+    final GoogleSignIn googleSignIn = kIsWeb
+      ? GoogleSignIn(clientId: googleClientId)
       : GoogleSignIn();
-    final account = await _googleSignIn.signIn();
+    final account = await googleSignIn.signIn();
     if (account == null) throw Exception('Google sign in aborted');
 
     final idToken = (await account.authentication).idToken;

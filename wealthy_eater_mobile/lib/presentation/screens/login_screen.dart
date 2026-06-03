@@ -1,10 +1,12 @@
+// ignore_for_file: control_flow_in_finally
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -24,13 +26,17 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await Provider.of<AuthProvider>(context, listen: false)
           .login(_emailCtrl.text.trim(), _passCtrl.text);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login success')));
       final user = Provider.of<AuthProvider>(context, listen: false).user;
+      if (!mounted) return;
       // navigate to home
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeScreen(user: user)));
     } catch (e) {
+      if (!mounted) return;
       _showError(e.toString());
     } finally {
+      if (!mounted) return;
       setState(() => _loading = false);
     }
   }
@@ -39,12 +45,16 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     try {
       await Provider.of<AuthProvider>(context, listen: false).googleSignIn();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Google login success')));
       final user = Provider.of<AuthProvider>(context, listen: false).user;
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeScreen(user: user)));
     } catch (e) {
+      if (!mounted) return;
       _showError(e.toString());
     } finally {
+      if (!mounted) return;
       setState(() => _loading = false);
     }
   }
