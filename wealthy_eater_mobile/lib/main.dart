@@ -8,6 +8,9 @@ import 'core/theme/index.dart';
 import 'data/repositories/index.dart';
 import 'domain/usecases/get_recipe_detail_usecase.dart';
 import 'domain/usecases/get_recipes_usecase.dart';
+import 'domain/usecases/recipe_like_usecases.dart';
+import 'domain/usecases/recipe_review_usecases.dart';
+import 'domain/usecases/get_my_reviews_list_usecase.dart';
 import 'presentation/providers/index.dart';
 import 'presentation/screens/index.dart';
 
@@ -20,7 +23,6 @@ class WealthyEaterApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Determine base URL based on platform
     final baseUrl = kIsWeb ? 'http://localhost:5000' : EnvConfig.baseUrl;
     final api = ApiClient(baseUrl);
     final recipeRepository = RecipeRepositoryImpl(apiClient: api);
@@ -30,8 +32,20 @@ class WealthyEaterApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider(api: api)),
         ChangeNotifierProvider(
           create: (_) => RecipeProvider(
-            getRecipesUseCase: GetRecipesUseCase(recipeRepository),
-            getRecipeDetailUseCase: GetRecipeDetailUseCase(recipeRepository),
+            // Browse
+            getRecipesUseCase:      GetRecipesUseCase(recipeRepository),
+            getRecipeDetailUseCase:  GetRecipeDetailUseCase(recipeRepository),
+            // Likes
+            toggleRecipeLikeUseCase: ToggleRecipeLikeUseCase(recipeRepository),
+            getLikedRecipesUseCase:  GetLikedRecipesUseCase(recipeRepository),
+            getLikeStatusUseCase:    GetLikeStatusUseCase(recipeRepository),
+            // Reviews
+            upsertReviewUseCase:     UpsertRecipeReviewUseCase(recipeRepository),
+            getRecipeReviewsUseCase: GetRecipeReviewsUseCase(recipeRepository),
+            getMyReviewUseCase:      GetMyRecipeReviewUseCase(recipeRepository),
+            deleteReviewUseCase:     DeleteRecipeReviewUseCase(recipeRepository),
+            // My Reviews
+            getMyReviewsListUseCase: GetMyReviewsListUseCase(recipeRepository),
           )..loadRecipes(),
         ),
       ],
@@ -46,11 +60,6 @@ class WealthyEaterApp extends StatelessWidget {
 }
 
 /// Root widget that handles session restore and routes to the correct screen.
-///
-/// On launch:
-/// 1. Calls [AuthProvider.restoreSession] to check stored token.
-/// 2. Shows a splash loader during the check.
-/// 3. Routes to [HomeScreen] if authenticated, [LoginScreen] if not.
 class _AppRoot extends StatefulWidget {
   const _AppRoot();
 
@@ -62,10 +71,8 @@ class _AppRootState extends State<_AppRoot> {
   @override
   void initState() {
     super.initState();
-    // Restore session after first frame so the provider tree is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().restoreSession().then((_) {
-        // Once authenticated, pre-load recipes
         if (mounted && context.read<AuthProvider>().isAuthenticated) {
           context.read<RecipeProvider>().loadRecipes();
         }
@@ -102,11 +109,15 @@ class _SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.restaurant_menu, size: 64, color: Theme.of(context).colorScheme.primary),
+            Icon(Icons.restaurant_menu,
+                size: 64, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 20),
             Text(
               'Wealthy Eater',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 24),
             const CircularProgressIndicator(),

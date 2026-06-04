@@ -1,4 +1,4 @@
-// ignore_for_file: use_null_aware_elements, unnecessary_underscores
+// ignore_for_file: unused_element, use_null_aware_elements, unnecessary_underscores
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -26,28 +26,7 @@ class DashboardHomeTab extends StatelessWidget {
           children: [
             _HeroCard(name: displayName),
             const SizedBox(height: 20),
-
-            // Stats row
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricCard(
-                    label: 'Recipes',
-                    value: recipeProvider.recipes.length.toString(),
-                    icon: Icons.menu_book,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _MetricCard(
-                    label: 'Favorites',
-                    value: recipeProvider.favoriteRecipeIds.length.toString(),
-                    icon: Icons.favorite,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
+           
 
             // Quick Actions
             _SectionCard(
