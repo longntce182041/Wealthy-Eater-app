@@ -5,7 +5,9 @@ import '../../domain/entities/user.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/coming_soon_tab.dart';
 import 'dashboard_home_tab.dart';
+import 'recipe_likes_tab.dart';
 import 'recipe_list_view.dart';
+import 'recipe_my_reviews_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserEntity? user;
@@ -28,14 +30,17 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Sign out'),
         content: const Text('Are you sure you want to sign out?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign out')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sign out')),
         ],
       ),
     );
     if (confirmed == true && mounted) {
       await context.read<AuthProvider>().logout();
-      // Navigation is handled by _AppRoot Consumer in main.dart
     }
   }
 
@@ -43,9 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _selectedIndex == 0 ? 'Home' : _selectedIndex == 1 ? 'Recipes' : _selectedIndex == 2 ? 'Plans' : 'Profile',
-        ),
+        title: Text(_navTitle(_selectedIndex)),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_outlined),
@@ -58,20 +61,29 @@ class _HomeScreenState extends State<HomeScreen> {
         child: IndexedStack(
           index: _selectedIndex,
           children: [
+            // ── 0: Home dashboard ──────────────────────────────────────
             DashboardHomeTab(
               user: widget.user,
               onExploreRecipes: () => _selectTab(1),
             ),
-            const RecipeListView(showHeader: true),
+
+            // ── 1: Recipes (with sub-tabs: Browse | Liked | Reviews) ──
+            const _RecipeNavTab(),
+
+            // ── 2: Meal Plans ──────────────────────────────────────────
             const ComingSoonTab(
               icon: Icons.event_note_outlined,
               title: 'Meal Plans',
-              description: 'AI-powered meal planning and nutrition workflows are coming soon.',
+              description:
+                  'AI-powered meal planning and nutrition workflows are coming soon.',
             ),
+
+            // ── 3: Profile ─────────────────────────────────────────────
             const ComingSoonTab(
               icon: Icons.person_outline,
               title: 'Profile',
-              description: 'Manage your profile, preferences, and favorite recipes.',
+              description:
+                  'Manage your profile, preferences, and favorite recipes.',
             ),
           ],
         ),
@@ -80,12 +92,93 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedIndex: _selectedIndex,
         onDestinationSelected: _selectTab,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.menu_book_outlined), selectedIcon: Icon(Icons.menu_book), label: 'Recipes'),
-          NavigationDestination(icon: Icon(Icons.event_note_outlined), selectedIcon: Icon(Icons.event_note), label: 'Plans'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined),
+              selectedIcon: Icon(Icons.dashboard),
+              label: 'Home'),
+          NavigationDestination(
+              icon: Icon(Icons.menu_book_outlined),
+              selectedIcon: Icon(Icons.menu_book),
+              label: 'Recipes'),
+          NavigationDestination(
+              icon: Icon(Icons.event_note_outlined),
+              selectedIcon: Icon(Icons.event_note),
+              label: 'Plans'),
+          NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Profile'),
         ],
       ),
+    );
+  }
+
+  String _navTitle(int index) {
+    switch (index) {
+      case 1:
+        return 'Recipes';
+      case 2:
+        return 'Meal Plans';
+      case 3:
+        return 'Profile';
+      default:
+        return 'Home';
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// Recipe navtab — contains 3 sub-tabs: Browse | Liked | Reviews
+// ════════════════════════════════════════════════════════════════════════════════
+
+class _RecipeNavTab extends StatefulWidget {
+  const _RecipeNavTab();
+
+  @override
+  State<_RecipeNavTab> createState() => _RecipeNavTabState();
+}
+
+class _RecipeNavTabState extends State<_RecipeNavTab>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Sub-tab bar
+        TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.menu_book_outlined), text: 'Browse'),
+            Tab(icon: Icon(Icons.favorite_outline),   text: 'Liked'),
+            Tab(icon: Icon(Icons.rate_review),            text: 'Reviews'),
+          ],
+        ),
+        // Sub-tab content
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: const [
+              RecipeListView(showHeader: false),
+              RecipeLikesTab(),
+              RecipeMyReviewsTab(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

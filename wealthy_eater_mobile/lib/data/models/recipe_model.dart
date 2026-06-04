@@ -1,5 +1,9 @@
 import '../../domain/entities/recipe.dart';
 
+// ---------------------------------------------------------------------------
+// Primitive helpers
+// ---------------------------------------------------------------------------
+
 double _toDouble(dynamic value, [double fallback = 0]) {
   if (value is num) return value.toDouble();
   if (value is String) return double.tryParse(value) ?? fallback;
@@ -20,6 +24,16 @@ String _readString(Map<String, dynamic> json, List<String> keys, [String fallbac
   return fallback;
 }
 
+DateTime? _toDateTime(dynamic value) {
+  if (value == null) return null;
+  if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Nutrition Model
+// ---------------------------------------------------------------------------
+
 class RecipeNutritionModel extends RecipeNutritionEntity {
   const RecipeNutritionModel({
     required super.calories,
@@ -37,6 +51,10 @@ class RecipeNutritionModel extends RecipeNutritionEntity {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Ingredient Model
+// ---------------------------------------------------------------------------
 
 class RecipeIngredientModel extends RecipeIngredientEntity {
   const RecipeIngredientModel({
@@ -70,6 +88,10 @@ class RecipeIngredientModel extends RecipeIngredientEntity {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Step Model
+// ---------------------------------------------------------------------------
+
 class RecipeStepModel extends RecipeStepEntity {
   const RecipeStepModel({
     required super.id,
@@ -85,6 +107,77 @@ class RecipeStepModel extends RecipeStepEntity {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Review Model
+// ---------------------------------------------------------------------------
+
+class RecipeReviewModel extends RecipeReviewEntity {
+  const RecipeReviewModel({
+    required super.id,
+    required super.userId,
+    required super.userName,
+    required super.rating,
+    required super.comment,
+    super.createdAt,
+    super.updatedAt,
+  });
+
+  factory RecipeReviewModel.fromJson(Map<String, dynamic> json) {
+    // The backend populates user_id as an object: { _id, email, ... }
+    // or may be a plain string when not populated.
+    final userField = json['user_id'] ?? json['userId'];
+    String userId = '';
+    String userName = 'User';
+
+    if (userField is Map<String, dynamic>) {
+      userId = _readString(userField, ['_id', 'id']);
+      // Prefer name, fall back to email prefix
+      final email = userField['email']?.toString() ?? '';
+      userName = userField['name']?.toString().isNotEmpty == true
+          ? userField['name'].toString()
+          : (email.isNotEmpty ? email.split('@').first : 'User');
+    } else if (userField is String) {
+      userId = userField;
+    }
+
+    return RecipeReviewModel(
+      id: _readString(json, ['id', '_id']),
+      userId: userId,
+      userName: userName,
+      rating: _toInt(json['rating']),
+      comment: _readString(json, ['comment']),
+      createdAt: _toDateTime(json['createdAt']),
+      updatedAt: _toDateTime(json['updatedAt']),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Like Model
+// ---------------------------------------------------------------------------
+
+class RecipeLikeModel extends RecipeLikeEntity {
+  const RecipeLikeModel({
+    required super.id,
+    required super.userId,
+    required super.recipeId,
+    super.createdAt,
+  });
+
+  factory RecipeLikeModel.fromJson(Map<String, dynamic> json) {
+    return RecipeLikeModel(
+      id: _readString(json, ['id', '_id']),
+      userId: _readString(json, ['user_id', 'userId']),
+      recipeId: _readString(json, ['recipe_id', 'recipeId']),
+      createdAt: _toDateTime(json['createdAt']),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Recipe Model
+// ---------------------------------------------------------------------------
 
 class RecipeModel extends RecipeEntity {
   const RecipeModel({
@@ -103,7 +196,8 @@ class RecipeModel extends RecipeEntity {
     required super.reviews,
     required super.averageRating,
     required super.reviewCount,
-    super.isFavorite = false,
+    super.isLiked = false,
+    super.likeCount = 0,
   });
 
   factory RecipeModel.fromJson(Map<String, dynamic> json) {
@@ -122,17 +216,35 @@ class RecipeModel extends RecipeEntity {
       status: _readString(json, ['status'], 'Published'),
       difficulty: _readString(json, ['difficulty', 'level_cooking'], 'Medium'),
       cookingStep: _readString(json, ['cookingStep', 'cooking_step']),
-      nutrition: nutritionJson is Map<String, dynamic> ? RecipeNutritionModel.fromJson(nutritionJson) : null,
+      nutrition: nutritionJson is Map<String, dynamic>
+          ? RecipeNutritionModel.fromJson(nutritionJson)
+          : null,
       ingredients: ingredientsJson is List
-          ? ingredientsJson.whereType<Map<String, dynamic>>().map(RecipeIngredientModel.fromJson).toList()
+          ? ingredientsJson
+              .whereType<Map<String, dynamic>>()
+              .map(RecipeIngredientModel.fromJson)
+              .toList()
           : const [],
       steps: stepsJson is List
-          ? stepsJson.whereType<Map<String, dynamic>>().map(RecipeStepModel.fromJson).toList()
+          ? stepsJson
+              .whereType<Map<String, dynamic>>()
+              .map(RecipeStepModel.fromJson)
+              .toList()
           : const [],
-      reviews: reviewsJson is List ? reviewsJson.whereType<Map<String, dynamic>>().toList() : const [],
-      averageRating: json['averageRating'] == null ? null : _toDouble(json['averageRating']),
+      // Parse typed reviews list
+      reviews: reviewsJson is List
+          ? reviewsJson
+              .whereType<Map<String, dynamic>>()
+              .map(RecipeReviewModel.fromJson)
+              .toList()
+          : const [],
+      averageRating: json['averageRating'] == null
+          ? null
+          : _toDouble(json['averageRating']),
       reviewCount: _toInt(json['reviewCount']),
-      isFavorite: json['isFavorite'] == true,
+      // isLiked from backend (e.g. when detail is fetched with user context)
+      isLiked: json['isLiked'] == true,
+      likeCount: _toInt(json['likeCount']),
     );
   }
 }

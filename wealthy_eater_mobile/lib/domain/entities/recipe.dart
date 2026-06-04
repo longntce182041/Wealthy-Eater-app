@@ -1,3 +1,7 @@
+// ---------------------------------------------------------------------------
+// Ingredient
+// ---------------------------------------------------------------------------
+
 class RecipeIngredientEntity {
   final String id;
   final String ingredientId;
@@ -26,6 +30,10 @@ class RecipeIngredientEntity {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Step
+// ---------------------------------------------------------------------------
+
 class RecipeStepEntity {
   final String id;
   final int stepNumber;
@@ -37,6 +45,10 @@ class RecipeStepEntity {
     required this.instruction,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Nutrition
+// ---------------------------------------------------------------------------
 
 class RecipeNutritionEntity {
   final double calories;
@@ -52,6 +64,61 @@ class RecipeNutritionEntity {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Review — typed entity for a user rating + comment
+// ---------------------------------------------------------------------------
+
+class RecipeReviewEntity {
+  final String id;
+
+  /// The user who wrote this review.
+  final String userId;
+
+  /// Display name of the reviewer (populated from User).
+  final String userName;
+
+  /// Star rating: 1 - 5.
+  final int rating;
+
+  /// Optional written comment.
+  final String comment;
+
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  const RecipeReviewEntity({
+    required this.id,
+    required this.userId,
+    required this.userName,
+    required this.rating,
+    required this.comment,
+    this.createdAt,
+    this.updatedAt,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Like (Favorite) — a record of a user liking a recipe
+// ---------------------------------------------------------------------------
+
+class RecipeLikeEntity {
+  final String id;
+  final String userId;
+  final String recipeId;
+  final DateTime? createdAt;
+
+  const RecipeLikeEntity({
+    required this.id,
+    required this.userId,
+    required this.recipeId,
+    this.createdAt,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Recipe — main aggregate entity
+// ---------------------------------------------------------------------------
+
 class RecipeEntity {
   final String id;
   final String name;
@@ -65,10 +132,18 @@ class RecipeEntity {
   final RecipeNutritionEntity? nutrition;
   final List<RecipeIngredientEntity> ingredients;
   final List<RecipeStepEntity> steps;
-  final List<Map<String, dynamic>> reviews;
+
+  /// Typed list of reviews.
+  final List<RecipeReviewEntity> reviews;
+
   final double? averageRating;
   final int reviewCount;
-  final bool isFavorite;
+
+  /// True when the current user has liked / favorited this recipe (server-confirmed).
+  final bool isLiked;
+
+  /// Total number of likes this recipe has received.
+  final int likeCount;
 
   const RecipeEntity({
     required this.id,
@@ -86,7 +161,8 @@ class RecipeEntity {
     required this.reviews,
     required this.averageRating,
     required this.reviewCount,
-    this.isFavorite = false,
+    this.isLiked = false,
+    this.likeCount = 0,
   });
 
   RecipeEntity copyWith({
@@ -102,10 +178,11 @@ class RecipeEntity {
     RecipeNutritionEntity? nutrition,
     List<RecipeIngredientEntity>? ingredients,
     List<RecipeStepEntity>? steps,
-    List<Map<String, dynamic>>? reviews,
+    List<RecipeReviewEntity>? reviews,
     double? averageRating,
     int? reviewCount,
-    bool? isFavorite,
+    bool? isLiked,
+    int? likeCount,
   }) {
     return RecipeEntity(
       id: id ?? this.id,
@@ -123,7 +200,8 @@ class RecipeEntity {
       reviews: reviews ?? this.reviews,
       averageRating: averageRating ?? this.averageRating,
       reviewCount: reviewCount ?? this.reviewCount,
-      isFavorite: isFavorite ?? this.isFavorite,
+      isLiked: isLiked ?? this.isLiked,
+      likeCount: likeCount ?? this.likeCount,
     );
   }
 }
