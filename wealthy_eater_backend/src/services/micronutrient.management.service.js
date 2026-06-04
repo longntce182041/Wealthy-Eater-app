@@ -51,7 +51,19 @@ class MicronutrientManagementService {
             },
         };
     }
+    
+    // CREATE Micronutrient
+    async createMicronutrient(req, res) {
+        try {
+            const { errors, isValid } = validateCreateMicronutrient(req.body);
+            if (!isValid) return res.status(400).json({ success: false, errors });
 
+            const newMicronutrient = await micronutrientService.createMicronutrient(req.body);
+            res.status(201).json({ success: true, message: "Micronutrient created successfully", data: newMicronutrient });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
 
 
     

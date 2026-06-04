@@ -4,10 +4,11 @@ const micronutrientController = require("../controllers/micronutrient.management
 const { protect, authorize } = require("../middlewares/authMiddleware");
 
 
-// GET List & Search Micronutrients (Public)
-router.get("/", micronutrientController.getMicronutrients);
+// GET List & Search Micronutrients 
+router.get("/", protect, authorize("admin"), micronutrientController.getMicronutrients);
 
-
+// POST Create Micronutrient 
+router.post("/create", protect, authorize("admin"), micronutrientController.createMicronutrient);
 
 
 

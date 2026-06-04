@@ -12,6 +12,26 @@ class MicronutrientManagementController {
         }
     }
 
+    // CREATE Micronutrient
+    async createMicronutrient(data) {
+        // Check if micronutrient with same name already exists
+        const existingMicronutrient = await Micronutrient.findOne({ 
+            name: { $regex: new RegExp(`^${data.name}$`, 'i') } 
+        });
+        
+        if (existingMicronutrient) {
+            throw new Error("Micronutrient with this name already exists");
+        }
+
+        const micronutrient = new Micronutrient({
+            name: data.name,
+            unit: data.unit,
+            description: data.description || "",
+        });
+
+        await micronutrient.save();
+        return micronutrient;
+    }
     
 
 }
