@@ -95,8 +95,8 @@ class _RecipeListViewState extends State<RecipeListView> {
                                 ),
                               );
                             },
-                            isFavorite: recipe.isFavorite,
-                            onFavoriteTap: () => provider.toggleFavorite(recipe),
+                            isLiked: recipe.isLiked,
+                            onLikeTap: () => provider.toggleLike(recipe.id),
                           ),
                         ),
                       ),
@@ -147,14 +147,14 @@ class _Header extends StatelessWidget {
 class _RecipeCard extends StatelessWidget {
   final dynamic recipe;
   final VoidCallback onTap;
-  final VoidCallback onFavoriteTap;
-  final bool isFavorite;
+  final VoidCallback onLikeTap;
+  final bool isLiked;
 
   const _RecipeCard({
     required this.recipe,
     required this.onTap,
-    required this.onFavoriteTap,
-    required this.isFavorite,
+    required this.onLikeTap,
+    required this.isLiked,
   });
 
   @override
@@ -195,9 +195,9 @@ class _RecipeCard extends StatelessWidget {
                           ),
                         ),
                         IconButton(
-                          onPressed: onFavoriteTap,
-                          icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
-                          color: isFavorite ? Colors.redAccent : null,
+                          onPressed: onLikeTap,
+                          icon: Icon(isLiked ? Icons.favorite : Icons.favorite_border),
+                          color: isLiked ? Colors.redAccent : null,
                         ),
                       ],
                     ),
@@ -256,22 +256,7 @@ class _MiniBadge extends StatelessWidget {
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
 
-  const _FilterChip({required this.label, required this.selected, required this.onSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onSelected(),
-    );
-  }
-}
 
 class _EmptyView extends StatelessWidget {
   final Future<void> Function() onRefresh;
