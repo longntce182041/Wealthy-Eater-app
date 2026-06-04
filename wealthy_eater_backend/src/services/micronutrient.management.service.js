@@ -51,7 +51,7 @@ class MicronutrientManagementService {
             },
         };
     }
-    
+
     // CREATE Micronutrient
     async createMicronutrient(req, res) {
         try {
@@ -65,7 +65,64 @@ class MicronutrientManagementService {
         }
     }
 
+    // UPDATE Micronutrient
+    async updateMicronutrient(id, data) {
+        const micronutrient = await Micronutrient.findById(id);
+        if (!micronutrient) {
+            throw new Error("Micronutrient not found");
+        }
 
+        // Check if new name conflicts with existing micronutrient
+        if (data.name && data.name !== micronutrient.name) {
+            const existingMicronutrient = await Micronutrient.findOne({ 
+                name: { $regex: new RegExp(`^${data.name}$`, 'i') },
+                _id: { $ne: id }
+            });
+            
+            if (existingMicronutrient) {
+                throw new Error("Micronutrient with this name already exists");
+            }
+        }
+
+        if (data.name) micronutrient.name = data.name;
+        if (data.unit) micronutrient.unit = data.unit;
+        if (data.description !== undefined) micronutrient.description = data.description;
+
+        await micronutrient.save();
+        return micronutrient;
+    }
+
+    // DELETE Micronutrient
+    async deleteMicronutrient(id) {
+        const micronutrient = await Micronutrient.findById(id);
+        if (!micronutrient) {
+            throw new Error("Micronutrient not found");
+        }
+
+        const [ingredientUsageCount, recipeUsageCount] = await Promise.all([
+            IngredientMicronutrientValues.countDocuments({ micronutrientId: id }),
+            RecipeMicronutrientValues.countDocuments({ micronutrientId: id }),
+        ]);
+
+        const totalUsageCount = ingredientUsageCount + recipeUsageCount;
+
+        if (totalUsageCount > 0) {
+            const error = new Error(
+                `Cannot delete micronutrient \"${micronutrient.name}\" because it is already used in ${ingredientUsageCount} ingredient value(s) and ${recipeUsageCount} recipe value(s). Please remove related references first.`,
+            );
+            error.statusCode = 409;
+            error.code = "MICRONUTRIENT_IN_USE";
+            error.details = {
+                ingredientUsageCount,
+                recipeUsageCount,
+                totalUsageCount,
+            };
+            throw error;
+        }
+        
+        await Micronutrient.findByIdAndDelete(id);
+        return { message: "Micronutrient deleted successfully" };
+    }
     
 }
 

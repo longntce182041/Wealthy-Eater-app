@@ -10,7 +10,11 @@ router.get("/", protect, authorize("admin"), micronutrientController.getMicronut
 // POST Create Micronutrient 
 router.post("/create", protect, authorize("admin"), micronutrientController.createMicronutrient);
 
+// PUT Update Micronutrient 
+router.put("/update/:id", protect, authorize("admin"), micronutrientController.updateMicronutrient);
 
+// DELETE Micronutrient (Protected )
+router.delete("/delete/:id", protect, authorize("admin"), micronutrientController.deleteMicronutrient);
 
 
 
