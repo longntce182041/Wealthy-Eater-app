@@ -3,6 +3,7 @@ const { validateCreateMicronutrient, validateUpdateMicronutrient } = require("..
 
 class MicronutrientManagementController {
     
+    // GET List & Search/Filters Micronutrients
     async getMicronutrients(req, res) {
         try {
             const result = await micronutrientService.getAllMicronutrients(req.query);
@@ -60,7 +61,6 @@ class MicronutrientManagementController {
             });
         }
     }
-
 }
 
 module.exports = new MicronutrientManagementController();

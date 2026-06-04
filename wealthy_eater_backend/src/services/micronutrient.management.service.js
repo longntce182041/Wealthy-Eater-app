@@ -3,6 +3,7 @@ const XLSX = require("xlsx");
 const { validateMicronutrient } = require("../validators/micronutrient.management.validator");
 
 class MicronutrientManagementService {
+    
     // GET All Micronutrients with Search & Pagination
     async getAllMicronutrients(query) {
         const { keyword, unit, createdFrom, createdTo, page = 1, limit = 10 } = query;
@@ -123,7 +124,6 @@ class MicronutrientManagementService {
         await Micronutrient.findByIdAndDelete(id);
         return { message: "Micronutrient deleted successfully" };
     }
-    
 }
 
 module.exports = new MicronutrientManagementService();

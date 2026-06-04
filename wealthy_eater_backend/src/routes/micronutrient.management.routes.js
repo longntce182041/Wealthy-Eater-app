@@ -4,7 +4,7 @@ const micronutrientController = require("../controllers/micronutrient.management
 const { protect, authorize } = require("../middlewares/authMiddleware");
 
 
-// GET List & Search Micronutrients 
+// GET List & Search/Filters Micronutrients 
 router.get("/", protect, authorize("admin"), micronutrientController.getMicronutrients);
 
 // POST Create Micronutrient 
@@ -15,7 +15,5 @@ router.put("/update/:id", protect, authorize("admin"), micronutrientController.u
 
 // DELETE Micronutrient (Protected )
 router.delete("/delete/:id", protect, authorize("admin"), micronutrientController.deleteMicronutrient);
-
-
 
 module.exports = router;
