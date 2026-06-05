@@ -10,7 +10,7 @@
 analyzer:
   errors:
     dangling_library_doc_comments: ignore
-    unnecessary_underscores: ignore ignore
+    unnecessary_underscores: ignore
 include: package:flutter_lints/flutter.yaml
 
 linter:

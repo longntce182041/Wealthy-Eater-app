@@ -44,37 +44,35 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _doLogin() async {
-    setState(() => _loading = true);
-    try {
-      await Provider.of<AuthProvider>(context, listen: false)
-          .login(_emailCtrl.text.trim(), _passCtrl.text);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login success')));
-      final user = Provider.of<AuthProvider>(context, listen: false).user;
-      // navigate to home
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeScreen(user: user)));
-    } catch (e) {
-      _showError(e.toString());
-    } finally {
-      setState(() => _loading = false);
+    if (!_formKey.currentState!.validate()) return;
+
+    final auth = context.read<AuthProvider>();
+    await auth.login(_emailCtrl.text.trim(), _passCtrl.text);
+
+    if (!mounted) return;
+    if (auth.state == AuthState.error) {
+      _showError(auth.errorMessage ?? 'Login failed');
     }
   }
 
   Future<void> _doGoogle() async {
-    setState(() => _loading = true);
-    try {
-      await Provider.of<AuthProvider>(context, listen: false).googleSignIn();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Google login success')));
-      final user = Provider.of<AuthProvider>(context, listen: false).user;
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeScreen(user: user)));
-    } catch (e) {
-      if (!mounted) return;
-      _showError(e.toString());
-    } finally {
-      if (!mounted) return;
-      setState(() => _loading = false);
+    final auth = context.read<AuthProvider>();
+    await auth.googleSignIn();
+
+    if (!mounted) return;
+    if (auth.state == AuthState.error) {
+      _showError(auth.errorMessage ?? 'Google login failed');
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
