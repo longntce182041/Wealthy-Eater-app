@@ -35,6 +35,11 @@ const UserProfileSchema = new mongoose.Schema({
   bmr: { 
     type: String 
 
+  },
+  dietary_references: {
+    activity_level: { type: String, default: null },
+    diet_preferences: { type: [String], default: [] },
+    allergies: { type: [String], default: [] }
   }
 });
 
