@@ -20,8 +20,8 @@ function handleError(err, res) {
 async function login(req, res) {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password are required' });
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ success: false, message: 'Email and password must be valid strings' });
     }
     const result = await AuthService.login(email, password);
     return res.json({ success: true, message: 'Login successful', data: result });

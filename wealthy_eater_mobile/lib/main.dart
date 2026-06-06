@@ -11,6 +11,7 @@ import 'domain/usecases/get_recipes_usecase.dart';
 import 'domain/usecases/recipe_like_usecases.dart';
 import 'domain/usecases/recipe_review_usecases.dart';
 import 'domain/usecases/get_my_reviews_list_usecase.dart';
+import 'domain/usecases/shopping_list_usecases.dart';
 import 'presentation/providers/index.dart';
 import 'presentation/screens/index.dart';
 
@@ -25,7 +26,8 @@ class WealthyEaterApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final baseUrl = kIsWeb ? 'http://localhost:5000' : EnvConfig.baseUrl;
     final api = ApiClient(baseUrl);
-    final recipeRepository = RecipeRepositoryImpl(apiClient: api);
+    final recipeRepository       = RecipeRepositoryImpl(apiClient: api);
+    final shoppingListRepository = ShoppingListRepositoryImpl(apiClient: api);
 
     return MultiProvider(
       providers: [
@@ -47,6 +49,17 @@ class WealthyEaterApp extends StatelessWidget {
             // My Reviews
             getMyReviewsListUseCase: GetMyReviewsListUseCase(recipeRepository),
           )..loadRecipes(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ShoppingListProvider(
+            addFromRecipeUseCase:         AddFromRecipeUseCase(shoppingListRepository),
+            getShoppingListUseCase:       GetShoppingListUseCase(shoppingListRepository),
+            toggleShoppingItemUseCase:    ToggleShoppingItemUseCase(shoppingListRepository),
+            removeShoppingItemUseCase:    RemoveShoppingItemUseCase(shoppingListRepository),
+            clearPurchasedUseCase:        ClearPurchasedUseCase(shoppingListRepository),
+            clearAllShoppingItemsUseCase: ClearAllShoppingItemsUseCase(shoppingListRepository),
+            getShoppingStatsUseCase:      GetShoppingStatsUseCase(shoppingListRepository),
+          ),
         ),
       ],
       child: MaterialApp(

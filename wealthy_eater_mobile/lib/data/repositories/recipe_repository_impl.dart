@@ -25,7 +25,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   }) async {
     try {
       final response = await apiClient.get(
-        '/api/recipes',
+        '/api/user/recipes',
         queryParameters: {
           if (search.trim().isNotEmpty) 'search': search.trim(),
           if (status.trim().isNotEmpty) 'status': status.trim(),
@@ -54,7 +54,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   @override
   Future<RecipeEntity> fetchRecipeDetail(String id) async {
     try {
-      final response = await apiClient.get('/api/recipes/$id');
+      final response = await apiClient.get('/api/user/recipes/$id');
 
       if (response.statusCode == 200 && response.data['success'] == true) {
         final data = response.data['data'];
@@ -74,7 +74,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   @override
   Future<({bool isLiked, String action})> toggleLike(String recipeId) async {
     try {
-      final response = await apiClient.post('/api/recipes/$recipeId/like');
+      final response = await apiClient.post('/api/user/recipes/$recipeId/like');
 
       if (response.statusCode != null &&
           response.statusCode! >= 200 &&
@@ -97,7 +97,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   Future<Map<String, dynamic>> fetchLikedRecipes({int page = 1, int limit = 20}) async {
     try {
       final response = await apiClient.get(
-        '/api/recipes/liked',
+        '/api/user/recipes/liked',
         queryParameters: {'page': page, 'limit': limit},
       );
 
@@ -117,7 +117,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   @override
   Future<({bool isLiked, int likeCount})> fetchLikeStatus(String recipeId) async {
     try {
-      final response = await apiClient.get('/api/recipes/$recipeId/like/status');
+      final response = await apiClient.get('/api/user/recipes/$recipeId/like/status');
 
       if (response.statusCode == 200 && response.data['success'] == true) {
         final data = response.data['data'] as Map<String, dynamic>;
@@ -143,7 +143,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   }) async {
     try {
       final response = await apiClient.post(
-        '/api/recipes/$recipeId/reviews',
+        '/api/user/recipes/$recipeId/reviews',
         data: {'rating': rating, 'comment': comment},
       );
 
@@ -170,7 +170,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   }) async {
     try {
       final response = await apiClient.get(
-        '/api/recipes/$recipeId/reviews',
+        '/api/user/recipes/$recipeId/reviews',
         queryParameters: {'page': page, 'limit': limit, 'sortOrder': sortOrder},
       );
 
@@ -196,7 +196,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   @override
   Future<RecipeReviewEntity?> fetchMyReview(String recipeId) async {
     try {
-      final response = await apiClient.get('/api/recipes/$recipeId/reviews/mine');
+      final response = await apiClient.get('/api/user/recipes/$recipeId/reviews/mine');
 
       if (response.statusCode == 200 && response.data['success'] == true) {
         final data = response.data['data'] as Map<String, dynamic>;
@@ -216,7 +216,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   @override
   Future<void> deleteReview(String reviewId) async {
     try {
-      await apiClient.delete('/api/recipes/reviews/$reviewId');
+      await apiClient.delete('/api/user/recipes/reviews/$reviewId');
     } on DioException catch (e) {
       throw Exception(e.response?.data?['message'] ?? e.message ?? 'Failed to delete review');
     }
@@ -228,7 +228,7 @@ class RecipeRepositoryImpl implements RecipeRepository {
   Future<Map<String, dynamic>> fetchAllMyReviews({int page = 1, int limit = 10, String sortOrder = 'desc'}) async {
     try {
       final response = await apiClient.get(
-        '/api/recipes/reviews/mine',
+        '/api/user/recipes/reviews/mine',
         queryParameters: {'page': page, 'limit': limit, 'sortOrder': sortOrder},
       );
 

@@ -3,7 +3,7 @@ const Recipe = require('../models/Recipe');
 const User = require('../models/User');
 
 /**
- * recipe.review.service.js
+ * user.recipe.review.service.js
  *
  * Business logic for recipe ratings and text reviews.
  *

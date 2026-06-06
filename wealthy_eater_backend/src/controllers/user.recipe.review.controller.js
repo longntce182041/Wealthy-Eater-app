@@ -1,10 +1,10 @@
-const reviewService = require('../services/recipe.review.service');
+const reviewService = require('../services/user.recipe.review.service');
 
 /**
- * recipe.review.controller.js
+ * user.recipe.review.controller.js
  *
  * HTTP layer for recipe reviews (ratings + comments).
- * All business logic lives in recipe.review.service.js.
+ * All business logic lives in user.recipe.review.service.js.
  */
 
 // ─── POST /api/recipes/:id/reviews ───────────────────────────────────────────

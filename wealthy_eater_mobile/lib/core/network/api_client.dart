@@ -69,6 +69,18 @@ class ApiClient {
       options: headers != null ? Options(headers: headers) : null,
     );
   }
+
+  Future<Response<T>> patch<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? headers,
+  }) {
+    return dio.patch<T>(
+      path,
+      data: data,
+      options: headers != null ? Options(headers: headers) : null,
+    );
+  }
 }
 
 /// Dio interceptor that reads the stored access token and injects it

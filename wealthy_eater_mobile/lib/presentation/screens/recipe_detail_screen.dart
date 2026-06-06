@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../domain/entities/recipe.dart';
 import '../providers/recipe_provider.dart';
+import '../providers/shopping_list_provider.dart';
 
 /// Recipe detail screen with three tabs: Info, Reviews.
 /// View is recorded automatically on open.
@@ -232,6 +233,56 @@ class _InfoTab extends StatelessWidget {
   final RecipeEntity recipe;
   const _InfoTab({required this.recipe});
 
+  Future<void> _addToShoppingList(BuildContext context, int servings) async {
+    final provider = context.read<ShoppingListProvider>();
+    final ok = await provider.addFromRecipe(recipe.id, servings: servings);
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: ok
+            ? Colors.green.shade700
+            : Theme.of(context).colorScheme.error,
+        content: Row(
+          children: [
+            Icon(
+              ok ? Icons.shopping_cart_checkout : Icons.error_outline,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                ok
+                    ? 'Ingredients added to your shopping list!'
+                    : (provider.errorMessage ?? 'Failed to add ingredients'),
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showServingsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ServingsSelectorSheet(
+        baseServings: recipe.baseServings > 0 ? recipe.baseServings : 1,
+        onConfirm: (servings) {
+          Navigator.pop(context);
+          _addToShoppingList(context, servings);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -245,8 +296,45 @@ class _InfoTab extends StatelessWidget {
             : recipe.description),
         const SizedBox(height: 20),
 
-        // Ingredients
-        _SectionTitle(title: 'Ingredients'),
+        // Ingredients + Add to Shopping List
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: _SectionTitle(title: 'Ingredients')),
+            Consumer<ShoppingListProvider>(
+              builder: (ctx, shoppingProvider, _) {
+                final isAdding = shoppingProvider.isAdding;
+                final isAdded = shoppingProvider.isRecipePending(recipe.id);
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: isAdding
+                      ? const SizedBox(
+                          key: ValueKey('loading'),
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        )
+                      : FilledButton.tonalIcon(
+                          key: const ValueKey('button'),
+                          onPressed: (recipe.ingredients.isEmpty || isAdded)
+                              ? null
+                              : () => _showServingsSheet(ctx),
+                          icon: Icon(
+                            isAdded ? Icons.check : Icons.add_shopping_cart_outlined,
+                            size: 16,
+                          ),
+                          label: Text(isAdded ? 'Added to list' : 'Add to list'),
+                          style: FilledButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                          ),
+                        ),
+                );
+              },
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         ...recipe.ingredients.map((ing) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -995,6 +1083,113 @@ class _DetailError extends StatelessWidget {
                 onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Servings Selector Sheet ──────────────────────────────────────────────────
+
+class _ServingsSelectorSheet extends StatefulWidget {
+  final int baseServings;
+  final void Function(int) onConfirm;
+
+  const _ServingsSelectorSheet({
+    required this.baseServings,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_ServingsSelectorSheet> createState() => _ServingsSelectorSheetState();
+}
+
+class _ServingsSelectorSheetState extends State<_ServingsSelectorSheet> {
+  late int _servings;
+
+  @override
+  void initState() {
+    super.initState();
+    _servings = widget.baseServings;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.outline.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Adjust Servings',
+            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'How many portions are you planning to cook?',
+            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+          
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton.filledTonal(
+                onPressed: _servings > 1 ? () => setState(() => _servings--) : null,
+                icon: const Icon(Icons.remove),
+                iconSize: 28,
+              ),
+              const SizedBox(width: 32),
+              SizedBox(
+                width: 40,
+                child: Text(
+                  '$_servings',
+                  style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(width: 32),
+              IconButton.filledTonal(
+                onPressed: _servings < 100 ? () => setState(() => _servings++) : null,
+                icon: const Icon(Icons.add),
+                iconSize: 28,
+              ),
+            ],
+          ),
+          const SizedBox(height: 40),
+          
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => widget.onConfirm(_servings),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: Text(
+                'Add $_servings serving${_servings == 1 ? '' : 's'} to list',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
