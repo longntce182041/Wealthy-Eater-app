@@ -7,12 +7,14 @@ const recipeRoute = require('./user.recipe.route');
 const ingredientRoute = require('./ingredient.management.routes');
 const shoppingListRoute = require('./shopping_list.route');
 const micronutrientRoute = require('./micronutrient.management.routes');
+const adminRecipeRoute = require('./admin.recipe.routes');
 
 router.use('/api/auth', authRoute);
 router.use('/api/user/recipes', recipeRoute);
 router.use('/api/ingredients', ingredientRoute);
 router.use('/api/user/shopping-list', shoppingListRoute);
 router.use('/api/micronutrients', micronutrientRoute);
+router.use('/api/admin/recipes', adminRecipeRoute);
 
 
 module.exports = router;
