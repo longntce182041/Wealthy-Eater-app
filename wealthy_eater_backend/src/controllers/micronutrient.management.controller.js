@@ -1,0 +1,66 @@
+const micronutrientService = require("../services/micronutrient.management.service");
+const { validateCreateMicronutrient, validateUpdateMicronutrient } = require("../validators/micronutrient.management.validator");
+
+class MicronutrientManagementController {
+    
+    // GET List & Search/Filters Micronutrients
+    async getMicronutrients(req, res) {
+        try {
+            const result = await micronutrientService.getAllMicronutrients(req.query);
+            res.json({ success: true, data: result });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    // CREATE Micronutrient
+    async createMicronutrient(data) {
+        // Check if micronutrient with same name already exists
+        const existingMicronutrient = await Micronutrient.findOne({ 
+            name: { $regex: new RegExp(`^${data.name}$`, 'i') } 
+        });
+        
+        if (existingMicronutrient) {
+            throw new Error("Micronutrient with this name already exists");
+        }
+
+        const micronutrient = new Micronutrient({
+            name: data.name,
+            unit: data.unit,
+            description: data.description || "",
+        });
+
+        await micronutrient.save();
+        return micronutrient;
+    }
+    
+    // UPDATE Micronutrient
+    async updateMicronutrient(req, res) {
+        try {
+            const { errors, isValid } = validateUpdateMicronutrient(req.body);
+            if (!isValid) return res.status(400).json({ success: false, errors });
+
+            const updatedMicronutrient = await micronutrientService.updateMicronutrient(req.params.id, req.body);
+            res.json({ success: true, message: "Micronutrient updated successfully", data: updatedMicronutrient });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    // DELETE Micronutrient
+    async deleteMicronutrient(req, res) {
+        try {
+            await micronutrientService.deleteMicronutrient(req.params.id);
+            res.json({ success: true, message: "Micronutrient deleted successfully" });
+        } catch (error) {
+            res.status(error.statusCode || 400).json({
+                success: false,
+                code: error.code,
+                message: error.message,
+                details: error.details,
+            });
+        }
+    }
+}
+
+module.exports = new MicronutrientManagementController();

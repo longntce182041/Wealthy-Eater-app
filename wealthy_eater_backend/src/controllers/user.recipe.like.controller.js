@@ -1,10 +1,10 @@
-const likeService = require('../services/recipe.like.service');
+const likeService = require('../services/user.recipe.like.service');
 
 /**
- * recipe.like.controller.js
+ * user.recipe.like.controller.js
  *
  * HTTP layer for recipe like / favorite operations.
- * All business logic lives in recipe.like.service.js.
+ * All business logic lives in user.recipe.like.service.js.
  */
 
 // ─── POST /api/recipes/:id/like  (toggle) ────────────────────────────────────

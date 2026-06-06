@@ -2,7 +2,7 @@ const RecipeLike = require('../models/RecipeLike');
 const Recipe = require('../models/Recipe');
 
 /**
- * recipe.like.service.js
+ * user.recipe.like.service.js
  *
  * Handles all business logic for recipe likes (favorites).
  * All functions throw on unrecoverable errors so controllers can catch centrally.
