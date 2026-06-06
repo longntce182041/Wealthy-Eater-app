@@ -9,6 +9,11 @@ router.post('/login', AuthController.login);
 // POST /api/auth/google         — Google OAuth login / auto-register
 router.post('/google', AuthController.googleLogin);
 
+// Registration + OTP flows
+router.post('/register', AuthController.register);
+router.post('/verify-otp', AuthController.verifyOtp);
+router.post('/resend-otp', AuthController.resendOtp);
+
 // POST /api/auth/refresh        — exchange refreshToken for new accessToken
 router.post('/refresh', AuthController.refresh);
 

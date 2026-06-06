@@ -102,7 +102,16 @@ class _AppRootState extends State<_AppRoot> {
           case AuthState.loading:
             return const _SplashScreen();
           case AuthState.authenticated:
-            return HomeScreen(user: auth.user);
+              // If authenticated but user hasn't completed profile, show profile form (customers)
+              if (auth.user?.role == 'customer' && auth.userProfile == null) {
+                return const ProfileFormScreen();
+              }
+
+              // Route to different home views depending on role
+              if (auth.user?.role == 'nutritionist') {
+                return NutritionistHomeScreen(user: auth.user);
+              }
+              return HomeScreen(user: auth.user);
           case AuthState.unauthenticated:
           case AuthState.error:
             return const LoginScreen();
