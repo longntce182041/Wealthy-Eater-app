@@ -11,7 +11,7 @@ import 'register_screen.dart';
 /// Optimized layout using [CustomScrollView] and [SliverFillRemaining] to handle
 /// keyboards flawlessly on small screens while keeping content centered.
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();

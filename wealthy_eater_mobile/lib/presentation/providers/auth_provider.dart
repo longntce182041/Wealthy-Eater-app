@@ -285,4 +285,56 @@ class AuthProvider with ChangeNotifier {
     errorMessage = message;
     notifyListeners();
   }
+
+  // ---------------------------------------------------------------------------
+  // Logout
+  // ---------------------------------------------------------------------------
+
+  Future<void> logout() async {
+    await _clearSession();
+    state = AuthState.unauthenticated;
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
+    final token = data['accessToken']?.toString();
+    if (token == null || token.isEmpty) {
+      _setError('Invalid response from server');
+      return;
+    }
+
+    _accessToken = token;
+    await _storage.write(key: 'accessToken', value: token);
+
+    final userData = data['user'];
+    if (userData is Map<String, dynamic>) {
+      user = UserEntity.fromJson(userData);
+    }
+
+    state = AuthState.authenticated;
+    errorMessage = null;
+    notifyListeners();
+  }
+
+  Future<void> _clearSession() async {
+    _accessToken = null;
+    user = null;
+    await _storage.delete(key: 'accessToken');
+  }
+
+  void _setLoading() {
+    state = AuthState.loading;
+    errorMessage = null;
+    notifyListeners();
+  }
+
+  void _setError(String message) {
+    state = AuthState.error;
+    errorMessage = message;
+    notifyListeners();
+  }
 }
