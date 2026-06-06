@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 
 import '../../domain/entities/user.dart';
 import '../providers/auth_provider.dart';
+import '../providers/shopping_list_provider.dart';
 import '../widgets/coming_soon_tab.dart';
 import 'dashboard_home_tab.dart';
 import 'recipe_likes_tab.dart';
 import 'recipe_list_view.dart';
 import 'recipe_my_reviews_tab.dart';
+import 'shopping_list_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserEntity? user;
@@ -145,7 +147,15 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
+    // Pre-load shopping list when the Recipe navtab is first opened
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final shoppingProvider =
+          context.read<ShoppingListProvider>();
+      if (shoppingProvider.viewState == ShoppingListViewState.initial) {
+        shoppingProvider.loadList();
+      }
+    });
   }
 
   @override
@@ -162,9 +172,10 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
         TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(icon: Icon(Icons.menu_book_outlined), text: 'Browse'),
-            Tab(icon: Icon(Icons.favorite_outline),   text: 'Liked'),
-            Tab(icon: Icon(Icons.rate_review),            text: 'Reviews'),
+            Tab(icon: Icon(Icons.menu_book_outlined),       text: 'Browse'),
+            Tab(icon: Icon(Icons.favorite_outline),          text: 'Liked'),
+            Tab(icon: Icon(Icons.rate_review),               text: 'Reviews'),
+            Tab(icon: Icon(Icons.shopping_cart_outlined),    text: 'Shopping'),
           ],
         ),
         // Sub-tab content
@@ -175,6 +186,7 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
               RecipeListView(showHeader: false),
               RecipeLikesTab(),
               RecipeMyReviewsTab(),
+              ShoppingListTab(),
             ],
           ),
         ),
