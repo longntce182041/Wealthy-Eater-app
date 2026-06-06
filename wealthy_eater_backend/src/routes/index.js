@@ -5,9 +5,11 @@ const router = express.Router();
 const authRoute = require('./auth.route');
 const recipeRoute = require('./recipe.route');
 const ingredientRoute = require('./ingredient.management.routes');
+const micronutrientRoute = require('./micronutrient.management.routes');
 
 router.use('/api/auth', authRoute);
 router.use('/api/recipes', recipeRoute);
 router.use('/api/ingredients', ingredientRoute);
+router.use('/api/micronutrients', micronutrientRoute);
 
 module.exports = router;
