@@ -1,11 +1,12 @@
 const express = require('express');
 const router  = express.Router();
 
-const RecipeController       = require('../controllers/recipe.controller');
-const LikeController         = require('../controllers/recipe.like.controller');
-const ReviewController       = require('../controllers/recipe.review.controller');
+const RecipeController       = require('../controllers/user.recipe.controller');
+const LikeController         = require('../controllers/user.recipe.like.controller');
+const ReviewController       = require('../controllers/user.recipe.review.controller');
 
 const { authenticateToken }  = require('../middlewares/auth');
+const validateObjectId       = require('../middlewares/validateObjectId');
 
 // All routes in this file are protected by JWT auth
 router.use(authenticateToken);
@@ -30,18 +31,16 @@ router.get('/reviews/mine',  ReviewController.getAllMyReviews);
 // ════════════════════════════════════════════════════════════
 
 // Recipe detail
-router.get('/:id', RecipeController.detail);
-
-
+router.get('/:id', validateObjectId('id'), RecipeController.detail);
 
 // Likes toggle + status
-router.post('/:id/like',         LikeController.toggleLike);
-router.get('/:id/like/status',   LikeController.getLikeStatus);
+router.post('/:id/like',       validateObjectId('id'), LikeController.toggleLike);
+router.get('/:id/like/status', validateObjectId('id'), LikeController.getLikeStatus);
 
 // Reviews
-router.post('/:id/reviews',       ReviewController.upsertReview);      // add / update
-router.get('/:id/reviews',        ReviewController.getRecipeReviews);  // list for recipe
-router.get('/:id/reviews/mine',   ReviewController.getMyReview);       // current user's review
-router.delete('/reviews/:reviewId', ReviewController.deleteReview);    // delete own review
+router.post('/:id/reviews',       validateObjectId('id'), ReviewController.upsertReview);      // add / update
+router.get('/:id/reviews',        validateObjectId('id'), ReviewController.getRecipeReviews);  // list for recipe
+router.get('/:id/reviews/mine',   validateObjectId('id'), ReviewController.getMyReview);       // current user's review
+router.delete('/reviews/:reviewId', validateObjectId('reviewId'), ReviewController.deleteReview);    // delete own review
 
 module.exports = router;

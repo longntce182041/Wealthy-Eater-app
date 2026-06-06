@@ -139,16 +139,42 @@ async function list(req, res) {
       Recipe.countDocuments(filter),
     ]);
 
-    const data = await Promise.all(recipes.map(async (recipe) => {
-      const [nutrition, reviewStats, ingredientsCount, stepsCount] = await Promise.all([
-        RecipeNutrition.findOne({ recipe_id: recipe._id }).lean(),
-        RecipeReview.find({ recipe_id: recipe._id }).lean(),
-        RecipeIngredient.countDocuments({ recipe_id: recipe._id }),
-        RecipeStep.countDocuments({ recipe_id: recipe._id }),
-      ]);
+    const recipeIds = recipes.map(r => r._id);
 
-      const ratingTotal = reviewStats.reduce((sum, review) => sum + (Number(review.rating) || 0), 0);
-      const reviewCount = reviewStats.length;
+    // 1. Fetch all nutrition
+    const nutritions = await RecipeNutrition.find({ recipe_id: { $in: recipeIds } }).lean();
+    const nutritionMap = {};
+    for (const n of nutritions) nutritionMap[n.recipe_id] = n;
+
+    // 2. Fetch all review stats using Aggregation
+    const reviewStats = await RecipeReview.aggregate([
+      { $match: { recipe_id: { $in: recipeIds } } },
+      { $group: { _id: '$recipe_id', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } }
+    ]);
+    const reviewMap = {};
+    for (const r of reviewStats) reviewMap[r._id] = r;
+
+    // 3. Fetch all ingredient counts
+    const ingredientCounts = await RecipeIngredient.aggregate([
+      { $match: { recipe_id: { $in: recipeIds } } },
+      { $group: { _id: '$recipe_id', count: { $sum: 1 } } }
+    ]);
+    const ingredientCountMap = {};
+    for (const i of ingredientCounts) ingredientCountMap[i._id] = i.count;
+
+    // 4. Fetch all step counts
+    const stepCounts = await RecipeStep.aggregate([
+      { $match: { recipe_id: { $in: recipeIds } } },
+      { $group: { _id: '$recipe_id', count: { $sum: 1 } } }
+    ]);
+    const stepCountMap = {};
+    for (const s of stepCounts) stepCountMap[s._id] = s.count;
+
+    const data = recipes.map(recipe => {
+      const nutrition = nutritionMap[recipe._id];
+      const revStats = reviewMap[recipe._id] || { count: 0, avgRating: 0 };
+      const ingredientsCount = ingredientCountMap[recipe._id] || 0;
+      const stepsCount = stepCountMap[recipe._id] || 0;
 
       return mapRecipe(recipe, {
         nutrition: nutrition ? {
@@ -157,12 +183,12 @@ async function list(req, res) {
           fat: nutrition.fat,
           carbs: nutrition.carbs,
         } : null,
-        averageRating: reviewCount ? Number((ratingTotal / reviewCount).toFixed(1)) : 0,
-        reviewCount,
+        averageRating: revStats.count ? Number(revStats.avgRating.toFixed(1)) : 0,
+        reviewCount: revStats.count,
         ingredientsCount,
         stepsCount,
       });
-    }));
+    });
 
     return res.json({
       success: true,
@@ -194,16 +220,19 @@ async function detail(req, res) {
       });
     }
 
-    const [nutrition, ingredientsRelations, steps, reviews] = await Promise.all([
+    const [nutrition, ingredientsRelations, steps, reviewStats, recentReviews] = await Promise.all([
       RecipeNutrition.findOne({ recipe_id: recipe._id }).lean(),
       RecipeIngredient.find({ recipe_id: recipe._id }).populate('ingredient_id').lean(),
       RecipeStep.find({ recipe_id: recipe._id }).sort({ step_number: 1 }).lean(),
-      RecipeReview.find({ recipe_id: recipe._id }).lean(),
+      RecipeReview.aggregate([
+        { $match: { recipe_id: recipe._id } },
+        { $group: { _id: null, count: { $sum: 1 }, avgRating: { $avg: '$rating' } } }
+      ]),
+      RecipeReview.find({ recipe_id: recipe._id }).sort({ createdAt: -1 }).limit(10).lean(),
     ]);
 
     const ingredients = ingredientsRelations.map((relation) => mapIngredient(relation.ingredient_id, relation));
-    const ratingTotal = reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0);
-    const reviewCount = reviews.length;
+    const revStats = reviewStats[0] || { count: 0, avgRating: 0 };
 
     return res.json({
       success: true,
@@ -215,8 +244,8 @@ async function detail(req, res) {
           fat: nutrition.fat,
           carbs: nutrition.carbs,
         } : null,
-        averageRating: reviewCount ? Number((ratingTotal / reviewCount).toFixed(1)) : 0,
-        reviewCount,
+        averageRating: revStats.count ? Number(revStats.avgRating.toFixed(1)) : 0,
+        reviewCount: revStats.count,
         ingredientsCount: ingredients.length,
         stepsCount: steps.length,
         ingredients,
@@ -225,7 +254,7 @@ async function detail(req, res) {
           stepNumber: step.step_number,
           instruction: step.instruction,
         })),
-        reviews: reviews.map((review) => ({
+        reviews: recentReviews.map((review) => ({
           id: review._id,
           rating: review.rating,
           comment: review.comment || '',

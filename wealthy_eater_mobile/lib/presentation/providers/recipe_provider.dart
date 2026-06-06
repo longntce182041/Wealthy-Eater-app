@@ -6,6 +6,7 @@ import '../../domain/usecases/get_recipes_usecase.dart';
 import '../../domain/usecases/recipe_like_usecases.dart';
 import '../../domain/usecases/recipe_review_usecases.dart';
 import '../../domain/usecases/get_my_reviews_list_usecase.dart';
+import '../../core/error/app_error.dart';
 
 enum RecipeViewState { initial, loading, success, error }
 
@@ -100,6 +101,10 @@ class RecipeProvider extends ChangeNotifier {
     }
 
     try {
+      if (likedListState == RecipeViewState.initial) {
+        await loadLikedRecipes();
+      }
+
       recipes = await getRecipesUseCase(
         search:      searchQuery,
         status:      selectedStatus,
@@ -116,7 +121,7 @@ class RecipeProvider extends ChangeNotifier {
       listState = RecipeViewState.success;
     } catch (e) {
       listState    = RecipeViewState.error;
-      errorMessage = e.toString();
+      errorMessage = mapError(e).message;
     }
     notifyListeners();
   }
@@ -139,7 +144,7 @@ class RecipeProvider extends ChangeNotifier {
       loadMyReview(id);
     } catch (e) {
       detailState  = RecipeViewState.error;
-      errorMessage = e.toString();
+      errorMessage = mapError(e).message;
     }
     notifyListeners();
   }
@@ -281,7 +286,7 @@ class RecipeProvider extends ChangeNotifier {
       likedListState = RecipeViewState.success;
     } catch (e) {
       likedListState = RecipeViewState.error;
-      errorMessage   = e.toString();
+      errorMessage   = mapError(e).message;
     }
     notifyListeners();
   }
@@ -316,7 +321,7 @@ class RecipeProvider extends ChangeNotifier {
       reviewsState         = RecipeViewState.success;
     } catch (e) {
       reviewsState = RecipeViewState.error;
-      reviewsError = e.toString();
+      reviewsError = mapError(e).message;
     }
     notifyListeners();
   }
@@ -378,7 +383,7 @@ class RecipeProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       isSubmittingReview = false;
-      reviewSubmitError  = e.toString();
+      reviewSubmitError  = mapError(e).message;
       notifyListeners();
       return false;
     }
@@ -411,7 +416,7 @@ class RecipeProvider extends ChangeNotifier {
       myReviewsListState = RecipeViewState.success;
     } catch (e) {
       myReviewsListState = RecipeViewState.error;
-      errorMessage       = e.toString();
+      errorMessage       = mapError(e).message;
     }
     notifyListeners();
   }
