@@ -58,4 +58,16 @@ router.get('/stats', AdminRecipeController.getRecipesStats);
  */
 router.get('/:id', validateObjectId('id'), AdminRecipeController.getRecipeDetail);
 
+/**
+ * UC-74: PUT /api/admin/recipes/:id
+ * Cập nhật thông tin công thức nấu ăn (Edit Recipe)
+ */
+router.put('/:id', validateObjectId('id'), AdminRecipeController.updateRecipe);
+
+/**
+ * UC-74: DELETE /api/admin/recipes/:id
+ * Xóa mềm công thức (Soft Delete)
+ */
+router.delete('/:id', validateObjectId('id'), AdminRecipeController.deleteRecipe);
+
 module.exports = router;

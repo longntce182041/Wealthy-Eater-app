@@ -390,9 +390,145 @@ async function getRecipeDetail(req, res) {
     });
   }
 }
+/**
+ * UC-74: PUT /api/admin/recipes/:id
+ * Cập nhật công thức (Bao gồm thông tin cơ bản, cập nhật nguyên liệu, bước nấu và tự tính lại dinh dưỡng)
+ */
+async function updateRecipe(req, res) {
+  try {
+    const recipeId = req.params.id;
+    const {
+      name, description, image_url, cooking_time, base_servings, status, level_cooking,
+      ingredients, steps
+    } = req.body;
+
+    // 1. Kiểm tra xem công thức có tồn tại không
+    const recipe = await Recipe.findById(recipeId);
+    if (!recipe) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy công thức để cập nhật.' });
+    }
+
+    // 2. Cập nhật thông tin cơ bản của Recipe
+    if (name) recipe.name = name;
+    if (description !== undefined) recipe.description = description;
+    if (image_url !== undefined) recipe.image_url = image_url;
+    if (cooking_time !== undefined) recipe.cooking_time = Number(cooking_time);
+    if (base_servings !== undefined) recipe.base_servings = Number(base_servings);
+    if (status) recipe.status = status;
+    if (level_cooking) recipe.level_cooking = level_cooking;
+
+    await recipe.save();
+
+    // 3. Cập nhật Nguyên liệu & Tính lại Dinh dưỡng (Chỉ thực thi nếu client có gửi mảng ingredients)
+    if (ingredients && Array.isArray(ingredients)) {
+      let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
+      const recipeIngredientDocs = [];
+
+      for (const item of ingredients) {
+        const ingredientData = await Ingredient.findById(item.ingredient_id).lean();
+        if (!ingredientData) {
+          return res.status(404).json({
+            success: false,
+            message: `Không tìm thấy nguyên liệu có ID: ${item.ingredient_id}`,
+          });
+        }
+
+        const quantity = Number(item.base_quantity) || 0;
+        totalCalories += (ingredientData.calories_per_unit || 0) * quantity;
+        totalProtein += (ingredientData.protein || 0) * quantity;
+        totalFat += (ingredientData.fat || 0) * quantity;
+        totalCarbs += (ingredientData.carbs || 0) * quantity;
+
+        recipeIngredientDocs.push({
+          recipe_id: recipeId,
+          ingredient_id: item.ingredient_id,
+          base_quantity: quantity,
+          unit: item.unit || ingredientData.unit || 'g',
+        });
+      }
+
+      // Chiến lược thay thế: Xóa nguyên liệu cũ -> Thêm nguyên liệu mới
+      await RecipeIngredient.deleteMany({ recipe_id: recipeId });
+      if (recipeIngredientDocs.length > 0) {
+        await RecipeIngredient.insertMany(recipeIngredientDocs);
+      }
+
+      // Cập nhật lại chỉ số dinh dưỡng (dùng findOneAndUpdate để nếu chưa có thì upsert tạo mới)
+      await RecipeNutrition.findOneAndUpdate(
+        { recipe_id: recipeId },
+        {
+          calories: Math.round(totalCalories * 10) / 10,
+          protein: Math.round(totalProtein * 10) / 10,
+          fat: Math.round(totalFat * 10) / 10,
+          carbs: Math.round(totalCarbs * 10) / 10,
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    // 4. Cập nhật các bước nấu ăn (Chỉ thực thi nếu client gửi mảng steps)
+    if (steps && Array.isArray(steps)) {
+      const recipeStepDocs = steps.map((stepContent, index) => ({
+        recipe_id: recipeId,
+        step_number: typeof stepContent === 'object' ? stepContent.step_number : index + 1,
+        instruction: typeof stepContent === 'object' ? stepContent.instruction : stepContent,
+      }));
+
+      // Chiến lược thay thế: Xóa bước cũ -> Thêm bước mới
+      await RecipeStep.deleteMany({ recipe_id: recipeId });
+      if (recipeStepDocs.length > 0) {
+        await RecipeStep.insertMany(recipeStepDocs);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Cập nhật công thức thành công!',
+      data: recipe,
+    });
+  } catch (err) {
+    console.error('❌ Error updating recipe:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Cập nhật công thức thất bại.',
+    });
+  }
+}
+
+/**
+ * UC-74: DELETE /api/admin/recipes/:id
+ * Xóa mềm công thức (Đổi trạng thái thành 'archived' để ẩn đi)
+ */
+async function deleteRecipe(req, res) {
+  try {
+    const recipeId = req.params.id;
+
+    const recipe = await Recipe.findById(recipeId);
+    if (!recipe) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy công thức.' });
+    }
+
+    // Xóa mềm: Chuyển trạng thái sang 'archived' thay vì xóa vật lý (hard delete)
+    recipe.status = 'archived';
+    await recipe.save();
+
+    return res.json({
+      success: true,
+      message: 'Đã xóa mềm công thức thành công (đã ẩn khỏi danh sách hiển thị).',
+    });
+  } catch (err) {
+    console.error('❌ Error deleting recipe:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Xóa công thức thất bại.',
+    });
+  }
+}
 
 module.exports = {
   getRecipesList,
   getRecipesStats,
   getRecipeDetail,
+  updateRecipe,
+  deleteRecipe
 };
