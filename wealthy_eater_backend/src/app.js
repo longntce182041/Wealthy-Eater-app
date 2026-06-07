@@ -18,7 +18,6 @@ const rateLimit  = require('express-rate-limit');
 const routes     = require('./routes');
 
 const app = express();
-app.set('etag', false);
 
 // ── Security Headers (helmet) ─────────────────────────────────────────────────
 // Sets Content-Security-Policy, X-Frame-Options, X-XSS-Protection, etc.

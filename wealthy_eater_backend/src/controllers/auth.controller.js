@@ -1,5 +1,4 @@
 const AuthService = require('../services/auth.service');
-const RegistrationService = require('../services/registration.service');
 
 // ─── Shared response helper ──────────────────────────────────────────────────
 
@@ -25,63 +24,6 @@ async function login(req, res) {
     }
     const result = await AuthService.login(email, password);
     return res.json({ success: true, message: 'Login successful', data: result });
-  } catch (err) {
-    return handleError(err, res);
-  }
-}
-
-/**
- * POST /api/auth/register
- * Body: { email, password, confirmPassword }
- */
-async function register(req, res) {
-  try {
-    const { email, password, confirmPassword } = req.body || {};
-    if (!email || !password || !confirmPassword) {
-      return res.status(400).json({ success: false, message: 'Email, password and confirmPassword are required' });
-    }
-    if (password !== confirmPassword) {
-      return res.status(400).json({ success: false, message: 'Passwords do not match' });
-    }
-
-    const result = await RegistrationService.startRegistration(email, password);
-    return res.status(200).json({ success: true, message: result.message });
-  } catch (err) {
-    return handleError(err, res);
-  }
-}
-
-/**
- * POST /api/auth/verify-otp
- * Body: { email, otp }
- */
-async function verifyOtp(req, res) {
-  try {
-    const { email, otp } = req.body || {};
-    if (!email || !otp) return res.status(400).json({ success: false, message: 'Email and otp are required' });
-
-    const result = await RegistrationService.verifyOtp(email, otp);
-    // If registration service returned tokens, forward them in data
-    if (result.data) {
-      return res.status(200).json({ success: true, message: result.message, data: result.data });
-    }
-    return res.status(200).json({ success: true, message: result.message });
-  } catch (err) {
-    return handleError(err, res);
-  }
-}
-
-/**
- * POST /api/auth/resend-otp
- * Body: { email }
- */
-async function resendOtp(req, res) {
-  try {
-    const { email } = req.body || {};
-    if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
-
-    const result = await RegistrationService.resendOtp(email);
-    return res.status(200).json({ success: true, message: result.message });
   } catch (err) {
     return handleError(err, res);
   }
@@ -141,4 +83,4 @@ async function getMe(req, res) {
   }
 }
 
-module.exports = { login, googleLogin, refresh, getMe, register, verifyOtp, resendOtp };
+module.exports = { login, googleLogin, refresh, getMe };

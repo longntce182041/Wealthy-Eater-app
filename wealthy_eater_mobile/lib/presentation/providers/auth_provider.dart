@@ -29,7 +29,6 @@ class AuthProvider with ChangeNotifier {
   AuthState state = AuthState.initial;
   String? errorMessage;
   UserEntity? user;
-  Map<String, dynamic>? userProfile;
   String? _accessToken;
 
   bool get isAuthenticated => state == AuthState.authenticated && _accessToken != null;
@@ -58,8 +57,6 @@ class AuthProvider with ChangeNotifier {
         _accessToken = token;
         user = UserEntity.fromJson(res.data['data'] as Map<String, dynamic>);
         state = AuthState.authenticated;
-        // fetch user profile if available
-        await _fetchUserProfile();
       } else {
         await _clearSession();
         state = AuthState.unauthenticated;
@@ -76,9 +73,7 @@ class AuthProvider with ChangeNotifier {
   // Login
   // ---------------------------------------------------------------------------
 
-  /// Login with optional [role]. If role is provided the backend will
-  /// authenticate the user for that role (e.g. 'nutritionist').
-  Future<void> login(String email, String password, {String? role}) async {
+  Future<void> login(String email, String password) async {
     _setLoading();
     try {
       final res = await _api.post(
@@ -110,6 +105,7 @@ class AuthProvider with ChangeNotifier {
       final GoogleSignIn googleSignIn = kIsWeb
           ? GoogleSignIn(clientId: googleClientId)
           : GoogleSignIn();
+
       final account = await googleSignIn.signIn();
       if (account == null) {
         _setError('Google sign-in was cancelled');

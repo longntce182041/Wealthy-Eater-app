@@ -11,8 +11,7 @@ const connectDatabase = async () => {
     await mongoose.connect(process.env.MONGODB_URI, options);
     console.log("✔ MongoDB connection cluster successfully established.");
   } catch (error) {
-    console.error("❌ Database connection failure sequence:");
-console.error(error);
+    console.error("❌ Database connection failure sequence:", error.message);
     process.exit(1); // Abort execution with failure flag
   }
 };
