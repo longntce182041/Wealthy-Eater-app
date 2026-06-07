@@ -29,6 +29,7 @@ class AuthProvider with ChangeNotifier {
   AuthState state = AuthState.initial;
   String? errorMessage;
   UserEntity? user;
+  Map<String, dynamic>? userProfile;
   String? _accessToken;
 
   bool get isAuthenticated => state == AuthState.authenticated && _accessToken != null;
@@ -57,6 +58,8 @@ class AuthProvider with ChangeNotifier {
         _accessToken = token;
         user = UserEntity.fromJson(res.data['data'] as Map<String, dynamic>);
         state = AuthState.authenticated;
+        // fetch user profile if available
+        await _fetchUserProfile();
       } else {
         await _clearSession();
         state = AuthState.unauthenticated;
@@ -73,12 +76,18 @@ class AuthProvider with ChangeNotifier {
   // Login
   // ---------------------------------------------------------------------------
 
-  Future<void> login(String email, String password) async {
+  /// Login with optional [role]. If role is provided the backend will
+  /// authenticate the user for that role (e.g. 'nutritionist').
+  Future<void> login(String email, String password, {String? role}) async {
     _setLoading();
     try {
       final res = await _api.post(
         '/api/auth/login',
-        data: {'email': email.trim(), 'password': password},
+        data: {
+          'email': email.trim(),
+          'password': password,
+          'role': ?role,
+        },
       );
 
       if (res.statusCode == 200 && res.data['success'] == true) {
@@ -98,10 +107,9 @@ class AuthProvider with ChangeNotifier {
   Future<void> googleSignIn() async {
     _setLoading();
     try {
-      final googleSignIn = kIsWeb
+      final GoogleSignIn googleSignIn = kIsWeb
           ? GoogleSignIn(clientId: googleClientId)
           : GoogleSignIn();
-
       final account = await googleSignIn.signIn();
       if (account == null) {
         _setError('Google sign-in was cancelled');
@@ -120,6 +128,70 @@ class AuthProvider with ChangeNotifier {
         await _handleAuthResponse(res.data['data'] as Map<String, dynamic>);
       } else {
         _setError(res.data['message']?.toString() ?? 'Google login failed');
+      }
+    } catch (e) {
+      _setError(mapError(e).message);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Registration / OTP flows
+  // ---------------------------------------------------------------------------
+
+  Future<void> register(String email, String password, String confirmPassword) async {
+    _setLoading();
+    try {
+      final res = await _api.post('/api/auth/register', data: {
+        'email': email.trim(),
+        'password': password,
+        'confirmPassword': confirmPassword,
+      });
+
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        // Registration started — server sent OTP. Stay unauthenticated.
+        state = AuthState.unauthenticated;
+        errorMessage = null;
+        notifyListeners();
+      } else {
+        _setError(res.data['message']?.toString() ?? 'Registration failed');
+      }
+    } catch (e) {
+      _setError(mapError(e).message);
+    }
+  }
+
+  Future<void> verifyOtp(String email, String otp) async {
+    _setLoading();
+    try {
+      final res = await _api.post('/api/auth/verify-otp', data: {'email': email.trim(), 'otp': otp});
+
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        final data = res.data['data'] as Map<String, dynamic>?;
+        if (data != null) {
+          await _handleAuthResponse(data);
+        } else {
+          // If server didn't return tokens, fall back to unauthenticated state
+          state = AuthState.unauthenticated;
+          notifyListeners();
+        }
+      } else {
+        _setError(res.data['message']?.toString() ?? 'Verification failed');
+      }
+    } catch (e) {
+      _setError(mapError(e).message);
+    }
+  }
+
+  Future<void> resendOtp(String email) async {
+    _setLoading();
+    try {
+      final res = await _api.post('/api/auth/resend-otp', data: {'email': email.trim()});
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        state = AuthState.unauthenticated;
+        errorMessage = null;
+        notifyListeners();
+      } else {
+        _setError(res.data['message']?.toString() ?? 'Resend failed');
       }
     } catch (e) {
       _setError(mapError(e).message);
@@ -157,7 +229,43 @@ class AuthProvider with ChangeNotifier {
 
     state = AuthState.authenticated;
     errorMessage = null;
+    // Fetch profile after successful login
+    await _fetchUserProfile();
     notifyListeners();
+  }
+
+  Future<void> _fetchUserProfile() async {
+    try {
+      final res = await _api.get('/api/profile/me');
+      if (res.statusCode == 200 && res.data['success'] == true && res.data['data'] != null) {
+        userProfile = Map<String, dynamic>.from(res.data['data'] as Map<String, dynamic>);
+      } else {
+        userProfile = null;
+      }
+    } catch (_) {
+      userProfile = null;
+    }
+  }
+
+  /// Public wrapper to fetch user profile on demand.
+  Future<void> fetchUserProfile() async => _fetchUserProfile();
+
+  /// Save or update user profile via API and refresh local cache.
+  Future<void> saveUserProfile(Map<String, dynamic> data) async {
+    _setLoading();
+    try {
+      final res = await _api.post('/api/profile', data: data);
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        await _fetchUserProfile();
+        state = AuthState.authenticated;
+        errorMessage = null;
+        notifyListeners();
+      } else {
+        _setError(res.data['message']?.toString() ?? 'Save profile failed');
+      }
+    } catch (e) {
+      _setError(mapError(e).message);
+    }
   }
 
   Future<void> _clearSession() async {

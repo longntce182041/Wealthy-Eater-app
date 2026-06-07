@@ -96,7 +96,14 @@ class _AuthInterceptor extends Interceptor {
     RequestInterceptorHandler handler,
   ) async {
     // Skip auth header for public endpoints
-    const publicPaths = ['/api/auth/login', '/api/auth/google', '/api/auth/refresh'];
+    const publicPaths = [
+      '/api/auth/login',
+      '/api/auth/google',
+      '/api/auth/refresh',
+      '/api/auth/register',
+      '/api/auth/verify-otp',
+      '/api/auth/resend-otp',
+    ];
     if (publicPaths.any((p) => options.path.startsWith(p))) {
       return handler.next(options);
     }
