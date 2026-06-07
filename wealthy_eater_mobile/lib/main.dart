@@ -58,7 +58,6 @@ class WealthyEaterApp extends StatelessWidget {
             removeShoppingItemUseCase:    RemoveShoppingItemUseCase(shoppingListRepository),
             clearPurchasedUseCase:        ClearPurchasedUseCase(shoppingListRepository),
             clearAllShoppingItemsUseCase: ClearAllShoppingItemsUseCase(shoppingListRepository),
-            getShoppingStatsUseCase:      GetShoppingStatsUseCase(shoppingListRepository),
           ),
         ),
       ],

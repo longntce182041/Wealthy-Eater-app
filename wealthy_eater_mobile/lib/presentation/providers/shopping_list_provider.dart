@@ -34,7 +34,6 @@ class ShoppingListProvider extends ChangeNotifier {
   final RemoveShoppingItemUseCase    _removeItem;
   final ClearPurchasedUseCase        _clearPurchased;
   final ClearAllShoppingItemsUseCase _clearAll;
-  final GetShoppingStatsUseCase      _getStats;
 
   ShoppingListProvider({
     required AddFromRecipeUseCase         addFromRecipeUseCase,
@@ -43,14 +42,12 @@ class ShoppingListProvider extends ChangeNotifier {
     required RemoveShoppingItemUseCase    removeShoppingItemUseCase,
     required ClearPurchasedUseCase        clearPurchasedUseCase,
     required ClearAllShoppingItemsUseCase clearAllShoppingItemsUseCase,
-    required GetShoppingStatsUseCase      getShoppingStatsUseCase,
   })  : _addFromRecipe  = addFromRecipeUseCase,
         _getList        = getShoppingListUseCase,
         _toggleItem     = toggleShoppingItemUseCase,
         _removeItem     = removeShoppingItemUseCase,
         _clearPurchased = clearPurchasedUseCase,
-        _clearAll       = clearAllShoppingItemsUseCase,
-        _getStats       = getShoppingStatsUseCase;
+        _clearAll       = clearAllShoppingItemsUseCase;
 
   // ── State ──────────────────────────────────────────────────────────────────
 
