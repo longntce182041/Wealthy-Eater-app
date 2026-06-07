@@ -27,7 +27,7 @@ class ShoppingListRepositoryImpl implements ShoppingListRepository {
         '/api/user/shopping-list/add-from-recipe',
         data: {
           'recipeId': recipeId,
-          if (servings != null) 'servings': servings,
+          'servings': ?servings,
         },
       );
 
