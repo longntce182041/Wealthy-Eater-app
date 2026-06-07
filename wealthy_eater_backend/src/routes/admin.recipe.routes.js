@@ -1,6 +1,6 @@
 /**
- * Admin Recipe Routes - UC-71: View List Recipes
- * Rotas para gerenciamento de receitas no painel administrativo
+ * Admin Recipe Routes - UC-71: View List Recipes & UC-73: Add Recipes
+ * Các route quản lý công thức nấu ăn trong trang quản trị
  */
 
 const express = require('express');
@@ -11,44 +11,50 @@ const { authenticateToken } = require('../middlewares/auth');
 const validateObjectId = require('../middlewares/validateObjectId');
 
 /**
- * Middleware para verificar se o usuário é admin
- * (Você pode ajustar conforme sua estrutura de roles)
+ * Middleware kiểm tra xem người dùng có phải là admin không
+ * (Bạn có thể điều chỉnh tùy theo cấu trúc phân quyền của hệ thống)
  */
 function checkAdminRole(req, res, next) {
-  // Por enquanto, apenas verifica se está autenticado
-  // Você pode adicionar verificação de role aqui depois
+  // Tạm thời chỉ đang kiểm tra xem đã đăng nhập chưa
+  // Bạn có thể thêm logic kiểm tra quyền (role admin) ở đây sau
   next();
 }
 
-// Aplicar autenticação a todas as rotas
+// Áp dụng xác thực (authentication) cho tất cả các route bên dưới
 router.use(authenticateToken);
 router.use(checkAdminRole);
 
 /**
  * UC-71: GET /api/admin/recipes
- * Lista todas as receitas com paginação e filtros
+ * Lấy danh sách tất cả công thức nấu ăn kèm phân trang và bộ lọc
  * 
- * Query Parameters:
- * - page: número da página (padrão: 1)
- * - limit: itens por página (padrão: 20, máximo: 100)
- * - search: termo de busca
- * - status: filtrar por status
- * - level: filtrar por nível de dificuldade
- * - minTime/maxTime: filtro de tempo de preparo
- * - minCalories/maxCalories: filtro de calorias
+ * Các tham số truy vấn (Query Parameters):
+ * - page: số trang (mặc định: 1)
+ * - limit: số lượng mục trên mỗi trang (mặc định: 20, tối đa: 100)
+ * - search: từ khóa tìm kiếm
+ * - status: lọc theo trạng thái
+ * - level: lọc theo mức độ khó
+ * - minTime/maxTime: lọc theo khoảng thời gian nấu
+ * - minCalories/maxCalories: lọc theo khoảng lượng calo
  * - sortBy: name_asc, name_desc, time_asc, time_desc, newest, oldest
  */
 router.get('/', AdminRecipeController.getRecipesList);
 
 /**
+ * UC-73: POST /api/admin/recipes
+ * Tạo công thức nấu ăn mới và tự động tính toán tổng dinh dưỡng
+ */
+router.post('/', AdminRecipeController.addRecipe);
+
+/**
  * GET /api/admin/recipes/stats
- * Obtém estatísticas gerais sobre receitas
+ * Lấy các số liệu thống kê chung về công thức nấu ăn
  */
 router.get('/stats', AdminRecipeController.getRecipesStats);
 
 /**
  * GET /api/admin/recipes/:id
- * Obtém detalhes completos de uma receita específica
+ * Lấy thông tin chi tiết đầy đủ của một công thức cụ thể
  */
 router.get('/:id', validateObjectId('id'), AdminRecipeController.getRecipeDetail);
 
