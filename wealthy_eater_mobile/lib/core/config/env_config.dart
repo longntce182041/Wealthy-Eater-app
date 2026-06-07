@@ -11,7 +11,7 @@ class EnvConfig {
         return 'https://staging-api.wealthyeater.com';
       case Environment.dev:
         // Points to standard local development fallback loops
-        return 'http://10.0.2.2:5000/api/v1'; // Special loop redirection endpoint for Android emulators
+        return 'http://10.0.2.2:5000'; // Special loop redirection endpoint for Android emulators
     }
   }
 
