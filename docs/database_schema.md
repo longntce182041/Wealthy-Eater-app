@@ -256,3 +256,33 @@ Tracks administrative and critical actions in the system.
 - `action` (String): Action taken (e.g. THÊM, SỬA, XÓA, KHÓA, DUYỆT). Required.
 - `description` (String): Detailed text description of the event. Required.
 - `created_at` (Date): Creation timestamp.
+
+---
+
+## 7. Notifications & Settings
+
+### `NotificationSetting`
+Stores user preferences for push notifications and local reminders (water and meals).
+- `_id` (String): Custom ObjectID string.
+- `user_id` (String): References `User`. Required.
+- `is_push_enabled` (Boolean): Defaults to `true`.
+- `water_reminder` (Object):
+  - `enabled` (Boolean): Defaults to `false`.
+  - `interval_minutes` (Number): Defaults to `120`.
+  - `start_time` (String): Format "HH:mm". Defaults to `"08:00"`.
+  - `end_time` (String): Format "HH:mm". Defaults to `"20:00"`.
+- `meal_reminders` (List[Object]):
+  - `meal_type` (String): Enum `['breakfast', 'lunch', 'dinner', 'snack']`.
+  - `time` (String): Format "HH:mm".
+  - `enabled` (Boolean).
+- **Timestamps**: `createdAt` and `updatedAt` enabled.
+
+### `Notification`
+Stores the history of notifications sent to the user from the backend.
+- `_id` (String): Custom ObjectID string.
+- `user_id` (String): References `User`. Required.
+- `title` (String): Title of the notification. Required.
+- `body` (String): Content of the notification. Required.
+- `type` (String): Enum `['system', 'consultation', 'alert', 'other']`. Defaults to `'system'`.
+- `is_read` (Boolean): Read status. Defaults to `false`.
+- **Timestamps**: `createdAt` and `updatedAt` enabled.

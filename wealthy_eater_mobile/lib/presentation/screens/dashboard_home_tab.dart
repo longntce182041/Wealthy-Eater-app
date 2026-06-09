@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../domain/entities/user.dart';
 import '../providers/recipe_provider.dart';
 import 'recipe_detail_screen.dart';
+import 'notification_settings_sheet.dart';
 
 class DashboardHomeTab extends StatelessWidget {
   final UserEntity? user;
@@ -39,6 +40,11 @@ class DashboardHomeTab extends StatelessWidget {
                     onPressed: onExploreRecipes,
                     icon: const Icon(Icons.restaurant_menu),
                     label: const Text('Browse recipes'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => NotificationSettingsSheet.show(context),
+                    icon: const Icon(Icons.notifications_active_outlined),
+                    label: const Text('Reminders'),
                   ),
                   OutlinedButton.icon(
                     onPressed: recipeProvider.refreshRecipes,

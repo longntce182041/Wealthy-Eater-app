@@ -29,6 +29,7 @@ class AuthProvider with ChangeNotifier {
   AuthState state = AuthState.initial;
   String? errorMessage;
   UserEntity? user;
+  Map<String, dynamic>? userProfile;
   String? _accessToken;
 
   bool get isAuthenticated => state == AuthState.authenticated && _accessToken != null;
@@ -73,7 +74,7 @@ class AuthProvider with ChangeNotifier {
   // Login
   // ---------------------------------------------------------------------------
 
-  Future<void> login(String email, String password) async {
+  Future<void> login(String email, String password, {String? role}) async {
     _setLoading();
     try {
       final res = await _api.post(

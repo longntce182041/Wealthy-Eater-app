@@ -11,6 +11,7 @@ const micronutrientRoute = require('./micronutrient.management.routes');
 
 // 👉 THÊM DÒNG NÀY: Import file route của Admin Recipe
 const adminRecipeRoute = require('./admin.recipe.routes'); 
+const notificationRoute = require('./user.notification.routes');
 
 // 2. MAPPING CÁC ENDPOINT API
 router.use('/api/auth', authRoute);
@@ -20,6 +21,8 @@ router.use('/api/user/recipes', userRecipeRoute);
 router.use('/api/recipes', userRecipeRoute); 
 
 router.use('/api/profile', profileRoute);
+router.use('/api/user/notifications', notificationRoute);
+router.use('/api/user/shopping-list', shoppingListRoute);
 
 // 👉 THÊM DÒNG NÀY: Trỏ endpoint /api/admin/recipes vào file adminRecipeRoute
 router.use('/api/admin/recipes', adminRecipeRoute);

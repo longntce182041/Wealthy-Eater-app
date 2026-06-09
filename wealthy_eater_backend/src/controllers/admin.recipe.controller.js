@@ -8,6 +8,7 @@ const RecipeNutrition = require('../models/RecipeNutrition');
 const RecipeIngredient = require('../models/RecipeIngredient');
 const RecipeStep = require('../models/RecipeStep');
 const RecipeReview = require('../models/RecipeReview');
+const Ingredient = require('../models/Ingredient');
 
 /**
  * Escapa caracteres especiais para regex seguro
@@ -54,6 +55,55 @@ function buildAdminFilter(query) {
   }
 
   return filter;
+}
+
+/**
+ * Helper: Lê e converte ingredientes para RecipeIngredientDocs, calculando a nutrição no processo.
+ * Evita o problema N+1 ao buscar todos os ingredientes em uma única query ao banco de dados.
+ */
+async function processRecipeIngredients(recipeId, ingredientsInput) {
+  let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
+  const recipeIngredientDocs = [];
+
+  // Extrair IDs para uma busca em lote
+  const ingredientIds = ingredientsInput.map(i => i.ingredient_id).filter(Boolean);
+
+  // Buscar todos os ingredientes de uma só vez (otimização O(1) query)
+  const ingredientDataList = await Ingredient.find({ _id: { $in: ingredientIds } }).lean();
+  
+  // Mapear para busca rápida (lookup)
+  const ingredientMap = {};
+  for (const data of ingredientDataList) {
+    ingredientMap[data._id.toString()] = data;
+  }
+
+  for (const item of ingredientsInput) {
+    const ingredientData = ingredientMap[item.ingredient_id];
+    if (!ingredientData) continue;
+
+    const quantity = Number(item.base_quantity) || 0;
+    totalCalories += (ingredientData.calories_per_unit || 0) * quantity;
+    totalProtein += (ingredientData.protein || 0) * quantity;
+    totalFat += (ingredientData.fat || 0) * quantity;
+    totalCarbs += (ingredientData.carbs || 0) * quantity;
+
+    recipeIngredientDocs.push({
+      recipe_id: recipeId,
+      ingredient_id: item.ingredient_id,
+      base_quantity: quantity,
+      unit: item.unit || ingredientData.unit || 'g',
+    });
+  }
+
+  return {
+    recipeIngredientDocs,
+    nutrition: {
+      calories: Math.round(totalCalories * 10) / 10,
+      protein: Math.round(totalProtein * 10) / 10,
+      fat: Math.round(totalFat * 10) / 10,
+      carbs: Math.round(totalCarbs * 10) / 10,
+    }
+  };
 }
 
 /**
@@ -391,6 +441,74 @@ async function getRecipeDetail(req, res) {
   }
 }
 /**
+ * UC-73: POST /api/admin/recipes
+ * Tạo công thức nấu ăn mới và tự động tính toán tổng dinh dưỡng
+ */
+async function addRecipe(req, res) {
+  try {
+    const {
+      name, description, image_url, cooking_time, base_servings, status, level_cooking,
+      ingredients, steps
+    } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Tên công thức là bắt buộc.' });
+    }
+
+    // 1. Tạo mới công thức
+    const recipe = new Recipe({
+      name,
+      description,
+      image_url,
+      cooking_time: Number(cooking_time) || 0,
+      base_servings: Number(base_servings) || 1,
+      status: status || 'draft',
+      level_cooking: level_cooking || 'medium',
+    });
+
+    await recipe.save();
+
+    // 2. Thêm nguyên liệu & tính tổng dinh dưỡng
+    if (ingredients && Array.isArray(ingredients) && ingredients.length > 0) {
+      const processed = await processRecipeIngredients(recipe._id, ingredients);
+      
+      if (processed.recipeIngredientDocs.length > 0) {
+        await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
+      }
+
+      // Lưu tổng dinh dưỡng
+      await RecipeNutrition.create({
+        recipe_id: recipe._id,
+        ...processed.nutrition
+      });
+    }
+
+    // 3. Thêm các bước nấu
+    if (steps && Array.isArray(steps) && steps.length > 0) {
+      const recipeStepDocs = steps.map((stepContent, index) => ({
+        recipe_id: recipe._id,
+        step_number: typeof stepContent === 'object' ? stepContent.step_number : index + 1,
+        instruction: typeof stepContent === 'object' ? stepContent.instruction : stepContent,
+      }));
+
+      await RecipeStep.insertMany(recipeStepDocs);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Tạo công thức thành công!',
+      data: recipe,
+    });
+  } catch (err) {
+    console.error('❌ Error adding recipe:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Tạo công thức thất bại.',
+    });
+  }
+}
+
+/**
  * UC-74: PUT /api/admin/recipes/:id
  * Cập nhật công thức (Bao gồm thông tin cơ bản, cập nhật nguyên liệu, bước nấu và tự tính lại dinh dưỡng)
  */
@@ -421,47 +539,18 @@ async function updateRecipe(req, res) {
 
     // 3. Cập nhật Nguyên liệu & Tính lại Dinh dưỡng (Chỉ thực thi nếu client có gửi mảng ingredients)
     if (ingredients && Array.isArray(ingredients)) {
-      let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
-      const recipeIngredientDocs = [];
-
-      for (const item of ingredients) {
-        const ingredientData = await Ingredient.findById(item.ingredient_id).lean();
-        if (!ingredientData) {
-          return res.status(404).json({
-            success: false,
-            message: `Không tìm thấy nguyên liệu có ID: ${item.ingredient_id}`,
-          });
-        }
-
-        const quantity = Number(item.base_quantity) || 0;
-        totalCalories += (ingredientData.calories_per_unit || 0) * quantity;
-        totalProtein += (ingredientData.protein || 0) * quantity;
-        totalFat += (ingredientData.fat || 0) * quantity;
-        totalCarbs += (ingredientData.carbs || 0) * quantity;
-
-        recipeIngredientDocs.push({
-          recipe_id: recipeId,
-          ingredient_id: item.ingredient_id,
-          base_quantity: quantity,
-          unit: item.unit || ingredientData.unit || 'g',
-        });
-      }
+      const processed = await processRecipeIngredients(recipeId, ingredients);
 
       // Chiến lược thay thế: Xóa nguyên liệu cũ -> Thêm nguyên liệu mới
       await RecipeIngredient.deleteMany({ recipe_id: recipeId });
-      if (recipeIngredientDocs.length > 0) {
-        await RecipeIngredient.insertMany(recipeIngredientDocs);
+      if (processed.recipeIngredientDocs.length > 0) {
+        await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
       }
 
       // Cập nhật lại chỉ số dinh dưỡng (dùng findOneAndUpdate để nếu chưa có thì upsert tạo mới)
       await RecipeNutrition.findOneAndUpdate(
         { recipe_id: recipeId },
-        {
-          calories: Math.round(totalCalories * 10) / 10,
-          protein: Math.round(totalProtein * 10) / 10,
-          fat: Math.round(totalFat * 10) / 10,
-          carbs: Math.round(totalCarbs * 10) / 10,
-        },
+        { ...processed.nutrition },
         { upsert: true, new: true }
       );
     }
@@ -529,6 +618,7 @@ module.exports = {
   getRecipesList,
   getRecipesStats,
   getRecipeDetail,
+  addRecipe,
   updateRecipe,
   deleteRecipe
 };
