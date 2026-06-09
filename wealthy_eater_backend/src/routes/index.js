@@ -22,6 +22,7 @@ router.use('/api/recipes', userRecipeRoute);
 
 router.use('/api/profile', profileRoute);
 router.use('/api/user/notifications', notificationRoute);
+router.use('/api/user/shopping-list', shoppingListRoute);
 
 // 👉 THÊM DÒNG NÀY: Trỏ endpoint /api/admin/recipes vào file adminRecipeRoute
 router.use('/api/admin/recipes', adminRecipeRoute);

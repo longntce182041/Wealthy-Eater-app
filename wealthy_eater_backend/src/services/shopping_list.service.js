@@ -2,6 +2,7 @@ const ShoppingList    = require('../models/ShoppingList');
 const RecipeIngredient = require('../models/RecipeIngredient');
 const Recipe           = require('../models/Recipe');
 const Ingredient       = require('../models/Ingredient');
+const mongoose         = require('mongoose');
 
 /**
  * shopping_list.service.js
@@ -72,6 +73,14 @@ function inferCategory(name = '') {
  * @returns {Promise<Array>} Array of ShoppingList documents (upserted)
  */
 async function addFromRecipe(userId, recipeId, servings) {
+  // Validate ObjectId
+  if (!mongoose.Types.ObjectId.isValid(recipeId)) {
+    const err = new Error('Invalid Recipe ID format');
+    err.statusCode = 400;
+    err.code = 'INVALID_ID';
+    throw err;
+  }
+
   // 1. Verify recipe exists
   const recipe = await Recipe.findById(recipeId).lean();
   if (!recipe) {
@@ -99,7 +108,6 @@ async function addFromRecipe(userId, recipeId, servings) {
   const multiplier    = targetServings / baseServings;
 
   // 3. Smart accumulation using bulkWrite
-  const mongoose = require('mongoose');
   const bulkOps = [];
   const ingredientIds = [];
 
