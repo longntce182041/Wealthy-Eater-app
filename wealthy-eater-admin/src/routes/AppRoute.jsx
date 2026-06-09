@@ -2,8 +2,8 @@ import React from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
 import DashboardPage from "../pages/dashboard";
-import IngredientsPage from "../pages/ingredients/index.jsx";
-import MicronutrientsPage from "../pages/micronutrients/index.jsx";
+import IngredientsPage from "../pages/ingredients/ingredients.jsx";
+import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx";
 import LoginPage from "../pages/Login.jsx"; // Đảm bảo import đúng đường dẫn LoginPage của bạn
 import AdminLayout from "../layouts/AdminLayout.jsx";
 
