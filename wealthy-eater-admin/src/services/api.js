@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_GATEWAY_URL,
+  baseURL: import.meta.env.VITE_API_GATEWAY_URL || "/api",
   timeout: 10000, // Timeout after 10 seconds of network inactivity
   headers: {
     "Content-Type": "application/json",

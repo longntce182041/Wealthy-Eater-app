@@ -36,7 +36,7 @@ function issueTokens(user) {
 class AuthService {
   // ── Email / Password Login ─────────────────────────────────────────────────
 
-  static async login(email, password) {
+  static async login(email, password, requiredRole = 'customer') {
     if (!email || !password) {
       throw new AppError('Email and password are required', 400);
     }
@@ -55,6 +55,10 @@ class AuthService {
     const matched = await bcrypt.compare(password, hash);
     if (!matched) {
       throw new AppError('Invalid email or password', 401);
+    }
+
+    if (user.role !== requiredRole) {
+      throw new AppError(`Access denied: account is not a ${requiredRole}`, 403);
     }
 
     return issueTokens(user);
@@ -95,6 +99,10 @@ class AuthService {
         role:  'customer',
         // password_hash left null — Google-only account
       });
+    } else {
+      if (user.role !== 'customer') {
+        throw new AppError('Access denied: Google login is only available for customer accounts', 403);
+      }
     }
 
     return issueTokens(user);
