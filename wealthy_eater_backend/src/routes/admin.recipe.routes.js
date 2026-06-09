@@ -70,4 +70,10 @@ router.put('/:id', validateObjectId('id'), AdminRecipeController.updateRecipe);
  */
 router.delete('/:id', validateObjectId('id'), AdminRecipeController.deleteRecipe);
 
+/**
+ * UC-75: GET /api/recipes hoặc /api/user/recipes
+ * API tìm kiếm nâng cao dành cho người dùng công cộng / mobile app
+ */
+router.get('/', UserRecipeController.searchAndFilterRecipes);
+
 module.exports = router;

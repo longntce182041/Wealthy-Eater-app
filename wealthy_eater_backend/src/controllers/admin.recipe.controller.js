@@ -614,11 +614,134 @@ async function deleteRecipe(req, res) {
   }
 }
 
+/**
+ * UC-75: GET /api/recipes (hoặc /api/user/recipes)
+ * Bộ lọc tìm kiếm nâng cao cho công thức món ăn công khai
+ */
+async function searchAndFilterRecipes(req, res) {
+  try {
+    const {
+      search,
+      diet_trend,
+      minTime,
+      maxTime,
+      minCalories,
+      maxCalories,
+      page = 1,
+      limit = 10
+    } = req.query;
+
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 10;
+    const skipNum = (pageNum - 1) * limitNum;
+
+    // 1. Khởi tạo Pipeline Aggregation
+    const pipeline = [];
+
+    // 2. Giai đoạn lọc các trường cơ bản thuộc bảng Recipe (Chỉ lấy món ăn có status là 'published')
+    const matchStage = { status: 'published' };
+
+    // Tìm theo từ khóa (Tên hoặc mô tả)
+    if (search) {
+      matchStage.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Lọc theo thời gian nấu (cooking_time)
+    if (minTime || maxTime) {
+      matchStage.cooking_time = {};
+      if (minTime) matchStage.cooking_time.$gte = Number(minTime);
+      if (maxTime) matchStage.cooking_time.$lte = Number(maxTime);
+    }
+
+    // Lọc theo xu hướng ăn kiêng (diet_trend / tags)
+    if (diet_trend) {
+      // Tìm xem mảng diet_trends của Recipe có chứa xu hướng này không
+      matchStage.diet_trends = { $regex: diet_trend, $options: 'i' };
+    }
+
+    pipeline.push({ $match: matchStage });
+
+    // 3. Giai đoạn LOOKUP nối với bảng dinh dưỡng (RecipeNutrition)
+    pipeline.push({
+      $lookup: {
+        from: 'recipenutritions', // Hãy đảm bảo tên collection này trùng với tên trong Compass của bạn
+        localField: '_id',
+        foreignField: 'recipe_id',
+        as: 'nutrition_info'
+      }
+    });
+
+    // Giải phẳng mảng kết quả trả về từ lookup
+    pipeline.push({
+      $unwind: {
+        path: '$nutrition_info',
+        preserveNullAndEmptyArrays: true // Giữ lại công thức kể cả khi chưa có dữ liệu dinh dưỡng
+      }
+    });
+
+    // 4. Giai đoạn lọc theo lượng CALO (Sau khi đã có dữ liệu từ bảng dinh dưỡng)
+    if (minCalories || maxCalories) {
+      const calorieMatch = {};
+      if (minCalories) calorieMatch['nutrition_info.calories'] = { $gte: Number(minCalories) };
+      if (maxCalories) {
+        calorieMatch['nutrition_info.calories'] = {
+          ...(calorieMatch['nutrition_info.calories'] || {}),
+          $lte: Number(maxCalories)
+        };
+      }
+      pipeline.push({ $match: calorieMatch });
+    }
+
+    // 5. Giai đoạn phân trang & đếm tổng số bản ghi bằng $facet
+    pipeline.push({
+      $facet: {
+        metadata: [{ $count: 'total' }],
+        data: [
+          { $sort: { createdAt: -1 } }, // Món ăn mới nhất lên đầu
+          { $skip: skipNum },
+          { $limit: limitNum }
+        ]
+      }
+    });
+
+    // Run Aggregation
+    const result = await Recipe.aggregate(pipeline);
+
+    // Xử lý dữ liệu đầu ra từ $facet
+    const recipesList = result[0]?.data || [];
+    const totalRecords = result[0]?.metadata[0]?.total || 0;
+    const totalPages = Math.ceil(totalRecords / limitNum);
+
+    return res.json({
+      success: true,
+      message: 'Tìm kiếm và lọc công thức nấu ăn thành công!',
+      pagination: {
+        totalItems: totalRecords,
+        totalPages: totalPages,
+        currentPage: pageNum,
+        pageSize: limitNum
+      },
+      data: recipesList
+    });
+
+  } catch (err) {
+    console.error('❌ Error in Search/Filter Recipes:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Xảy ra lỗi trong quá trình tìm kiếm công thức.'
+    });
+  }
+}
+
 module.exports = {
   getRecipesList,
   getRecipesStats,
   getRecipeDetail,
   addRecipe,
   updateRecipe,
-  deleteRecipe
+  deleteRecipe,
+  searchAndFilterRecipes
 };
