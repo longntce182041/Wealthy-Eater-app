@@ -80,6 +80,7 @@ async function sendVerificationEmail({ to, otp, ttlMinutes = 5 }) {
     return info;
   } catch (err) {
     console.error('[Mail] Failed to send verification email:', err.message);
+    throw err;
   }
 }
 

@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../domain/entities/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/shopping_list_provider.dart';
+import '../providers/notification_provider.dart';
+import 'notification_history_screen.dart';
 import '../widgets/coming_soon_tab.dart';
 import 'dashboard_home_tab.dart';
 import 'recipe_likes_tab.dart';
@@ -52,6 +54,42 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(_navTitle(_selectedIndex)),
         actions: [
+          Consumer<NotificationProvider>(
+            builder: (context, notif, _) {
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined),
+                    tooltip: 'Notifications',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const NotificationHistoryScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  if (notif.unreadCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '\${notif.unreadCount}',
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout_outlined),
             tooltip: 'Sign out',

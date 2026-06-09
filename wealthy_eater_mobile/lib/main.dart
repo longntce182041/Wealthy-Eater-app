@@ -60,6 +60,7 @@ class WealthyEaterApp extends StatelessWidget {
             clearAllShoppingItemsUseCase: ClearAllShoppingItemsUseCase(shoppingListRepository),
           ),
         ),
+        ChangeNotifierProvider(create: (_) => NotificationProvider(api: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',
@@ -87,6 +88,8 @@ class _AppRootState extends State<_AppRoot> {
       context.read<AuthProvider>().restoreSession().then((_) {
         if (mounted && context.read<AuthProvider>().isAuthenticated) {
           context.read<RecipeProvider>().loadRecipes();
+          context.read<NotificationProvider>().fetchSettings();
+          context.read<NotificationProvider>().fetchHistory();
         }
       });
     });

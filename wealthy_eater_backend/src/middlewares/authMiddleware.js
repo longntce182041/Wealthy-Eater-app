@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const { jwtConfig } = require("../utils/jwt");
+const { JWT_ACCESS_SECRET } = require("../utils/jwt");
 
 function protect(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -10,7 +10,7 @@ function protect(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, jwtConfig.secret);
+    const payload = jwt.verify(token, JWT_ACCESS_SECRET);
     req.user = {
       ...payload,
       id: payload.id || payload.sub || payload.userId,
