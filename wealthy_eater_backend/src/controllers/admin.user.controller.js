@@ -4,6 +4,7 @@
  */
 console.log('Loaded admin.user.controller');
 
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const UserProfile = require('../models/UserProfile');
 const UserDietary = require('../models/UserDietary');
@@ -201,6 +202,100 @@ async function getUsersList(req, res) {
   }
 }
 
+const DEFAULT_PASSWORD = process.env.DEFAULT_USER_PASSWORD || 'ChangeMe123!';
+const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
+
+async function createUser(req, res) {
+  try {
+    console.log('createUser called');
+    console.log('req.body:', req.body);
+
+    const { email, password, role = 'customer', status = 'active' } = req.body || {};
+
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: 'Invalid email format.' });
+    }
+
+    // Double-check DB connection
+    if (!User.db || !User.db.readyState) {
+      console.error('MongoDB not connected or readyState:', User.db && User.db.readyState);
+      return res.status(500).json({ success: false, message: 'Database not ready.' });
+    }
+
+    // Check duplicate
+    const existing = await User.findOne({ email: normalizedEmail }).lean();
+    if (existing) {
+      return res.status(409).json({ success: false, message: 'Email already exists.' });
+    }
+
+    const rawPassword = password && String(password).trim().length >= 6 ? String(password).trim() : DEFAULT_PASSWORD;
+
+    const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
+    const passwordHash = await bcrypt.hash(rawPassword, salt);
+
+    const newUser = new User({
+      email: normalizedEmail,
+      password_hash: passwordHash,
+      role,
+      created_at: new Date(),
+      status
+    });
+
+    let savedUser;
+    try {
+      savedUser = await newUser.save();
+    } catch (saveErr) {
+      // Handle duplicate key race and validation errors
+      console.error('Error saving user:', saveErr);
+      if (saveErr.code === 11000) {
+        return res.status(409).json({ success: false, message: 'Email already exists.' });
+      }
+      if (saveErr.name === 'ValidationError') {
+        return res.status(400).json({ success: false, message: saveErr.message });
+      }
+      throw saveErr;
+    }
+
+    // Create profile but isolate errors so user creation still succeeds
+    try {
+      await UserProfile.create({
+        user_id: savedUser._id,
+        age: null,
+        gender: null,
+        height: null,
+        weight: null,
+        dietary_references: { activity_level: null, diet_preferences: [], allergies: [] }
+      });
+    } catch (profileErr) {
+      console.error('Warning: failed to create UserProfile for', savedUser._id, profileErr);
+      // do not fail the whole request; return created user but log the issue
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'User created successfully.',
+      data: {
+        id: savedUser._id,
+        email: savedUser.email,
+        role: savedUser.role,
+        status: savedUser.status,
+        createdAt: savedUser.created_at
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ Error creating user full stack:', err);
+    return res.status(500).json({ success: false, message: 'Server error while creating user.' });
+  }
+}
+
 module.exports = {
-  getUsersList
+  getUsersList,
+  createUser
 };
