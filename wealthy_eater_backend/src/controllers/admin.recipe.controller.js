@@ -1,8 +1,10 @@
 /**
- * Admin Recipe Controller - UC-71: View List Recipes
- * API para listar todas as receitas do sistema com paginação e filtros para o dashboard administrativo
+ * Admin Recipe Controller - UC-71 to UC-76
+ * API para listar, criar, editar, deletar e importar receitas do sistema com paginação e filtros
  */
 
+const mongoose = require('mongoose');
+const xlsx = require('xlsx');
 const Recipe = require('../models/Recipe');
 const RecipeNutrition = require('../models/RecipeNutrition');
 const RecipeIngredient = require('../models/RecipeIngredient');
@@ -140,18 +142,6 @@ function mapRecipeForAdmin(recipe, nutrition, reviewStats, ingredientsCount, ste
 /**
  * UC-71: GET /api/admin/recipes
  * Lista todas as receitas do sistema com paginação e filtros
- * 
- * Query Parameters:
- * - page: número da página (padrão: 1)
- * - limit: itens por página (padrão: 20, máximo: 100)
- * - search: termo de busca (nome, descrição, nível)
- * - status: filtrar por status (published, draft, archived, etc)
- * - level: filtrar por nível de dificuldade (easy, medium, hard)
- * - minTime: tempo mínimo de preparo em minutos
- * - maxTime: tempo máximo de preparo em minutos
- * - minCalories: calorias mínimas
- * - maxCalories: calorias máximas
- * - sortBy: ordenação (name_asc, name_desc, time_asc, time_desc, newest, oldest)
  */
 async function getRecipesList(req, res) {
   try {
@@ -422,7 +412,6 @@ async function getRecipeDetail(req, res) {
       recipe,
       nutrition,
       revStats,
-      // Estas contagens não são necessárias aqui, pode passar 0
       0,
       0
     );
@@ -440,6 +429,7 @@ async function getRecipeDetail(req, res) {
     });
   }
 }
+
 /**
  * UC-73: POST /api/admin/recipes
  * Tạo công thức nấu ăn mới và tự động tính toán tổng dinh dưỡng
@@ -635,13 +625,9 @@ async function searchAndFilterRecipes(req, res) {
     const limitNum = Number(limit) || 10;
     const skipNum = (pageNum - 1) * limitNum;
 
-    // 1. Khởi tạo Pipeline Aggregation
     const pipeline = [];
-
-    // 2. Giai đoạn lọc các trường cơ bản thuộc bảng Recipe (Chỉ lấy món ăn có status là 'published')
     const matchStage = { status: 'published' };
 
-    // Tìm theo từ khóa (Tên hoặc mô tả)
     if (search) {
       matchStage.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -649,40 +635,34 @@ async function searchAndFilterRecipes(req, res) {
       ];
     }
 
-    // Lọc theo thời gian nấu (cooking_time)
     if (minTime || maxTime) {
       matchStage.cooking_time = {};
       if (minTime) matchStage.cooking_time.$gte = Number(minTime);
       if (maxTime) matchStage.cooking_time.$lte = Number(maxTime);
     }
 
-    // Lọc theo xu hướng ăn kiêng (diet_trend / tags)
     if (diet_trend) {
-      // Tìm xem mảng diet_trends của Recipe có chứa xu hướng này không
       matchStage.diet_trends = { $regex: diet_trend, $options: 'i' };
     }
 
     pipeline.push({ $match: matchStage });
 
-    // 3. Giai đoạn LOOKUP nối với bảng dinh dưỡng (RecipeNutrition)
     pipeline.push({
       $lookup: {
-        from: 'recipenutritions', // Hãy đảm bảo tên collection này trùng với tên trong Compass của bạn
+        from: 'recipenutritions',
         localField: '_id',
         foreignField: 'recipe_id',
         as: 'nutrition_info'
       }
     });
 
-    // Giải phẳng mảng kết quả trả về từ lookup
     pipeline.push({
       $unwind: {
         path: '$nutrition_info',
-        preserveNullAndEmptyArrays: true // Giữ lại công thức kể cả khi chưa có dữ liệu dinh dưỡng
+        preserveNullAndEmptyArrays: true
       }
     });
 
-    // 4. Giai đoạn lọc theo lượng CALO (Sau khi đã có dữ liệu từ bảng dinh dưỡng)
     if (minCalories || maxCalories) {
       const calorieMatch = {};
       if (minCalories) calorieMatch['nutrition_info.calories'] = { $gte: Number(minCalories) };
@@ -695,22 +675,19 @@ async function searchAndFilterRecipes(req, res) {
       pipeline.push({ $match: calorieMatch });
     }
 
-    // 5. Giai đoạn phân trang & đếm tổng số bản ghi bằng $facet
     pipeline.push({
       $facet: {
         metadata: [{ $count: 'total' }],
         data: [
-          { $sort: { createdAt: -1 } }, // Món ăn mới nhất lên đầu
+          { $sort: { createdAt: -1 } },
           { $skip: skipNum },
           { $limit: limitNum }
         ]
       }
     });
 
-    // Run Aggregation
     const result = await Recipe.aggregate(pipeline);
 
-    // Xử lý dữ liệu đầu ra từ $facet
     const recipesList = result[0]?.data || [];
     const totalRecords = result[0]?.metadata[0]?.total || 0;
     const totalPages = Math.ceil(totalRecords / limitNum);
@@ -736,6 +713,181 @@ async function searchAndFilterRecipes(req, res) {
   }
 }
 
+/**
+ * UC-76: POST /api/admin/recipes/import-excel
+ * Nhập hàng loạt công thức phức tạp từ file Excel, thực hiện validate lỗi logic và bulk insert hiệu năng cao
+ */
+async function importRecipesExcel(req, res) {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Vui lòng cung cấp tệp Excel (.xlsx hoặc .xls).' });
+    }
+
+    // 1. Đọc tệp excel từ bộ nhớ đệm Buffer
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(worksheet);
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'Tệp Excel trống không có dữ liệu.' });
+    }
+
+    // 2. Thu thập trước tất cả các ID nguyên liệu xuất hiện trong Excel để tìm kiếm hàng loạt (Tránh N+1)
+    const uniqueIngredientIds = new Set();
+    rows.forEach(row => {
+      const rawIngs = row.Ingredients || row.ingredients;
+      if (rawIngs) {
+        String(rawIngs).split('|').forEach(item => {
+          const parts = item.split(':');
+          if (parts[0]) uniqueIngredientIds.add(parts[0].trim());
+        });
+      }
+    });
+
+    // Truy vấn hàng loạt dữ liệu nguyên liệu hệ thống trong 1 câu lệnh đơn
+    const ingredientList = await Ingredient.find({ _id: { $in: Array.from(uniqueIngredientIds) } }).lean();
+    const ingredientMap = {};
+    ingredientList.forEach(ing => {
+      ingredientMap[ing._id.toString()] = ing;
+    });
+
+    const errorLog = [];
+    const recipesToInsert = [];
+    const ingredientsToInsert = [];
+    const stepsToInsert = [];
+    const nutritionsToInsert = [];
+
+    // 3. Vòng lặp Validate dữ liệu từng hàng một
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNumber = i + 2; // Dòng đầu là tiêu đề cột
+
+      const name = row.Name || row.name;
+      const cookingTime = row.CookingTime || row.cooking_time || row.cookingTime;
+      const baseServings = row.BaseServings || row.base_servings || row.baseServings;
+
+      if (!name) {
+        errorLog.push(`Dòng ${rowNumber}: Thiếu trường tên công thức bắt buộc (Name).`);
+        continue;
+      }
+
+      // Khởi sinh ID String thủ công để liên kết dữ liệu quan hệ nhúng trước khi insertMany
+      const recipeId = new mongoose.Types.ObjectId().toString();
+
+      // Bóc tách dữ liệu mảng nhúng nguyên liệu (Format: ID:Quantity:Unit)
+      const rawIngsStr = row.Ingredients || row.ingredients || '';
+      const rawIngredients = rawIngsStr ? String(rawIngsStr).split('|') : [];
+      
+      let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
+      let hasIngredientError = false;
+      const rowIngredientDocs = [];
+
+      for (const item of rawIngredients) {
+        const parts = item.split(':');
+        const ingredientId = parts[0]?.trim();
+        if (!ingredientId) continue;
+
+        const quantity = Number(parts[1]) || 0;
+        const unit = parts[2]?.trim() || '';
+
+        const ingredientData = ingredientMap[ingredientId];
+        if (!ingredientData) {
+          errorLog.push(`Dòng ${rowNumber}: Không tìm thấy nguyên liệu mã ID '${ingredientId}' trong hệ thống.`);
+          hasIngredientError = true;
+          break;
+        }
+
+        // Tính toán dồn tổng chỉ số dinh dưỡng cho công thức tự động
+        totalCalories += (ingredientData.calories_per_unit || 0) * quantity;
+        totalProtein += (ingredientData.protein || 0) * quantity;
+        totalFat += (ingredientData.fat || 0) * quantity;
+        totalCarbs += (ingredientData.carbs || 0) * quantity;
+
+        rowIngredientDocs.push({
+          recipe_id: recipeId,
+          ingredient_id: ingredientId,
+          base_quantity: quantity,
+          unit: unit || ingredientData.unit || 'g'
+        });
+      }
+
+      if (hasIngredientError) continue;
+
+      // Bóc tách dữ liệu mảng các bước thực hiện nấu ăn (Format: Bước 1|Bước 2|Bước 3)
+      const rawStepsStr = row.Steps || row.steps || '';
+      const rawSteps = rawStepsStr ? String(rawStepsStr).split('|') : [];
+      const rowStepDocs = rawSteps.map((instruction, index) => ({
+        recipe_id: recipeId,
+        step_number: index + 1,
+        instruction: instruction.trim()
+      })).filter(s => s.instruction);
+
+      // Đẩy vào danh sách hàng đợi chờ thực thi Bulk Insert
+      recipesToInsert.push({
+        _id: recipeId,
+        name: String(name).trim(),
+        description: row.Description || row.description || '',
+        image_url: row.ImageUrl || row.image_url || row.imageUrl || '',
+        cooking_time: Number(cookingTime) || 0,
+        base_servings: Number(baseServings) || 1,
+        status: row.Status || row.status || 'published',
+        level_cooking: row.Level || row.level_cooking || row.level || 'medium'
+      });
+
+      ingredientsToInsert.push(...rowIngredientDocs);
+      stepsToInsert.push(...rowStepDocs);
+
+      nutritionsToInsert.push({
+        recipe_id: recipeId,
+        calories: Math.round(totalCalories * 10) / 10,
+        protein: Math.round(totalProtein * 10) / 10,
+        fat: Math.round(totalFat * 10) / 10,
+        carbs: Math.round(totalCarbs * 10) / 10
+      });
+    }
+
+    // 4. Trả về toàn bộ log lỗi phát hiện được, không thực hiện lưu bất kỳ bản ghi nào (All-or-Nothing)
+    if (errorLog.length > 0) {
+      return res.status(422).json({
+        success: false,
+        message: 'Import thất bại do dữ liệu file Excel chứa lỗi logic.',
+        errors: errorLog
+      });
+    }
+
+    // 5. Thực thi TRUE BULK INSERT đồng loạt vào 4 bảng
+    if (recipesToInsert.length > 0) {
+      await Recipe.insertMany(recipesToInsert);
+    }
+    if (ingredientsToInsert.length > 0) {
+      await RecipeIngredient.insertMany(ingredientsToInsert);
+    }
+    if (stepsToInsert.length > 0) {
+      await RecipeStep.insertMany(stepsToInsert);
+    }
+    if (nutritionsToInsert.length > 0) {
+      await RecipeNutrition.insertMany(nutritionsToInsert);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: 'Import thành công dữ liệu hàng loạt từ Excel!',
+      data: {
+        totalProcessed: rows.length,
+        totalImported: recipesToInsert.length
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ Error Importing Excel Recipes:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Xảy ra lỗi hệ thống khi nhập dữ liệu tệp Excel.'
+    });
+  }
+}
+
 module.exports = {
   getRecipesList,
   getRecipesStats,
@@ -743,5 +895,6 @@ module.exports = {
   addRecipe,
   updateRecipe,
   deleteRecipe,
-  searchAndFilterRecipes
+  searchAndFilterRecipes,
+  importRecipesExcel
 };
