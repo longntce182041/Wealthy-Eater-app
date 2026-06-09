@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
-import 'nutritionist_login_screen.dart';
-import 'register_screen.dart';
 
 /// Login screen with email/password and Google Sign-In.
 ///
@@ -61,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
     if (auth.state == AuthState.error) {
-      _showError(auth.errorMessage ?? 'Google login failed');
+      _showError(auth.errorMessage ?? 'Google sign-in failed');
     }
   }
 
@@ -179,32 +177,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               onPressed: isLoading ? null : _doGoogle,
                               icon: const Icon(Icons.g_mobiledata, size: 24),
                               label: const Text('Continue with Google'),
-                            ),
-                            const SizedBox(height: 12),
-
-                            // Switch to Nutritionist Login
-                            Center(
-                              child: TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NutritionistLoginScreen()));
-                                },
-                                child: const Text('Nutritionist Login'),
-                              ),
-                            ),
-
-                            // Register / Forgot links
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegisterScreen())),
-                                  child: const Text('Register'),
-                                ),
-                                TextButton(
-                                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Forgot password not implemented'))),
-                                  child: const Text('Forgot Password?'),
-                                ),
-                              ],
                             ),
                           ],
                         ),

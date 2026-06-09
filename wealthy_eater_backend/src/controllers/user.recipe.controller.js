@@ -3,7 +3,7 @@ const RecipeIngredient = require('../models/RecipeIngredient');
 const RecipeStep = require('../models/RecipeStep');
 const RecipeNutrition = require('../models/RecipeNutrition');
 const RecipeReview = require('../models/RecipeReview');
-const Ingredient = require('../models/Ingredient');
+const Ingredient = require('../models/Ingredient'); // Đảm bảo model này đã được load
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -42,7 +42,7 @@ function buildFilter(query) {
 function mapIngredient(ingredient, relation) {
   const source = ingredient || {};
   return {
-    id: relation?._id || '',                                          // ID của RecipeIngredient (join record)
+    id: relation?._id || '',                                         // ID của RecipeIngredient (bảng trung gian)
     ingredientId: source._id || relation?.ingredient_id || '',        // ID của Ingredient gốc
     name: source.name || 'Ingredient',
     imageUrl: source.image_url || '',
@@ -65,7 +65,6 @@ function mapRecipe(recipe, extras = {}) {
     cookingTime: recipe.cooking_time ?? 0,
     baseServings: recipe.base_servings ?? 1,
     status: recipe.status || 'unknown',
-    // Mobile reads 'level_cooking' OR 'difficulty' — use snake_case to match both
     level_cooking: recipe.level_cooking || 'unknown',
     cookingStep: recipe.cooking_step || '',
     averageRating: extras.reviewCount ? extras.averageRating ?? 0 : null,
@@ -79,11 +78,13 @@ function mapRecipe(recipe, extras = {}) {
   };
 }
 
+// ════════════════════════════════════════════════════════════
+// UC-71 - VIEW LIST RECIPES
+// ════════════════════════════════════════════════════════════
 async function list(req, res) {
   try {
     const filter = buildFilter(req.query || {});
     
-    // 1. Handle Nutrition Filtering via RecipeNutrition
     if (req.query.minCalories || req.query.maxCalories || req.query.minProtein || req.query.maxProtein) {
       const nutritionFilter = {};
       if (req.query.minCalories || req.query.maxCalories) {
@@ -99,35 +100,17 @@ async function list(req, res) {
       
       const matchedNutritions = await RecipeNutrition.find(nutritionFilter).select('recipe_id').lean();
       const validRecipeIds = matchedNutritions.map(n => n.recipe_id);
-      
-      if (filter._id) {
-        // If there's already an _id filter, we'd need to intersect, but usually there isn't in list()
-        filter._id = { $in: validRecipeIds };
-      } else {
-        filter._id = { $in: validRecipeIds };
-      }
+      filter._id = { $in: validRecipeIds };
     }
 
-    // 2. Handle Sorting
-    let sortObj = { name: 1 }; // Default
+    let sortObj = { name: 1 };
     const sortBy = req.query.sortBy || 'name_asc';
     switch (sortBy) {
-      case 'newest':
-        sortObj = { _id: -1 };
-        break;
-      case 'time_asc':
-        sortObj = { cooking_time: 1 };
-        break;
-      case 'time_desc':
-        sortObj = { cooking_time: -1 };
-        break;
-      case 'name_desc':
-        sortObj = { name: -1 };
-        break;
-      case 'name_asc':
-      default:
-        sortObj = { name: 1 };
-        break;
+      case 'newest': sortObj = { _id: -1 }; break;
+      case 'time_asc': sortObj = { cooking_time: 1 }; break;
+      case 'time_desc': sortObj = { cooking_time: -1 }; break;
+      case 'name_desc': sortObj = { name: -1 }; break;
+      case 'name_asc': default: sortObj = { name: 1 }; break;
     }
 
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
@@ -141,32 +124,31 @@ async function list(req, res) {
 
     const recipeIds = recipes.map(r => r._id);
 
-    // 1. Fetch all nutrition
-    const nutritions = await RecipeNutrition.find({ recipe_id: { $in: recipeIds } }).lean();
+    const [nutritions, reviewStats, ingredientCounts, stepCounts] = await Promise.all([
+      RecipeNutrition.find({ recipe_id: { $in: recipeIds } }).lean(),
+      RecipeReview.aggregate([
+        { $match: { recipe_id: { $in: recipeIds } } },
+        { $group: { _id: '$recipe_id', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } }
+      ]),
+      RecipeIngredient.aggregate([
+        { $match: { recipe_id: { $in: recipeIds } } },
+        { $group: { _id: '$recipe_id', count: { $sum: 1 } } }
+      ]),
+      RecipeStep.aggregate([
+        { $match: { recipe_id: { $in: recipeIds } } },
+        { $group: { _id: '$recipe_id', count: { $sum: 1 } } }
+      ])
+    ]);
+
     const nutritionMap = {};
     for (const n of nutritions) nutritionMap[n.recipe_id] = n;
 
-    // 2. Fetch all review stats using Aggregation
-    const reviewStats = await RecipeReview.aggregate([
-      { $match: { recipe_id: { $in: recipeIds } } },
-      { $group: { _id: '$recipe_id', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } }
-    ]);
     const reviewMap = {};
     for (const r of reviewStats) reviewMap[r._id] = r;
 
-    // 3. Fetch all ingredient counts
-    const ingredientCounts = await RecipeIngredient.aggregate([
-      { $match: { recipe_id: { $in: recipeIds } } },
-      { $group: { _id: '$recipe_id', count: { $sum: 1 } } }
-    ]);
     const ingredientCountMap = {};
     for (const i of ingredientCounts) ingredientCountMap[i._id] = i.count;
 
-    // 4. Fetch all step counts
-    const stepCounts = await RecipeStep.aggregate([
-      { $match: { recipe_id: { $in: recipeIds } } },
-      { $group: { _id: '$recipe_id', count: { $sum: 1 } } }
-    ]);
     const stepCountMap = {};
     for (const s of stepCounts) stepCountMap[s._id] = s.count;
 
@@ -194,43 +176,43 @@ async function list(req, res) {
       success: true,
       message: 'Recipes loaded successfully',
       data,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Failed to load recipes',
-    });
+    return res.status(500).json({ success: false, message: err.message || 'Failed to load recipes' });
   }
 }
 
+// ════════════════════════════════════════════════════════════
+// UC-72 - VIEW DETAIL RECIPES (Sử dụng Populate liên kết dữ liệu)
+// ════════════════════════════════════════════════════════════
 async function detail(req, res) {
   try {
-    const recipe = await Recipe.findById(req.params.id).lean();
+    const recipeId = req.params.id;
+    const recipe = await Recipe.findById(recipeId).lean();
 
     if (!recipe) {
-      return res.status(404).json({
-        success: false,
-        message: 'Recipe not found',
-      });
+      return res.status(404).json({ success: false, message: 'Recipe not found' });
     }
 
+    // Thực hiện nạp song song dữ liệu từ các bảng liên quan để tối ưu Performance
     const [nutrition, ingredientsRelations, steps, reviewStats, recentReviews] = await Promise.all([
       RecipeNutrition.findOne({ recipe_id: recipe._id }).lean(),
+      
+      // POPULATE: Liên kết RecipeIngredient sang Ingredient để lấy dữ liệu nguyên liệu thô
       RecipeIngredient.find({ recipe_id: recipe._id }).populate('ingredient_id').lean(),
+      
       RecipeStep.find({ recipe_id: recipe._id }).sort({ step_number: 1 }).lean(),
+      
       RecipeReview.aggregate([
         { $match: { recipe_id: recipe._id } },
         { $group: { _id: null, count: { $sum: 1 }, avgRating: { $avg: '$rating' } } }
       ]),
+      
       RecipeReview.find({ recipe_id: recipe._id }).sort({ createdAt: -1 }).limit(10).lean(),
     ]);
 
+    // Áp dụng helper mappers để định dạng đúng cấu trúc Mobile yêu cầu
     const ingredients = ingredientsRelations.map((relation) => mapIngredient(relation.ingredient_id, relation));
     const revStats = reviewStats[0] || { count: 0, avgRating: 0 };
 
@@ -263,10 +245,7 @@ async function detail(req, res) {
       }),
     });
   } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Failed to load recipe',
-    });
+    return res.status(500).json({ success: false, message: err.message || 'Failed to load recipe' });
   }
 }
 
