@@ -27,4 +27,7 @@ router.use('/api/user/shopping-list', shoppingListRoute);
 // 👉 THÊM DÒNG NÀY: Trỏ endpoint /api/admin/recipes vào file adminRecipeRoute
 router.use('/api/admin/recipes', adminRecipeRoute);
 
+router.use('/api/admin/ingredients', ingredientRoute);
+router.use('/api/admin/micronutrients', micronutrientRoute);
+
 module.exports = router;
