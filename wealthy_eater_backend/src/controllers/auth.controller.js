@@ -23,8 +23,12 @@ async function login(req, res) {
     if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ success: false, message: 'Email and password must be valid strings' });
     }
+    if (password.length > 128) {
+      return res.status(400).json({ success: false, message: 'Password is too long' });
+    }
+    const cleanEmail = email.trim().toLowerCase();
     const targetRole = (typeof role === 'string' && role) ? role : 'customer';
-    const result = await AuthService.login(email, password, targetRole);
+    const result = await AuthService.login(cleanEmail, password, targetRole);
     return res.json({ success: true, message: 'Login successful', data: result });
   } catch (err) {
     return handleError(err, res);
@@ -92,10 +96,14 @@ async function getMe(req, res) {
 async function register(req, res) {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) {
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ success: false, message: 'Email and password are required' });
     }
-    const result = await RegistrationService.startRegistration(email, password);
+    if (password.length < 6 || password.length > 128) {
+      return res.status(400).json({ success: false, message: 'Password must be between 6 and 128 characters' });
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    const result = await RegistrationService.startRegistration(cleanEmail, password);
     return res.json(result);
   } catch (err) {
     return handleError(err, res);

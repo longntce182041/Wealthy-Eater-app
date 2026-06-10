@@ -1,19 +1,20 @@
 const mongoose = require('mongoose');
 
 /**
- * Middleware to validate if the `req.params.id` (or other specified param)
- * is a valid MongoDB ObjectId. Prevents Mongoose CastError exceptions.
+ * Middleware to validate if the :id parameter in the route is a valid MongoDB ObjectId.
+ * Prevents Mongoose CastError (500) and immediately returns 400 Bad Request.
  */
 function validateObjectId(paramName = 'id') {
   return (req, res, next) => {
     const id = req.params[paramName];
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid ID format',
-        error: { code: 'INVALID_ID', message: `The provided ${paramName} is not a valid ObjectId.` }
+    
+    if (id && !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid resource ID format' 
       });
     }
+    
     next();
   };
 }

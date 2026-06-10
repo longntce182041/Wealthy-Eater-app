@@ -1,36 +1,40 @@
 const express = require('express');
 const router = express.Router();
 
-// 1. IMPORT CÁC ROUTE PHÂN HỆ
-const authRoute = require('./auth.route');
-const userRecipeRoute = require('./user.recipe.route');
-const profileRoute = require('./profile.route');
-const ingredientRoute = require('./ingredient.management.routes');
-const shoppingListRoute = require('./shopping_list.route');
+// ============================================================================
+// 1. IMPORT ROUTE FILES (Alphabetical order to minimize Git conflicts)
+// ============================================================================
+const adminRecipeRoute   = require('./admin.recipe.routes');
+const adminUserRoute     = require('./admin.user.routes');
+const authRoute          = require('./auth.route');
+const ingredientRoute    = require('./ingredient.management.routes');
 const micronutrientRoute = require('./micronutrient.management.routes');
+const notificationRoute  = require('./user.notification.routes');
+const nutritionistRoute  = require('./nutritionist.routes');
+const profileRoute       = require('./profile.route');
+const shoppingListRoute  = require('./shopping_list.route');
+const userRecipeRoute    = require('./user.recipe.route');
 
-// 👉 THÊM DÒNG NÀY: Import file route của Admin Recipe
-const adminRecipeRoute = require('./admin.recipe.routes'); 
-const adminUserRoute = require('./admin.user.routes');
-const notificationRoute = require('./user.notification.routes');
+// ============================================================================
+// 2. MAPPING API ENDPOINTS (Grouped logically to minimize Git conflicts)
+// ============================================================================
 
-// 2. MAPPING CÁC ENDPOINT API
+// ─── AUTH & PROFILE ─────────────────────────────────────────────────────────
 router.use('/api/auth', authRoute);
-
-// Để an toàn cho cả Mobile và Web, cả 2 endpoint dưới đây đều trỏ về file user.recipe.route.js của bạn
-router.use('/api/user/recipes', userRecipeRoute);
-router.use('/api/recipes', userRecipeRoute); 
-
 router.use('/api/profile', profileRoute);
-router.use('/api/user/notifications', notificationRoute);
-router.use('/api/user/shopping-list', shoppingListRoute);
 
-// 👉 THÊM DÒNG NÀY: Trỏ endpoint /api/admin/recipes vào file adminRecipeRoute
-router.use('/api/admin/recipes', adminRecipeRoute);
-router.use('/api/admin/', adminUserRoute);
-
-
+// ─── ADMIN ROUTES ───────────────────────────────────────────────────────────
+router.use('/api/admin', adminUserRoute); // Tuỳ chỉnh lại path '/api/admin/users' nếu cần
 router.use('/api/admin/ingredients', ingredientRoute);
 router.use('/api/admin/micronutrients', micronutrientRoute);
+router.use('/api/admin/recipes', adminRecipeRoute);
+
+// ─── NUTRITIONIST ROUTES ────────────────────────────────────────────────────
+router.use('/api/nutritionists', nutritionistRoute);
+
+// ─── USER / CUSTOMER ROUTES ─────────────────────────────────────────────────
+router.use('/api/user/notifications', notificationRoute);
+router.use('/api/user/recipes', userRecipeRoute);
+router.use('/api/user/shopping-list', shoppingListRoute);
 
 module.exports = router;

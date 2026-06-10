@@ -46,6 +46,9 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
     if (!mounted) return;
     if (auth.state == AuthState.error) {
       _showError(auth.errorMessage ?? 'Login failed');
+    } else if (auth.state == AuthState.authenticated) {
+      // Pop the pushed login screen so the root AppRoot can reveal the dashboard
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 

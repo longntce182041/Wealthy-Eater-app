@@ -5,9 +5,7 @@ const RecipeNutrition = require('../models/RecipeNutrition');
 const RecipeReview = require('../models/RecipeReview');
 const Ingredient = require('../models/Ingredient'); // Đảm bảo model này đã được load
 
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+const { escapeRegex } = require('../utils/string.util');
 
 function buildFilter(query) {
   const filter = {};
@@ -98,8 +96,7 @@ async function list(req, res) {
         if (req.query.maxProtein) nutritionFilter.protein.$lte = Number(req.query.maxProtein);
       }
       
-      const matchedNutritions = await RecipeNutrition.find(nutritionFilter).select('recipe_id').lean();
-      const validRecipeIds = matchedNutritions.map(n => n.recipe_id);
+      const validRecipeIds = await RecipeNutrition.distinct('recipe_id', nutritionFilter);
       filter._id = { $in: validRecipeIds };
     }
 
