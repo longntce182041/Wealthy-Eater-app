@@ -27,8 +27,7 @@ router.use(checkAdminRole);
 /**
  * UC-71: GET /api/admin/recipes
  * Lấy danh sách tất cả công thức nấu ăn kèm phân trang và bộ lọc
- * 
- * Các tham số truy vấn (Query Parameters):
+ * * Các tham số truy vấn (Query Parameters):
  * - page: số trang (mặc định: 1)
  * - limit: số lượng mục trên mỗi trang (mặc định: 20, tối đa: 100)
  * - search: từ khóa tìm kiếm
@@ -51,6 +50,12 @@ router.post('/', AdminRecipeController.addRecipe);
  * Lấy các số liệu thống kê chung về công thức nấu ăn
  */
 router.get('/stats', AdminRecipeController.getRecipesStats);
+
+/**
+ * UC-75: GET /api/admin/recipes/search/advanced
+ * [ĐÃ SỬA LỖI] API tìm kiếm nâng cao chuyển về dùng đúng AdminRecipeController
+ */
+router.get('/search/advanced', AdminRecipeController.searchAndFilterRecipes);
 
 /**
  * GET /api/admin/recipes/:id
