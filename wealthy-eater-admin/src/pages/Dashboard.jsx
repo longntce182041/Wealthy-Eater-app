@@ -19,21 +19,30 @@ export default function Dashboard() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const raw = localStorage.getItem('admin_user');
-    if (!raw) {
-      navigate('/login');
-      return;
-    }
-    try {
-      setUser(JSON.parse(raw));
-    } catch (e) {
-      localStorage.removeItem('admin_user');
-      navigate('/login');
+    // 1. Kiểm tra nghiêm ngặt CẢ Thông tin User và Token bảo mật
+    const rawUser = localStorage.getItem('admin_user');
+    const token = localStorage.getItem('admin_session_jwt_token');
+
+    // Nếu thiếu 1 trong 2, dọn sạch bộ nhớ và đá về trang Login ngay
+    if (!rawUser || !token) {
+      handleForceLogout();
       return;
     }
 
-    fetchData();
+    try {
+      setUser(JSON.parse(rawUser));
+      fetchData(); // Chỉ gọi API khi xác nhận có đủ cả user và token
+    } catch (e) {
+      handleForceLogout();
+    }
   }, [navigate]);
+
+  // Hàm dọn dẹp bộ nhớ khi không hợp lệ hoặc hết hạn
+  function handleForceLogout() {
+    localStorage.removeItem('admin_user');
+    localStorage.removeItem('admin_session_jwt_token');
+    navigate('/login');
+  }
 
   async function fetchData() {
     setLoading(true);
@@ -52,6 +61,14 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
+      
+      // 2. NẾU BACKEND BÁO TOKEN HẾT HẠN (401) HOẶC SAI LỖI -> ĐÁ VỀ LOGIN LUÔN
+      if (err.response?.status === 401 || err.response?.data?.message?.includes('expired')) {
+        alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!');
+        handleForceLogout();
+        return;
+      }
+
       setError(err?.response?.data?.message || err.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
@@ -67,6 +84,10 @@ export default function Dashboard() {
         fetchData(); 
       }
     } catch (err) {
+      if (err.response?.status === 401) {
+        handleForceLogout();
+        return;
+      }
       alert(err?.response?.data?.message || err.message || 'Failed to delete recipe');
     }
   }

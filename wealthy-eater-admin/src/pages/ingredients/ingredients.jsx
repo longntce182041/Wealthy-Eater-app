@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 const IngredientPage = () => {
     const [ingredients, setIngredients] = useState([]);
     const [loading, setLoading] = useState(true);
-    const fileInputRef = useRef(null); // Ref để kích hoạt input file excel ẩn
+    const fileInputRef = useRef(null); 
 
     // --- STATE PHÂN TRANG ---
     const [currentPage, setCurrentPage] = useState(1);
@@ -43,7 +43,7 @@ const IngredientPage = () => {
         setFormData({ ...formData, [field]: val });
     };
 
-    // 1. Gọi API lấy danh sách (Có phân trang)
+    // Gọi API lấy danh sách
     const fetchIngredients = useCallback(async () => {
         try {
             setLoading(true);
@@ -67,7 +67,6 @@ const IngredientPage = () => {
         }
     }, [filters.keyword, filters.unit, currentPage]);
 
-    // Effect: Gọi lại khi Filters hoặc Page thay đổi
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchIngredients();
@@ -75,7 +74,6 @@ const IngredientPage = () => {
         return () => clearTimeout(timer);
     }, [fetchIngredients]);
 
-    // Reset về trang 1 khi đổi bộ lọc
     useEffect(() => {
         setCurrentPage(1);
     }, [filters]);
@@ -94,16 +92,13 @@ const IngredientPage = () => {
         fetchMicros();
     }, []);
 
-    // --- HANDLERS PHÂN TRANG ---
     const handlePrevPage = () => { if (currentPage > 1) setCurrentPage(prev => prev - 1); };
     const handleNextPage = () => { if (currentPage < totalPages) setCurrentPage(prev => prev + 1); };
 
-    // --- HANDLER IMPORT EXCEL ---
     const handleImportExcel = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Kiểm tra định dạng file mẫu nhanh ở client
         const fileExtension = file.name.split('.').pop().toLowerCase();
         if (fileExtension !== 'xlsx' && fileExtension !== 'xls') {
             toast.error("Please upload an Excel file (.xlsx or .xls)");
@@ -115,25 +110,23 @@ const IngredientPage = () => {
 
         try {
             setLoading(true);
-            // Gửi lên endpoint upload excel của backend (với header multipart/form-data)
             const res = await apiClient.post('/admin/ingredients/import', dataForm, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-});
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
             
             if (res.data.success) {
                 toast.success(res.data.message || "Imported ingredients successfully!");
-                fetchIngredients(); // Đọc lại danh sách mới cập nhật
+                fetchIngredients(); 
             }
         } catch (error) {
             console.error(error);
             toast.error(error.response?.data?.message || "Failed to import Excel file");
         } finally {
             setLoading(false);
-            if (fileInputRef.current) fileInputRef.current.value = ""; // Reset input file
+            if (fileInputRef.current) fileInputRef.current.value = ""; 
         }
     };
 
-    // --- MODAL HANDLERS ---
     const handleOpenCreate = () => {
         setIsEditing(false);
         setFormData({ name: '', calories_per_unit: '', protein: '', carbs: '', fats: '', unit: 'gram', ImageUrl: '', description: '' });
@@ -186,9 +179,10 @@ const IngredientPage = () => {
         }
     };
 
+    // 🎯 Đã sửa lỗi: Dùng apiClient đúng tuyến đường /admin/ingredients để lấy dữ liệu detail thành công
     const handleView = async (id) => {
         try {
-            const res = await axiosClient.get(`/ingredients/${id}`);
+            const res = await apiClient.get(`/admin/ingredients/${id}`);
             if (res.data && res.data.success) {
                 setDetailData(res.data.data);
                 setShowDetail(true);
@@ -205,10 +199,10 @@ const IngredientPage = () => {
             const payload = { ...formData, micronutrients: selectedMicros };
             let res;
             if (isEditing) {
-    res = await apiClient.put(`/admin/ingredients/update/${currentId}`, payload);
-} else {
-    res = await apiClient.post('/admin/ingredients/create', payload);
-}
+                res = await apiClient.put(`/admin/ingredients/update/${currentId}`, payload);
+            } else {
+                res = await apiClient.post('/admin/ingredients/create', payload);
+            }
             toast.success(res.data.message);
             setShowModal(false);
             fetchIngredients();
@@ -229,14 +223,14 @@ const IngredientPage = () => {
                     <input
                         type="text" placeholder="Search ingredients..."
                         value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
-                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd' }}
+                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', color: '#333', background: 'white' }}
                     />
                 </div>
                 <div style={{ position: 'relative', width: '170px' }}>
                     <Filter size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
                     <select
                         value={filters.unit} onChange={(e) => setFilters({ ...filters, unit: e.target.value })}
-                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer' }}
+                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer', color: '#333', background: 'white' }}
                     >
                         <option value="">All Units</option>
                         <option value="gram">gram</option>
@@ -246,7 +240,6 @@ const IngredientPage = () => {
                     </select>
                 </div>
 
-                {/* --- NÚT IMPORT EXCEL MỚI BỔ SUNG --- */}
                 <input 
                     type="file" 
                     ref={fileInputRef} 
@@ -318,21 +311,21 @@ const IngredientPage = () => {
             {showModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
                     <div style={{ background: 'white', padding: '30px', borderRadius: '8px', width: '500px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-                        <button onClick={() => setShowModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
-                        <h3 style={{ marginTop: 0, color: '#30a5ff' }}>{isEditing ? 'Edit Ingredient' : 'Add New Ingredient'}</h3>
-                        <form onSubmit={handleSubmit}>
-                            <div style={{ marginBottom: '10px' }}>
-                                <label style={{ display: 'block', fontSize: '13px' }}>Ingredient Name</label>
-                                <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} required />
+                        <button onClick={() => setShowModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} style={{ color: '#666' }} /></button>
+                        <h3 style={{ marginTop: 0, color: '#30a5ff', fontWeight: 'bold' }}>{isEditing ? 'Edit Ingredient' : 'Add New Ingredient'}</h3>
+                        <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
+                            <div style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Ingredient Name</label>
+                                <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '13px' }}>Calories / Unit</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.calories_per_unit} onChange={e => handleNumberChange('calories_per_unit', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} required />
+                                    <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Calories / Unit</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.calories_per_unit} onChange={e => handleNumberChange('calories_per_unit', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '13px' }}>Unit</label>
-                                    <select value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Unit</label>
+                                    <select value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }}>
                                         <option value="gram">gram</option>
                                         <option value="ml">ml</option>
                                         <option value="piece">piece</option>
@@ -340,32 +333,32 @@ const IngredientPage = () => {
                                     </select>
                                 </div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '12px' }}>Protein (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.protein} onChange={e => handleNumberChange('protein', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} required />
+                                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: '#333' }}>Protein (g)</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.protein} onChange={e => handleNumberChange('protein', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '12px' }}>Carbs (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.carbs} onChange={e => handleNumberChange('carbs', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} required />
+                                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: '#333' }}>Carbs (g)</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.carbs} onChange={e => handleNumberChange('carbs', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '12px' }}>Fats (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.fats} onChange={e => handleNumberChange('fats', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} required />
+                                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: '#333' }}>Fats (g)</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.fats} onChange={e => handleNumberChange('fats', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
                                 </div>
                             </div>
-                            <div style={{ marginBottom: '10px' }}>
-                                <label style={{ display: 'block', fontSize: '13px' }}>Image URL</label>
-                                <input type="text" value={formData.ImageUrl} onChange={e => setFormData({ ...formData, ImageUrl: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} placeholder="https://..." />
+                            <div style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Image URL</label>
+                                <input type="text" value={formData.ImageUrl} onChange={e => setFormData({ ...formData, ImageUrl: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} placeholder="https://..." />
                             </div>
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '13px' }}>Description</label>
-                                <textarea rows="2" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}></textarea>
+                            <div style={{ marginBottom: '15px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Description</label>
+                                <textarea rows="2" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white', fontFamily: 'inherit' }}></textarea>
                             </div>
 
                             {/* MICRONUTRIENTS SECTION */}
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '6px' }}>Micronutrients (optional)</label>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '6px', color: '#333', fontWeight: '500' }}>Micronutrients (optional)</label>
                                 {selectedMicros.map((m, idx) => (
                                     <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                                         <select
@@ -375,7 +368,7 @@ const IngredientPage = () => {
                                                 copy[idx].micronutrientId = e.target.value;
                                                 setSelectedMicros(copy);
                                             }}
-                                            style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                                            style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px', color: '#333', background: 'white' }}
                                         >
                                             <option value="">Select micronutrient</option>
                                             {availableMicros
@@ -384,7 +377,7 @@ const IngredientPage = () => {
                                                     const already = selectedMicros.some((s, si) => s.micronutrientId === id && si !== idx);
                                                     return !already || (m.micronutrientId && (m.micronutrientId === id));
                                                 })
-                                                .map(a => <option key={a._id || a.id} value={a._id || a.id}>{a.name}</option>)}
+                                                .map(a => <option key={a._id || a.id} value={a._id || a.id} style={{ color: '#333' }}>{a.name}</option>)}
                                         </select>
                                         <input type="number" min="0" onKeyDown={blockInvalidChar} value={m.amount}
                                             onChange={e => {
@@ -392,19 +385,30 @@ const IngredientPage = () => {
                                                 copy[idx].amount = e.target.value;
                                                 setSelectedMicros(copy);
                                             }}
-                                            placeholder="amount" style={{ width: '110px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }} />
-                                        <button type="button" onClick={() => { const copy = selectedMicros.filter((_, i) => i !== idx); setSelectedMicros(copy); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#f0243f' }}><Trash2 size={16} /></button>
+                                            placeholder="amount" style={{ width: '110px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', color: '#333', background: 'white' }} />
+                                        <button type="button" onClick={() => { const copy = selectedMicros.filter((_, i) => i !== idx); setSelectedMicros(copy); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#f9243f' }}><Trash2 size={16} /></button>
                                     </div>
                                 ))}
                                 <div>
-                                    <button type="button" onClick={() => setSelectedMicros([...selectedMicros, { micronutrientId: '', amount: '' }])} style={{ background: '#eef6ff', border: '1px dashed #30a5ff', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer' }}>
+                                    <button type="button" onClick={() => setSelectedMicros([...selectedMicros, { micronutrientId: '', amount: '' }])} style={{ background: '#eef6ff', border: '1px dashed #30a5ff', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', color: '#30a5ff', fontWeight: '500' }}>
                                         + Add micronutrient
                                     </button>
                                 </div>
                             </div>
-                            <button type="submit" style={{ width: '100%', padding: '12px', background: '#30a5ff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                {isEditing ? 'Update Ingredient' : 'Add Ingredient'}
-                            </button>
+
+                            {/* 🎯 Đã cập nhật hàng nút điều hướng: Thêm nút Cancel đồng bộ đẹp mắt */}
+                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                <button 
+                                    type="button" 
+                                    onClick={() => setShowModal(false)} 
+                                    style={{ background: '#f1f1f1', color: '#333', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button type="submit" style={{ padding: '10px 20px', background: '#30a5ff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
+                                    {isEditing ? 'Update' : 'Add'}
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -414,35 +418,50 @@ const IngredientPage = () => {
             {showDetail && detailData && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
                     <div style={{ background: 'white', padding: '24px', borderRadius: '8px', width: '520px', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
-                        <button onClick={() => { setShowDetail(false); setDetailData(null); }} style={{ position: 'absolute', top: '12px', right: '12px', border: 'none', background: 'none', cursor: 'pointer' }}><X size={18} /></button>
-                        <h3 style={{ marginTop: 0, color: '#30a5ff' }}>{detailData.name}</h3>
-                        <p><strong>Unit:</strong> {detailData.unit} &nbsp; <strong>Calories/Unit:</strong> {detailData.calories_per_unit}</p>
-                        <p><strong>Protein:</strong> {detailData.protein}g &nbsp; <strong>Carbs:</strong> {detailData.carbs}g &nbsp; <strong>Fats:</strong> {detailData.fats}g</p>
-                        <p style={{ whiteSpace: 'pre-wrap', color: '#555' }}>{detailData.description || 'No description available.'}</p>
-                        <h4 style={{ marginTop: '16px', marginBottom: '8px', color: '#333', borderBottom: '2px solid #30a5ff', paddingBottom: '4px', display: 'inline-block' }}>Micronutrients Linkage</h4>
+                        <button onClick={() => { setShowDetail(false); setDetailData(null); }} style={{ position: 'absolute', top: '15px', right: '15px', border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} style={{ color: '#666' }} /></button>
+                        <h3 style={{ marginTop: 0, color: '#30a5ff', fontWeight: 'bold', fontSize: '18px' }}>{detailData.name}</h3>
+                        
+                        <div style={{ marginTop: '15px', color: '#333', lineHeight: '1.6' }}>
+                            <p><strong>Unit:</strong> {detailData.unit} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Calories/Unit:</strong> {detailData.calories_per_unit}</p>
+                            <p><strong>Protein:</strong> {detailData.protein}g &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Carbs:</strong> {detailData.carbs}g &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Fats:</strong> {detailData.fats}g</p>
+                            <p style={{ whiteSpace: 'pre-wrap', color: '#555', background: '#f9f9f9', padding: '10px', borderRadius: '4px', marginTop: '10px' }}>
+                                <strong>Description:</strong><br/>{detailData.description || 'No description available.'}
+                            </p>
+                        </div>
+
+                        <h4 style={{ marginTop: '20px', marginBottom: '8px', color: '#333', borderBottom: '2px solid #30a5ff', paddingBottom: '4px', display: 'inline-block', fontWeight: 'bold' }}>Micronutrients Linkage</h4>
                         {detailData.micronutrients && detailData.micronutrients.length ? (
                             <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px' }}>
                                 <thead>
                                     <tr style={{ textAlign: 'left', borderBottom: '1px solid #eee', background: '#f8f9fa' }}>
-                                        <th style={{ padding: '8px' }}>Name</th>
-                                        <th style={{ padding: '8px' }}>Amount</th>
-                                        <th style={{ padding: '8px' }}>Unit</th>
+                                        <th style={{ padding: '8px', color: '#333' }}>Name</th>
+                                        <th style={{ padding: '8px', color: '#333' }}>Amount</th>
+                                        <th style={{ padding: '8px', color: '#333' }}>Unit</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {detailData.micronutrients.map((m, i) => (
                                         <tr key={i} style={{ borderBottom: '1px solid #fafafa' }}>
-                                            {/* Sửa lại m.micronutrientId?.name nhằm tránh crash khi backend đã populate object */}
-                                            <td style={{ padding: '8px', fontWeight: '500' }}>{m.micronutrientId?.name || m.name || m.micronutrientId}</td>
+                                            <td style={{ padding: '8px', fontWeight: '500', color: '#333' }}>{m.micronutrientId?.name || m.name || m.micronutrientId}</td>
                                             <td style={{ padding: '8px', color: '#30a5ff', fontWeight: 'bold' }}>{m.amount}</td>
-                                            <td style={{ padding: '8px', color: '#888' }}>{m.micronutrientId?.unit || m.unit || '-'}</td>
+                                            <td style={{ padding: '8px', color: '#666' }}>{m.micronutrientId?.unit || m.unit || '-'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         ) : (
-                            <p style={{ color: '#666', fontSize: '14px', fontStyle: 'italic' }}>No micronutrients linked to this ingredient.</p>
+                            <p style={{ color: '#666', fontSize: '14px', fontStyle: 'italic', marginTop: '5px' }}>No micronutrients linked to this ingredient.</p>
                         )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => { setShowDetail(false); setDetailData(null); }} 
+                                style={{ background: '#f1f1f1', color: '#333', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

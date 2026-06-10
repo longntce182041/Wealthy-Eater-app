@@ -1,5 +1,6 @@
 const micronutrientService = require("../services/micronutrient.management.service");
 const { validateCreateMicronutrient, validateUpdateMicronutrient } = require("../validators/micronutrient.management.validator");
+const Micronutrient = require("../models/Micronutrient"); 
 
 class MicronutrientManagementController {
     
@@ -13,25 +14,38 @@ class MicronutrientManagementController {
         }
     }
 
-    // CREATE Micronutrient
-    async createMicronutrient(data) {
-        // Check if micronutrient with same name already exists
-        const existingMicronutrient = await Micronutrient.findOne({ 
-            name: { $regex: new RegExp(`^${data.name}$`, 'i') } 
-        });
-        
-        if (existingMicronutrient) {
-            throw new Error("Micronutrient with this name already exists");
+    // 🎯 CREATE Micronutrient - Đã cấu trúc lại nhận (req, res) chuẩn Express Router
+    async createMicronutrient(req, res) {
+        try {
+            // 1. Validate dữ liệu đầu vào từ client giống như bên Ingredient
+            const { errors, isValid } = validateCreateMicronutrient(req.body);
+            if (!isValid) return res.status(400).json({ success: false, errors });
+
+            const data = req.body;
+
+            // 2. Kiểm tra trùng tên (không phân biệt hoa thường)
+            const existingMicronutrient = await Micronutrient.findOne({ 
+                name: { $regex: new RegExp(`^${data.name}$`, 'i') } 
+            });
+            
+            if (existingMicronutrient) {
+                return res.status(400).json({ success: false, message: "Micronutrient with this name already exists" });
+            }
+
+            // 3. Tiến hành tạo mới dữ liệu
+            const micronutrient = new Micronutrient({
+                name: data.name,
+                unit: data.unit,
+                description: data.description || "",
+            });
+
+            await micronutrient.save();
+            
+            // 4. Trả kết quả thành công về cho React Client
+            res.status(201).json({ success: true, message: "Micronutrient created successfully", data: micronutrient });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
         }
-
-        const micronutrient = new Micronutrient({
-            name: data.name,
-            unit: data.unit,
-            description: data.description || "",
-        });
-
-        await micronutrient.save();
-        return micronutrient;
     }
     
     // UPDATE Micronutrient
