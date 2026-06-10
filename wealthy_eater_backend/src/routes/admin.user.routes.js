@@ -5,8 +5,8 @@ const router = express.Router();
 const adminUserController = require('../controllers/admin.user.controller');
 
 // UC-77: View List User dành cho Admin Dashboard
-router.get('/users', adminUserController.getUsersList); 
+router.get('/', adminUserController.getUsersList); 
 // Create user
-router.post('/users', adminUserController.createUser);
+router.post('/', adminUserController.createUser);
 
 module.exports = router;

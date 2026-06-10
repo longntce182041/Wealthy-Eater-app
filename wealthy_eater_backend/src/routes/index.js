@@ -24,7 +24,7 @@ router.use('/api/auth', authRoute);
 router.use('/api/profile', profileRoute);
 
 // ─── ADMIN ROUTES ───────────────────────────────────────────────────────────
-router.use('/api/admin', adminUserRoute); // Tuỳ chỉnh lại path '/api/admin/users' nếu cần
+router.use('/api/admin/users', adminUserRoute);
 router.use('/api/admin/ingredients', ingredientRoute);
 router.use('/api/admin/micronutrients', micronutrientRoute);
 router.use('/api/admin/recipes', adminRecipeRoute);
