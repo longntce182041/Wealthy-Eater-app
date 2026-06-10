@@ -19,11 +19,12 @@ function handleError(err, res) {
  */
 async function login(req, res) {
   try {
-    const { email, password } = req.body || {};
+    const { email, password, role } = req.body || {};
     if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ success: false, message: 'Email and password must be valid strings' });
     }
-    const result = await AuthService.login(email, password);
+    const targetRole = (typeof role === 'string' && role) ? role : 'customer';
+    const result = await AuthService.login(email, password, targetRole);
     return res.json({ success: true, message: 'Login successful', data: result });
   } catch (err) {
     return handleError(err, res);
