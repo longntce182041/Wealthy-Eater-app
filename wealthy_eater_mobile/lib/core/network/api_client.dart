@@ -21,7 +21,7 @@ class ApiClient {
             headers: {'Content-Type': 'application/json'},
           ),
         ) {
-    dio.interceptors.add(_AuthInterceptor(storage ?? const FlutterSecureStorage()));
+    dio.interceptors.add(_AuthInterceptor(storage ?? const FlutterSecureStorage(), dio));
   }
 
   Future<Response<T>> get<T>(
@@ -87,8 +87,10 @@ class ApiClient {
 /// as a Bearer Authorization header on every outgoing request.
 class _AuthInterceptor extends Interceptor {
   final FlutterSecureStorage _storage;
+  final Dio _dio;
+  bool _isRefreshing = false;
 
-  _AuthInterceptor(this._storage);
+  _AuthInterceptor(this._storage, this._dio);
 
   @override
   Future<void> onRequest(
@@ -106,5 +108,38 @@ class _AuthInterceptor extends Interceptor {
       options.headers['Authorization'] = 'Bearer $token';
     }
     handler.next(options);
+  }
+
+  @override
+  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
+    if (err.response?.statusCode == 401 && !_isRefreshing) {
+      final refreshToken = await _storage.read(key: 'refreshToken');
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        _isRefreshing = true;
+        try {
+          // Attempt to refresh the token directly via Dio
+          final refreshRes = await _dio.post('/api/auth/refresh', data: {
+            'refreshToken': refreshToken,
+          });
+
+          if (refreshRes.statusCode == 200 && refreshRes.data['success'] == true) {
+            final newAccessToken = refreshRes.data['data']['accessToken'];
+            await _storage.write(key: 'accessToken', value: newAccessToken);
+
+            // Retry the original request with the new token
+            final options = err.requestOptions;
+            options.headers['Authorization'] = 'Bearer $newAccessToken';
+            
+            final retryRes = await _dio.fetch(options);
+            _isRefreshing = false;
+            return handler.resolve(retryRes);
+          }
+        } catch (_) {
+          // Refresh failed, fall through to error
+        }
+        _isRefreshing = false;
+      }
+    }
+    return handler.next(err);
   }
 }

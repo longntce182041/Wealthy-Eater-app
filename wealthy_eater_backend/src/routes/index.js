@@ -27,4 +27,8 @@ router.use('/api/user/shopping-list', shoppingListRoute);
 // 👉 THÊM DÒNG NÀY: Trỏ endpoint /api/admin/recipes vào file adminRecipeRoute
 router.use('/api/admin/recipes', adminRecipeRoute);
 
+// Nutritionist routes
+const nutritionistRoute = require('./nutritionist.routes');
+router.use('/api/nutritionists', nutritionistRoute);
+
 module.exports = router;

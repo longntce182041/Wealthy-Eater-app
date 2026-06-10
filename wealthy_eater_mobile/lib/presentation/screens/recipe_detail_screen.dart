@@ -37,77 +37,74 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<RecipeProvider>(
-      builder: (context, provider, _) {
+    // Only rebuild the Scaffold layout when the top-level detail state changes.
+    // Liking a recipe or adding a review will only trigger isolated widget rebuilds.
+    return Selector<RecipeProvider, RecipeViewState>(
+      selector: (context, provider) => provider.detailState,
+      builder: (context, detailState, _) {
+        final provider = context.read<RecipeProvider>();
         final recipe = provider.selectedRecipe;
 
         return Scaffold(
-          body: CustomScrollView(
-            slivers: [
-              // ── Hero App Bar ──────────────────────────────────────────────
-              SliverAppBar(
-                pinned: true,
-                expandedHeight: 320,
-                foregroundColor: Colors.white,
-                backgroundColor: Theme.of(context).colorScheme.tertiary,
-                title: const Text('Recipe detail',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                actions: [
-                  if (recipe != null)
-                    _LikeButton(recipe: recipe, provider: provider),
-                ],
-                flexibleSpace: FlexibleSpaceBar(
-                  background: _HeroBackground(recipe: recipe),
-                ),
-              ),
-
-              // ── Loading / error / empty ────────────────────────────────────
-              if (provider.detailState == RecipeViewState.loading)
-                const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()))
-              else if (provider.detailState == RecipeViewState.error)
-                SliverFillRemaining(
-                  child: _DetailError(
-                    message: provider.errorMessage ?? 'Unable to load recipe',
-                    onRetry: () =>
-                        provider.loadRecipeDetail(widget.recipeId),
-                  ),
-                )
-              else if (recipe == null)
-                const SliverFillRemaining(child: SizedBox.shrink())
-              else ...[
-                // ── Tab bar ───────────────────────────────────────────────
-                SliverPersistentHeader(
+          body: NestedScrollView(
+            headerSliverBuilder: (context, innerBoxIsScrolled) {
+              return [
+                // ── Hero App Bar ──────────────────────────────────────────────
+                SliverAppBar(
                   pinned: true,
-                  delegate: _TabBarDelegate(
-                    TabBar(
-                      controller: _tabController,
-                      tabs: const [
-                        Tab(text: 'Information'),
-                        Tab(text: 'Reviews'),
-                      ],
+                  expandedHeight: 320,
+                  foregroundColor: Colors.white,
+                  backgroundColor: Theme.of(context).colorScheme.tertiary,
+                  actions: [
+                    if (recipe != null)
+                      _LikeButton(recipeId: recipe.id),
+                  ],
+                  flexibleSpace: FlexibleSpaceBar(
+                    background: _HeroBackground(recipe: recipe),
+                  ),
+                ),
+                if (recipe != null)
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _TabBarDelegate(
+                      TabBar(
+                        controller: _tabController,
+                        tabs: const [
+                          Tab(text: 'Information'),
+                          Tab(text: 'Reviews'),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-
-                // ── Tab content ───────────────────────────────────────────
-                SliverFillRemaining(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _InfoTab(recipe: recipe),
-                      _ReviewsTab(
-                        recipe:   recipe,
-                        provider: provider,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
+              ];
+            },
+            body: _buildBodyContent(provider, recipe),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildBodyContent(RecipeProvider provider, RecipeEntity? recipe) {
+    if (provider.detailState == RecipeViewState.loading) {
+      return const Center(child: CircularProgressIndicator());
+    } else if (provider.detailState == RecipeViewState.error) {
+      return _DetailError(
+        message: provider.errorMessage ?? 'Unable to load recipe',
+        onRetry: () => provider.loadRecipeDetail(widget.recipeId),
+      );
+    } else if (recipe == null) {
+      return const SizedBox.shrink();
+    }
+
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        _InfoTab(recipe: recipe),
+        _ReviewsTab(
+          recipeId: recipe.id,
+        ),
+      ],
     );
   }
 }
@@ -115,26 +112,31 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen>
 // ─── Like button ──────────────────────────────────────────────────────────────
 
 class _LikeButton extends StatelessWidget {
-  final RecipeEntity recipe;
-  final RecipeProvider provider;
+  final String recipeId;
 
-  const _LikeButton({required this.recipe, required this.provider});
+  const _LikeButton({required this.recipeId});
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: recipe.isLiked ? 'Unlike' : 'Like',
-      icon: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        transitionBuilder: (child, animation) =>
-            ScaleTransition(scale: animation, child: child),
-        child: Icon(
-          recipe.isLiked ? Icons.favorite : Icons.favorite_border,
-          key: ValueKey(recipe.isLiked),
-          color: recipe.isLiked ? Colors.redAccent : Colors.white,
-        ),
-      ),
-      onPressed: () => provider.toggleLike(recipe.id),
+    return Consumer<RecipeProvider>(
+      builder: (context, provider, _) {
+        final isLiked = provider.selectedRecipe?.isLiked ?? false;
+        
+        return IconButton(
+          tooltip: isLiked ? 'Unlike' : 'Like',
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            transitionBuilder: (child, animation) =>
+                ScaleTransition(scale: animation, child: child),
+            child: Icon(
+              isLiked ? Icons.favorite : Icons.favorite_border,
+              key: ValueKey(isLiked),
+              color: isLiked ? Colors.redAccent : Colors.white,
+            ),
+          ),
+          onPressed: () => provider.toggleLike(recipeId),
+        );
+      },
     );
   }
 }
@@ -393,95 +395,101 @@ class _InfoTab extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _ReviewsTab extends StatelessWidget {
-  final RecipeEntity recipe;
-  final RecipeProvider provider;
+  final String recipeId;
 
-  const _ReviewsTab({required this.recipe, required this.provider});
-
-  void _showReviewSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _ReviewBottomSheet(
-        recipe:       recipe,
-        existingReview: provider.myReviewForCurrentRecipe,
-        onSubmit: (rating, comment) async {
-          return provider.submitReview(
-            recipeId: recipe.id,
-            rating:   rating,
-            comment:  comment,
-          );
-        },
-        onDelete: provider.myReviewForCurrentRecipe != null
-            ? () => provider.deleteMyReview(
-                  provider.myReviewForCurrentRecipe!.id,
-                  recipe.id,
-                )
-            : null,
-      ),
-    );
-  }
+  const _ReviewsTab({required this.recipeId});
 
   @override
   Widget build(BuildContext context) {
-    final stats = provider.reviewStats;
-    final avg   = (stats['avgRating'] as num?)?.toDouble() ?? 0.0;
-    final total = (stats['totalReviews'] as num?)?.toInt() ?? 0;
+    return Consumer<RecipeProvider>(
+      builder: (context, provider, _) {
+        final recipe = provider.selectedRecipe;
+        if (recipe == null) return const SizedBox.shrink();
 
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        // Stats header
-        if (total > 0)
-          _RatingHeader(avgRating: avg, totalReviews: total, stats: stats),
+        void showReviewSheet() {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => _ReviewBottomSheet(
+              recipe: recipe,
+              existingReview: provider.myReviewForCurrentRecipe,
+              onSubmit: (rating, comment) async {
+                return provider.submitReview(
+                  recipeId: recipe.id,
+                  rating: rating,
+                  comment: comment,
+                );
+              },
+              onDelete: provider.myReviewForCurrentRecipe != null
+                  ? () => provider.deleteMyReview(
+                        provider.myReviewForCurrentRecipe!.id,
+                        recipe.id,
+                      )
+                  : null,
+            ),
+          );
+        }
 
-        const SizedBox(height: 16),
+        final stats = provider.reviewStats;
+        final avg   = (stats['avgRating'] as num?)?.toDouble() ?? 0.0;
+        final total = (stats['totalReviews'] as num?)?.toInt() ?? 0;
 
-        // My review chip or Write review button
-        _MyReviewPreview(
-          myReview: provider.myReviewForCurrentRecipe,
-          onTap: () => _showReviewSheet(context),
-        ),
+        return ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            // Stats header
+            if (total > 0)
+              _RatingHeader(avgRating: avg, totalReviews: total, stats: stats),
 
-        const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-        // Reviews list
-        if (provider.reviewsState == RecipeViewState.loading)
-          const Center(child: Padding(
-            padding: EdgeInsets.all(32),
-            child: CircularProgressIndicator(),
-          ))
-        else if (provider.reviewsState == RecipeViewState.error)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(provider.reviewsError ?? 'Unable to load reviews',
-                textAlign: TextAlign.center),
-          )
-        else if (provider.currentRecipeReviews.isEmpty)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Column(
-                children: [
-                  const Icon(Icons.rate_review_outlined, size: 48),
-                  const SizedBox(height: 8),
-                  Text('No reviews yet',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 4),
-                  const Text('Be the first to share your experience!'),
-                ],
+            // My review chip or Write review button
+            _MyReviewPreview(
+              myReview: provider.myReviewForCurrentRecipe,
+              onTap: () => showReviewSheet(),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Reviews list
+            if (provider.reviewsState == RecipeViewState.loading)
+              const Center(child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(),
+              ))
+            else if (provider.reviewsState == RecipeViewState.error)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(provider.reviewsError ?? 'Unable to load reviews',
+                    textAlign: TextAlign.center),
+              )
+            else if (provider.currentRecipeReviews.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.rate_review_outlined, size: 48),
+                      const SizedBox(height: 8),
+                      Text('No reviews yet',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 4),
+                      const Text('Be the first to share your experience!'),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ...provider.currentRecipeReviews.map(
+                (review) => Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _ReviewCard(review: review),
+                ),
               ),
-            ),
-          )
-        else
-          ...provider.currentRecipeReviews.map(
-            (review) => Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: _ReviewCard(review: review),
-            ),
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

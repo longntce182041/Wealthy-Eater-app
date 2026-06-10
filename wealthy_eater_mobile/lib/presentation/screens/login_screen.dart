@@ -2,14 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
+import '../widgets/custom_elevated_button.dart';
+import '../widgets/custom_text_field.dart';
 import 'nutritionist_login_screen.dart';
 import 'register_screen.dart';
 
-/// Login screen with email/password and Google Sign-In.
-///
-/// Routes to [HomeScreen] when [AuthProvider] transitions to [AuthState.authenticated].
-/// Optimized layout using [CustomScrollView] and [SliverFillRemaining] to handle
-/// keyboards flawlessly on small screens while keeping content centered.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -21,7 +18,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -67,11 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -94,118 +86,23 @@ class _LoginScreenState extends State<LoginScreen> {
                         key: _formKey,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
-                          mainAxisSize: MainAxisSize.min, // Keep minimal vertical space for centering
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Logo / Title
-                            Icon(
-                              Icons.restaurant_menu,
-                              size: 56,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Wealthy Eater',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Sign in to your account',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade500),
-                            ),
-                            const SizedBox(height: 36),
-
-                            // Email
-                            TextFormField(
-                              controller: _emailCtrl,
-                              keyboardType: TextInputType.emailAddress,
-                              textInputAction: TextInputAction.next,
-                              autocorrect: false,
-                              validator: _validateEmail,
-                              decoration: const InputDecoration(
-                                labelText: 'Email',
-                                prefixIcon: Icon(Icons.email_outlined),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Password
-                            TextFormField(
-                              controller: _passCtrl,
-                              obscureText: _obscurePassword,
-                              textInputAction: TextInputAction.done,
-                              onFieldSubmitted: (_) => _doLogin(),
-                              validator: _validatePassword,
-                              decoration: InputDecoration(
-                                labelText: 'Password',
-                                prefixIcon: const Icon(Icons.lock_outline),
-                                suffixIcon: IconButton(
-                                  icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 28),
-
-                            // Login Button
-                            FilledButton(
-                              onPressed: isLoading ? null : _doLogin,
-                              child: isLoading
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                    )
-                                  : const Text('Sign In'),
-                            ),
+                            _buildHeader(context),
+                            const SizedBox(height: 48),
+                            _buildEmailField(),
+                            const SizedBox(height: 20),
+                            _buildPasswordField(),
+                            const SizedBox(height: 32),
+                            _buildLoginButton(isLoading),
+                            const SizedBox(height: 24),
+                            _buildDivider(),
+                            const SizedBox(height: 24),
+                            _buildSocialLogin(isLoading),
+                            const SizedBox(height: 32),
+                            _buildNutritionistLoginLink(context),
                             const SizedBox(height: 12),
-
-                            // Divider
-                            Row(
-                              children: [
-                                const Expanded(child: Divider()),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  child: Text('or', style: TextStyle(color: Colors.grey.shade500)),
-                                ),
-                                const Expanded(child: Divider()),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-
-                            // Google Sign-In
-                            OutlinedButton.icon(
-                              onPressed: isLoading ? null : _doGoogle,
-                              icon: const Icon(Icons.g_mobiledata, size: 24),
-                              label: const Text('Continue with Google'),
-                            ),
-                            const SizedBox(height: 12),
-
-                            // Switch to Nutritionist Login
-                            Center(
-                              child: TextButton(
-                                onPressed: () {
-                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NutritionistLoginScreen()));
-                                },
-                                child: const Text('Nutritionist Login'),
-                              ),
-                            ),
-
-                            // Register / Forgot links
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                TextButton(
-                                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegisterScreen())),
-                                  child: const Text('Register'),
-                                ),
-                                TextButton(
-                                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Forgot password not implemented'))),
-                                  child: const Text('Forgot Password?'),
-                                ),
-                              ],
-                            ),
+                            _buildFooterLinks(context),
                           ],
                         ),
                       );
@@ -217,6 +114,120 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Column(
+      children: [
+        Icon(
+          Icons.restaurant_menu,
+          size: 64,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'Wealthy Eater',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.headlineLarge,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Sign in to your account',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmailField() {
+    return CustomTextField(
+      controller: _emailCtrl,
+      labelText: 'Email Address',
+      hintText: 'Enter your email',
+      keyboardType: TextInputType.emailAddress,
+      prefixIcon: Icons.email_outlined,
+      validator: _validateEmail,
+    );
+  }
+
+  Widget _buildPasswordField() {
+    return CustomTextField(
+      controller: _passCtrl,
+      labelText: 'Password',
+      hintText: 'Enter your password',
+      isPassword: true,
+      textInputAction: TextInputAction.done,
+      prefixIcon: Icons.lock_outline,
+      validator: _validatePassword,
+      onFieldSubmitted: (_) => _doLogin(),
+    );
+  }
+
+  Widget _buildLoginButton(bool isLoading) {
+    return CustomElevatedButton(
+      label: 'Sign In',
+      onPressed: _doLogin,
+      isLoading: isLoading,
+    );
+  }
+
+  Widget _buildDivider() {
+    return Row(
+      children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text('OR', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey.shade500)),
+        ),
+        const Expanded(child: Divider()),
+      ],
+    );
+  }
+
+  Widget _buildSocialLogin(bool isLoading) {
+    return SizedBox(
+      height: 56,
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: isLoading ? null : _doGoogle,
+        icon: const Icon(Icons.g_mobiledata, size: 28),
+        label: const Text('Continue with Google'),
+      ),
+    );
+  }
+
+  Widget _buildNutritionistLoginLink(BuildContext context) {
+    return Center(
+      child: TextButton(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const NutritionistLoginScreen()),
+          );
+        },
+        child: const Text('Nutritionist Login'),
+      ),
+    );
+  }
+
+  Widget _buildFooterLinks(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        TextButton(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const RegisterScreen()),
+          ),
+          child: const Text('Create Account'),
+        ),
+        TextButton(
+          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Forgot password not implemented')),
+          ),
+          child: const Text('Forgot Password?'),
+        ),
+      ],
     );
   }
 }

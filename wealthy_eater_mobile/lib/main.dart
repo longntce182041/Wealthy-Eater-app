@@ -13,6 +13,7 @@ import 'domain/usecases/recipe_review_usecases.dart';
 import 'domain/usecases/get_my_reviews_list_usecase.dart';
 import 'domain/usecases/shopping_list_usecases.dart';
 import 'presentation/providers/index.dart';
+import 'presentation/providers/nutritionist_provider.dart';
 import 'presentation/screens/index.dart';
 
 void main() {
@@ -61,6 +62,7 @@ class WealthyEaterApp extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider(create: (_) => NotificationProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => NutritionistProvider(api: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',
@@ -104,6 +106,9 @@ class _AppRootState extends State<_AppRoot> {
           case AuthState.loading:
             return const _SplashScreen();
           case AuthState.authenticated:
+            if (auth.user?.role == 'nutritionist') {
+              return NutritionistDashboardScreen(user: auth.user);
+            }
             return HomeScreen(user: auth.user);
           case AuthState.unauthenticated:
           case AuthState.error:
