@@ -219,6 +219,11 @@ class AuthProvider with ChangeNotifier {
     _accessToken = token;
     await _storage.write(key: 'accessToken', value: token);
 
+    final rToken = data['refreshToken']?.toString();
+    if (rToken != null && rToken.isNotEmpty) {
+      await _storage.write(key: 'refreshToken', value: rToken);
+    }
+
     final userData = data['user'];
     if (userData is Map<String, dynamic>) {
       user = UserEntity.fromJson(userData);
@@ -269,6 +274,7 @@ class AuthProvider with ChangeNotifier {
     _accessToken = null;
     user = null;
     await _storage.delete(key: 'accessToken');
+    await _storage.delete(key: 'refreshToken');
   }
 
   void _setLoading() {

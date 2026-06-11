@@ -7,7 +7,7 @@ import '../providers/shopping_list_provider.dart';
 import '../providers/notification_provider.dart';
 import 'notification_history_screen.dart';
 import '../widgets/coming_soon_tab.dart';
-import 'dashboard_home_tab.dart';
+import 'nutritionists_tab.dart';
 import 'recipe_likes_tab.dart';
 import 'recipe_list_view.dart';
 import 'recipe_my_reviews_tab.dart';
@@ -101,22 +101,19 @@ class _HomeScreenState extends State<HomeScreen> {
         child: IndexedStack(
           index: _selectedIndex,
           children: [
-            // ── 0: Home dashboard ──────────────────────────────────────
-            DashboardHomeTab(
-              user: widget.user,
-              onExploreRecipes: () => _selectTab(1),
-            ),
-
-            // ── 1: Recipes (with sub-tabs: Browse | Liked | Reviews) ──
+            // ── 0: Recipes (with sub-tabs: Browse | Liked | Reviews) ──
             const _RecipeNavTab(),
 
-            // ── 2: Meal Plans ──────────────────────────────────────────
+            // ── 1: Meal Plans ──────────────────────────────────────────
             const ComingSoonTab(
               icon: Icons.event_note_outlined,
               title: 'Meal Plans',
               description:
                   'AI-powered meal planning and nutrition workflows are coming soon.',
             ),
+
+            // ── 2: Nutritionists ──────────────────────────────────────
+            const NutritionistsTab(),
 
             // ── 3: Profile ─────────────────────────────────────────────
             const ComingSoonTab(
@@ -133,10 +130,6 @@ class _HomeScreenState extends State<HomeScreen> {
         onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard),
-              label: 'Home'),
-          NavigationDestination(
               icon: Icon(Icons.menu_book_outlined),
               selectedIcon: Icon(Icons.menu_book),
               label: 'Recipes'),
@@ -144,6 +137,10 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icon(Icons.event_note_outlined),
               selectedIcon: Icon(Icons.event_note),
               label: 'Plans'),
+          NavigationDestination(
+              icon: Icon(Icons.people_outline),
+              selectedIcon: Icon(Icons.people),
+              label: 'Nutritionists'),
           NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person),
@@ -155,14 +152,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _navTitle(int index) {
     switch (index) {
-      case 1:
+      case 0:
         return 'Recipes';
-      case 2:
+      case 1:
         return 'Meal Plans';
+      case 2:
+        return 'Nutritionists';
       case 3:
         return 'Profile';
       default:
-        return 'Home';
+        return 'Recipes';
     }
   }
 }
