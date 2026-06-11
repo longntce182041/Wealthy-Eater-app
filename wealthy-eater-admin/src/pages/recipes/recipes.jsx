@@ -1,29 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import apiClient from '../services/api';
-import './dashboard.css';
+import apiClient from '../../services/api';
+import '../dashboard.css';
 
-export default function Dashboard() {
+export default function RecipesPage() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
-  const [stats, setStats] = useState({
-    totalRecipes: 0,
-    publishedRecipes: 0,
-    draftRecipes: 0,
-    totalReviews: 0,
-    averageRating: 0,
-    topRecipe: null
-  });
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Các Bộ lọc tìm kiếm hỗ trợ Admin thao tác danh mục
+  const [searchTerm, setSearchTerm] = useState('');
+  const [levelFilter, setLevelFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   useEffect(() => {
-    // 1. Kiểm tra nghiêm ngặt CẢ Thông tin User và Token bảo mật
+    // Kiểm tra quyền bảo mật hệ thống nghiêm ngặt giống Dashboard
     const rawUser = localStorage.getItem('admin_user');
     const token = localStorage.getItem('admin_session_jwt_token');
 
-    // Nếu thiếu 1 trong 2, dọn sạch bộ nhớ và đá về trang Login ngay
     if (!rawUser || !token) {
       handleForceLogout();
       return;
@@ -31,45 +27,34 @@ export default function Dashboard() {
 
     try {
       setUser(JSON.parse(rawUser));
-      fetchData(); // Chỉ gọi API khi xác nhận có đủ cả user và token
+      fetchRecipes(); 
     } catch (e) {
       handleForceLogout();
     }
   }, [navigate]);
 
-  // Hàm dọn dẹp bộ nhớ khi không hợp lệ hoặc hết hạn
   function handleForceLogout() {
     localStorage.removeItem('admin_user');
     localStorage.removeItem('admin_session_jwt_token');
     navigate('/login');
   }
 
-  async function fetchData() {
+  async function fetchRecipes() {
     setLoading(true);
     setError('');
     try {
-      const [statsRes, recipesRes] = await Promise.all([
-        apiClient.get('/admin/recipes/stats'),
-        apiClient.get('/admin/recipes')
-      ]);
-
-      if (statsRes.data?.success) {
-        setStats(statsRes.data.data);
-      }
-      if (recipesRes.data?.success) {
-        setRecipes(recipesRes.data.data);
+      const response = await apiClient.get('/admin/recipes');
+      if (response.data?.success) {
+        setRecipes(response.data.data || []);
       }
     } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-      
-      // 2. NẾU BACKEND BÁO TOKEN HẾT HẠN (401) HOẶC SAI LỖI -> ĐÁ VỀ LOGIN LUÔN
+      console.error('Error fetching recipes:', err);
       if (err.response?.status === 401 || err.response?.data?.message?.includes('expired')) {
         alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!');
         handleForceLogout();
         return;
       }
-
-      setError(err?.response?.data?.message || err.message || 'Failed to load dashboard data');
+      setError(err?.response?.data?.message || err.message || 'Failed to load recipes database');
     } finally {
       setLoading(false);
     }
@@ -81,7 +66,7 @@ export default function Dashboard() {
       const res = await apiClient.delete(`/admin/recipes/${recipeId}`);
       if (res.data?.success) {
         alert('Recipe soft-deleted successfully!');
-        fetchData(); 
+        fetchRecipes(); 
       }
     } catch (err) {
       if (err.response?.status === 401) {
@@ -91,6 +76,15 @@ export default function Dashboard() {
       alert(err?.response?.data?.message || err.message || 'Failed to delete recipe');
     }
   }
+
+  // Lọc dữ liệu Realtime tại giao diện
+  const filteredRecipes = recipes.filter(recipe => {
+    const matchesSearch = recipe.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          recipe.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesLevel = levelFilter === '' || recipe.levelCooking === levelFilter;
+    const matchesStatus = statusFilter === '' || recipe.status === statusFilter;
+    return matchesSearch && matchesLevel && matchesStatus;
+  });
 
   if (!user) return null;
 
@@ -107,65 +101,54 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Metric Cards Grid */}
-      <section className="metrics-grid">
-        <div className="metric-card">
-          <div className="metric-info">
-            <h4>Total Recipes</h4>
-            <p>{loading ? '...' : stats.totalRecipes}</p>
-          </div>
-          <div className="metric-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-            </svg>
-          </div>
+      {/* THANH ĐIỀU HƯỚNG TÌM KIẾM VÀ BỘ LỌC */}
+      <section style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: '260px' }}>
+          <input 
+            type="text" 
+            placeholder="Tìm tên công thức, mô tả món ăn..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '100%', padding: '12px 16px', borderRadius: '10px', 
+              background: '#1e293b', border: '1px solid #334155', color: '#fff',
+              boxSizing: 'border-box'
+            }}
+          />
         </div>
+        
+        <select 
+          value={levelFilter} 
+          onChange={(e) => setLevelFilter(e.target.value)}
+          style={{ padding: '12px 16px', borderRadius: '10px', background: '#1e293b', border: '1px solid #334155', color: '#fff', cursor: 'pointer' }}
+        >
+          <option value="">Tất cả độ khó</option>
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
 
-        <div className="metric-card">
-          <div className="metric-info">
-            <h4>Published</h4>
-            <p>{loading ? '...' : stats.publishedRecipes}</p>
-          </div>
-          <div className="metric-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-              <polyline points="22 4 12 14.01 9 11.01"></polyline>
-            </svg>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-info">
-            <h4>Drafts</h4>
-            <p>{loading ? '...' : stats.draftRecipes}</p>
-          </div>
-          <div className="metric-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-info">
-            <h4>Average Rating</h4>
-            <p>{loading ? '...' : `${stats.averageRating} ★`}</p>
-          </div>
-          <div className="metric-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-            </svg>
-          </div>
-        </div>
+        <select 
+          value={statusFilter} 
+          onChange={(e) => setStatusFilter(e.target.value)}
+          style={{ padding: '12px 16px', borderRadius: '10px', background: '#1e293b', border: '1px solid #334155', color: '#fff', cursor: 'pointer' }}
+        >
+          <option value="">Tất cả trạng thái</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+          <option value="archived">Archived</option>
+        </select>
       </section>
 
-      {/* Recipes Table Card */}
+      {/* BẢNG DANH MỤC HIỂN THỊ CÔNG THỨC (UC-71) */}
       <section className="table-card">
         <div className="table-header">
-          <h3>Recipes List</h3>
+          <div>
+            <h3>Recipes Database Management</h3>
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0 0' }}>Quản lý danh mục toàn bộ công thức nấu ăn trên hệ thống nền tảng</p>
+          </div>
           <div className="table-actions">
-            <button className="btn-primary" onClick={fetchData}>
+            <button className="btn-primary" onClick={fetchRecipes}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
               </svg>
@@ -176,55 +159,55 @@ export default function Dashboard() {
 
         <div className="data-table-wrapper">
           {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', fontWeight: 600 }}>Loading recipes database...</div>
-          ) : recipes.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', fontWeight: 600, color: '#94a3b8' }}>Loading recipes database...</div>
+          ) : filteredRecipes.length === 0 ? (
             <div className="empty-state">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
               </svg>
-              <p>No recipes available in the database.</p>
+              <p>No recipes available matching the filters.</p>
             </div>
           ) : (
             <table className="data-table">
               <thead>
                 <tr>
                   <th>Recipe Details</th>
-                  {/* CHỨC NĂNG UC-71: Thêm cột tiêu đề hiển thị tổng hàm lượng Calo */}
-                  <th>TOTAL CALORIES</th>
-                  <th>LEVEL</th>
-                  <th>TIME (MINS)</th>
-                  <th>RATING</th>
-                  <th>STATUS</th>
-                  <th>ACTIONS</th>
+                  {/* TÍCH HỢP CỘT TỔNG HÀM LƯỢNG CALO ĐẠT CHUẨN UC-71 */}
+                  <th>Total Calories</th>
+                  <th>Level</th>
+                  <th>Time</th>
+                  <th>Rating</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {recipes.map((recipe) => (
+                {filteredRecipes.map((recipe) => (
                   <tr key={recipe.id || recipe._id}>
                     <td>
                       <div className="recipe-cell">
                         {recipe.imageUrl ? (
                           <img className="recipe-img" src={recipe.imageUrl} alt={recipe.name} />
                         ) : (
-                          <div className="recipe-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>🍳</div>
+                          <div className="recipe-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#334155', color: '#9ca3af' }}>🍳</div>
                         )}
                         <div style={{ textAlign: 'left' }}>
                           <div className="recipe-title">{recipe.name}</div>
-                          <div className="recipe-desc">{recipe.description}</div>
+                          <div className="recipe-desc">{recipe.description || 'No description provided'}</div>
                         </div>
                       </div>
                     </td>
-
-                    {/* CHỨC NĂNG UC-71: Render dữ liệu Calo và Macros (Carb, Protein, Fat) */}
+                    
+                    {/* KHU VỰC CỘT CALO & KHỐI DINH DƯỠNG TRỰC QUAN */}
                     <td>
                       <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontWeight: '700', color: '#38bdf8', fontSize: '15px', marginBottom: '2px' }}>
-                          {recipe.nutrition?.calories || recipe.calories || 0} kcal
+                        <div style={{ fontWeight: '800', color: '#38bdf8', fontSize: '15px' }}>
+                          {recipe.nutrition?.calories || 0} kcal
                         </div>
-                        <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', gap: '6px' }}>
-                          <span>C: {recipe.nutrition?.carbs || recipe.carbs || 0}g</span>
-                          <span>P: {recipe.nutrition?.protein || recipe.protein || 0}g</span>
-                          <span>F: {recipe.nutrition?.fat || recipe.fat || 0}g</span>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px', display: 'flex', gap: '6px' }}>
+                          <span>C: {recipe.nutrition?.carbs || 0}g</span>
+                          <span>P: {recipe.nutrition?.protein || 0}g</span>
+                          <span>F: {recipe.nutrition?.fat || 0}g</span>
                         </div>
                       </div>
                     </td>
@@ -234,24 +217,30 @@ export default function Dashboard() {
                         {recipe.levelCooking}
                       </span>
                     </td>
-                    <td>{recipe.cookingTime} mins</td>
+                    
+                    <td>
+                      <span style={{ fontWeight: 500 }}>{recipe.cookingTime} mins</span>
+                    </td>
+                    
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: '#f59e0b' }}>
                         <span>{recipe.reviewStats?.averageRating || '—'}</span>
                         {recipe.reviewStats?.averageRating > 0 && <span>★</span>}
                       </div>
                     </td>
+                    
                     <td>
                       <span className={`badge ${recipe.status}`}>
                         {recipe.status}
                       </span>
                     </td>
+                    
                     <td>
                       <div className="actions-cell">
                         <button
                           className="btn-icon-action"
                           title="View Details"
-                          onClick={() => alert(`Details: \n\nName: ${recipe.name}\nCalories: ${recipe.nutrition?.calories || 0} kcal\nProtein: ${recipe.nutrition?.protein || 0}g\nCarbs: ${recipe.nutrition?.carbs || 0}g\nFat: ${recipe.nutrition?.fat || 0}g\n\nSteps:\n${recipe.cookingStep}`)}
+                          onClick={() => alert(`Nutrition Metrics: \n\nCalories: ${recipe.nutrition?.calories || 0} kcal\nProtein: ${recipe.nutrition?.protein || 0}g\nCarbs: ${recipe.nutrition?.carbs || 0}g\nFat: ${recipe.nutrition?.fat || 0}g\n\nCooking Steps:\n${recipe.cookingStep || 'No steps written yet.'}`)}
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="1"></circle>

@@ -1,25 +1,23 @@
 import React from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
-import DashboardPage from "../pages/dashboard";
+// ĐỒNG BỘ CHUẨN CẤU TRÚC THƯ MỤC THỰC TẾ CỦA BẠN:
+import DashboardPage from "../pages/Dashboard.jsx"; // File Dashboard.jsx nằm trực tiếp trong pages
 import IngredientsPage from "../pages/ingredients/ingredients.jsx";
-import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx";
-import LoginPage from "../pages/Login.jsx"; // Đảm bảo import đúng đường dẫn LoginPage của bạn
+import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx"; // Trỏ đúng vào file micronutrients.jsx chứ không phải index.jsx
+import RecipesPage from "../pages/recipes/recipes.jsx"; 
+import LoginPage from "../pages/Login.jsx"; // File Login.jsx nằm trực tiếp trong pages
 import AdminLayout from "../layouts/AdminLayout.jsx";
 
 const PrivateRoute = () => {
-  // ĐỒNG BỘ: Đổi sang check đúng key token mà trang Login lưu trữ
   const token = localStorage.getItem("admin_session_jwt_token");
-
   if (!token) {
     return <Navigate to="/login" replace />;
   }
-
   return <Outlet />;
 };
 
 const RoleProtectedRoute = ({ allowedRoles }) => {
-  // ĐỒNG BỘ: Parse object admin_user ra để lấy role chính xác
   let userRole = null;
   try {
     const rawUser = localStorage.getItem("admin_user");
@@ -52,6 +50,7 @@ export function AppRoutes() {
           <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
             <Route path="ingredients" element={<IngredientsPage />} />
             <Route path="micronutrients" element={<MicronutrientsPage />} />
+            <Route path="recipes" element={<RecipesPage />} /> 
           </Route>
         </Route>
       </Route>
