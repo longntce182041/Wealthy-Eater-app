@@ -61,6 +61,22 @@ class ConsultationService {
     }
   }
 
+  /// POST /api/user/consultations/verify-payment
+  /// Manually asks the backend to verify the transaction status with PayOS directly.
+  /// Extremely useful for testing locally where PayOS webhooks cannot reach localhost.
+  Future<bool> verifyPayment(String orderCode) async {
+    try {
+      final response = await apiClient.post(
+        '/api/user/consultations/verify-payment',
+        data: {'order_code': orderCode},
+      );
+
+      return response.statusCode == 200 && response.data['success'] == true;
+    } catch (e) {
+      return false; // Silently fail verification, let polling or other mechanisms handle it
+    }
+  }
+
   /// GET /api/user/consultations/payos/urls
   /// Fetches configured PayOS URLs for WebView interception.
   Future<PayOSUrlsModel> fetchPayOSUrls() async {

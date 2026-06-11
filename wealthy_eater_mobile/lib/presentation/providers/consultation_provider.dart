@@ -129,14 +129,23 @@ class ConsultationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Polls the active contract endpoint until it finds an active contract
-  /// or reaches the maximum number of attempts. Useful after a successful payment.
-  Future<bool> verifyAndLoadActiveContract() async {
+  /// After a successful payment, syncs the DB with PayOS and polls until
+  /// the contract is active. If [orderCode] is provided, the backend will
+  /// query PayOS directly to activate the contract — bypassing the need
+  /// for PayOS webhooks to arrive (essential for local dev with ngrok delays).
+  Future<bool> verifyAndLoadActiveContract({String? orderCode}) async {
     _isLoadingActiveContract = true;
     notifyListeners();
 
+    // Tell backend to sync with PayOS now, before polling.
+    if (orderCode != null && orderCode.isNotEmpty) {
+      debugPrint('[ConsultationProvider] Syncing payment with backend, orderCode=$orderCode');
+      await _service.verifyPayment(orderCode);
+    }
+
+    // Poll up to 10 times (10s) waiting for the contract to become active.
     bool found = false;
-    for (int i = 0; i < 15; i++) { // Poll for up to 15 seconds
+    for (int i = 0; i < 10; i++) {
       try {
         final contract = await _service.fetchActiveContract();
         if (contract != null) {
@@ -145,16 +154,12 @@ class ConsultationProvider extends ChangeNotifier {
           break;
         }
       } catch (e) {
-        debugPrint('Polling active contract error: $e');
+        debugPrint('[ConsultationProvider] Polling error (attempt $i): $e');
       }
-      // Wait 1 second before retrying
       await Future.delayed(const Duration(seconds: 1));
     }
 
-    if (!found) {
-      _activeContract = null;
-    }
-    
+    if (!found) _activeContract = null;
     _isLoadingActiveContract = false;
     notifyListeners();
     return found;
