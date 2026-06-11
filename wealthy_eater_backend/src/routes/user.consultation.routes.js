@@ -25,4 +25,8 @@ router.get('/payos/urls', protect, consultationController.getPayOSUrls);
 // GET /api/user/consultations/transactions/:id
 router.get('/transactions/:id', protect, consultationController.getTransactionDetail);
 
+// 4. MANUAL VERIFY PAYMENT (Fallback for missing local webhooks) ──────────────
+// POST /api/user/consultations/verify-payment
+router.post('/verify-payment', protect, consultationController.verifyPayment);
+
 module.exports = router;

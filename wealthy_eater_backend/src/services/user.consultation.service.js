@@ -466,6 +466,92 @@ class UserConsultationService {
     };
   }
 
+  /**
+   * Manual fallback: ask PayOS directly for the payment status and update
+   * the DB without going through the webhook signature flow.
+   *
+   * This is the correct approach for local dev where PayOS webhooks
+   * cannot reach localhost.
+   */
+  async verifyPaymentSync(orderCode) {
+    console.log(`[VerifySync] Checking orderCode: ${orderCode}`);
+    const transaction = await Transaction.findOne({ payos_order_code: String(orderCode) });
+    if (!transaction) throw new AppError('Transaction not found', 404);
+
+    // Already processed — nothing to do
+    if (transaction.status === 'PAID') {
+      const contract = await ConsultationContract.findById(transaction.consultation_contracts_id_fk);
+      console.log(`[VerifySync] Already PAID. Contract status: ${contract?.status}`);
+      return { success: true, already_paid: true, contract_status: contract?.status };
+    }
+
+    // ── Ask PayOS directly (no signature needed — we initiated the call) ──────
+    let paymentInfo;
+    try {
+      paymentInfo = await payOS.getPaymentLinkInformation(orderCode);
+      console.log(`[VerifySync] PayOS status for ${orderCode}: ${paymentInfo?.status}`);
+    } catch (err) {
+      console.error('[VerifySync] Failed to query PayOS:', err.message);
+      throw new AppError('Unable to query PayOS for payment status.', 502);
+    }
+
+    if (!paymentInfo || paymentInfo.status !== 'PAID') {
+      return { success: false, message: 'Payment not confirmed by PayOS yet.', status: paymentInfo?.status };
+    }
+
+    // ── Payment is PAID → update DB directly (no webhook needed) ─────────────
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const payosTransactionId =
+        paymentInfo.transactions?.[0]?.reference ||
+        paymentInfo.id ||
+        'SYNC_VERIFIED';
+
+      transaction.status = 'PAID';
+      transaction.payos_transaction_id = payosTransactionId;
+      await transaction.save({ session });
+
+      const contract = await ConsultationContract.findById(
+        transaction.consultation_contracts_id_fk
+      ).session(session);
+
+      if (contract && contract.status === 'pending_payment') {
+        contract.status = 'active';
+        const expireAt = new Date();
+        if (contract.package_type === '6_months') expireAt.setMonth(expireAt.getMonth() + 6);
+        else if (contract.package_type === '3_months') expireAt.setMonth(expireAt.getMonth() + 3);
+        else expireAt.setMonth(expireAt.getMonth() + 1);
+        contract.expire_at = expireAt;
+        await contract.save({ session });
+        console.log(`[VerifySync] Contract ${contract._id} activated successfully.`);
+      }
+
+      await session.commitTransaction();
+      session.endSession();
+
+      // Fire notifications in background (non-blocking)
+      if (contract?.status === 'active') {
+        this._createPaymentNotifications(contract, transaction).catch(err =>
+          console.error('[VerifySync] Notification error (non-blocking):', err.message)
+        );
+        AuditLog.create({
+          user_id: contract.user_id,
+          action: 'PAYMENT',
+          description: `[SYNC] Payment confirmed for contract ${contract._id}. OrderCode: ${orderCode}.`
+        }).catch(() => {});
+      }
+
+      return { success: true, message: 'Payment verified and contract activated.', order_code: orderCode };
+    } catch (dbErr) {
+      await session.abortTransaction();
+      session.endSession();
+      console.error('[VerifySync] DB error:', dbErr.message);
+      throw new AppError('Failed to activate contract after payment sync.', 500);
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // 3. GET TRANSACTION DETAIL
   // ─────────────────────────────────────────────────────────────────────────────

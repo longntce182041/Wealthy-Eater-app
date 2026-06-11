@@ -195,6 +195,39 @@ class UserConsultationController {
     }
     next();
   }
+
+  /**
+   * POST /api/user/consultations/verify-payment
+   *
+   * Manual fallback to verify payment status synchronously with PayOS
+   * when local webhooks are blocked.
+   */
+  async verifyPayment(req, res) {
+    try {
+      const { order_code } = req.body;
+      if (!order_code) {
+        throw new Error('order_code is required');
+      }
+
+      const result = await consultationService.verifyPaymentSync(order_code);
+
+      return res.status(200).json({
+        success: true,
+        data: result,
+        error: null
+      });
+    } catch (error) {
+      console.error('UserConsultationController.verifyPayment Error:', error.message);
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: {
+          code: 'VERIFICATION_ERROR',
+          message: error.message || 'Failed to verify payment manually.'
+        }
+      });
+    }
+  }
 }
 
 module.exports = new UserConsultationController();

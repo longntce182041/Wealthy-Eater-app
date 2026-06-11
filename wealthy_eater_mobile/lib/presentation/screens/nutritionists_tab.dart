@@ -343,9 +343,12 @@ class _HireConfirmationSheetState extends State<_HireConfirmationSheet> {
 
       if (!mounted) return;
       
-      navigator.pop(); // Close bottom sheet
+      navigator.pop(); // Close bottom sheet — widget becomes unmounted after this!
 
-      // Navigate to payment checkout screen
+      // Navigate to payment checkout screen.
+      // NOTE: We do NOT check `mounted` after this push because the bottom sheet
+      // widget is already unmounted (popped above). We use the captured
+      // `navigator`, `scaffoldMessenger`, and `provider` refs instead.
       final paymentCompleted = await navigator.push<bool>(
         MaterialPageRoute(
           builder: (_) => PaymentCheckoutScreen(
@@ -354,18 +357,42 @@ class _HireConfirmationSheetState extends State<_HireConfirmationSheet> {
         ),
       );
 
-      if (!mounted) return;
+      // ⚠️ Do NOT use `if (!mounted) return` here — widget is unmounted after pop()
+      // Instead use captured refs: navigator, scaffoldMessenger, provider.
 
       if (paymentCompleted == true) {
+        final orderCode = result.orderCode;
+
         scaffoldMessenger.showSnackBar(
           const SnackBar(
             content: Text('Verifying payment... Please wait.'),
             backgroundColor: Colors.blue,
+            duration: Duration(seconds: 20),
           ),
         );
         provider.resetCheckout();
-        // Crucial step: Poll to load the active contract and swap the UI instantly!
-        await provider.verifyAndLoadActiveContract();
+
+        // Sync with PayOS + poll until contract is active.
+        // verifyAndLoadActiveContract internally calls verify-payment on the
+        // backend first, then polls /active until the contract flips to active.
+        // We do NOT check `mounted` here — this widget was popped above and is
+        // unmounted, but `provider` and `scaffoldMessenger` refs are still valid.
+        final found = await provider.verifyAndLoadActiveContract(orderCode: orderCode);
+
+        scaffoldMessenger.hideCurrentSnackBar();
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(found
+                ? '🎉 Your nutritionist is now active!'
+                : 'Payment received! Your contract will activate shortly.'),
+            backgroundColor: found ? Colors.green : Colors.orange,
+          ),
+        );
+
+        if (!found) {
+          // Last resort: force one more plain reload in case polling timed out.
+          await provider.loadActiveContract();
+        }
       } else {
         scaffoldMessenger.showSnackBar(
           const SnackBar(
