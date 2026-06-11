@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/nutritionist_model.dart';
+import '../providers/consultation_provider.dart';
 import '../providers/nutritionist_provider.dart';
+import 'my_nutritionist_dashboard.dart';
 import 'nutritionist_detail_screen.dart';
+import 'payment_checkout_screen.dart';
 
 class NutritionistsTab extends StatefulWidget {
   const NutritionistsTab({super.key});
@@ -18,6 +21,7 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<NutritionistProvider>().fetchNutritionists();
+      context.read<ConsultationProvider>().loadActiveContract();
     });
   }
 
@@ -32,7 +36,7 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
     return colors[index % colors.length];
   }
 
-  void _showBookingSheet(BuildContext context, NutritionistModel doctor) {
+  void _showHireSheet(BuildContext context, NutritionistModel doctor) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -41,7 +45,7 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (ctx) {
-        return _BookingBottomSheet(doctor: doctor);
+        return _HireConfirmationSheet(doctor: doctor);
       },
     );
   }
@@ -50,11 +54,21 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Consumer<NutritionistProvider>(
-      builder: (context, provider, child) {
-        if (provider.isLoading) {
+    return Consumer<ConsultationProvider>(
+      builder: (context, consultProvider, child) {
+        if (consultProvider.isLoadingActiveContract) {
           return const Center(child: CircularProgressIndicator());
         }
+
+        if (consultProvider.hasActiveNutritionist) {
+          return MyNutritionistDashboard(contract: consultProvider.activeContract!);
+        }
+
+        return Consumer<NutritionistProvider>(
+          builder: (context, provider, child) {
+            if (provider.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
         if (provider.error != null) {
           return Center(
@@ -81,10 +95,6 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
           children: [
-            // Header
-            
-            const SizedBox(height: 24),
-
             if (nutritionists.isEmpty)
               const Center(
                 child: Padding(
@@ -130,7 +140,7 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
                           ),
                         );
                         if (shouldBook == true && context.mounted) {
-                          _showBookingSheet(context, doc);
+                          _showHireSheet(context, doc);
                         }
                       },
                       child: Padding(
@@ -240,7 +250,7 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${doc.serviceFee.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')} đ',
+                                      '${doc.serviceFee.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')} VND',
                                       style: TextStyle(
                                         fontSize: 16,
                                         color: theme.colorScheme.tertiary,
@@ -250,10 +260,10 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
                                   ],
                                 ),
                                 FilledButton.icon(
-                                  onPressed: () => _showBookingSheet(context, doc),
-                                  icon: const Icon(Icons.calendar_month, size: 16),
+                                  onPressed: () => _showHireSheet(context, doc),
+                                  icon: const Icon(Icons.handshake_outlined, size: 16),
                                   label: const Text(
-                                    'Book Free consultation',
+                                    'Hire',
                                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                                   ),
                                   style: FilledButton.styleFrom(
@@ -278,277 +288,392 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
         );
       },
     );
+      },
+    );
   }
 }
 
-class _BookingBottomSheet extends StatefulWidget {
+/// Bottom sheet for confirming the hire and initiating PayOS payment.
+class _HireConfirmationSheet extends StatefulWidget {
   final NutritionistModel doctor;
 
-  const _BookingBottomSheet({required this.doctor});
+  const _HireConfirmationSheet({required this.doctor});
 
   @override
-  State<_BookingBottomSheet> createState() => _BookingBottomSheetState();
+  State<_HireConfirmationSheet> createState() => _HireConfirmationSheetState();
 }
 
-class _BookingBottomSheetState extends State<_BookingBottomSheet> {
-  int _selectedDateIndex = 0;
-  int _selectedTimeIndex = 0;
+class _HireConfirmationSheetState extends State<_HireConfirmationSheet> {
+  bool _isProcessing = false;
+  String? _error;
+  String _selectedPackage = '1_month';
 
-  final List<String> _dates = [
-    'Wed, Jun 10',
-    'Thu, Jun 11',
-    'Fri, Jun 12',
-    'Sat, Jun 13',
-  ];
+  String _formatCurrency(int value) {
+    return '${value.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} VND';
+  }
 
-  final List<String> _times = [
-    '09:00 AM',
-    '10:30 AM',
-    '02:00 PM',
-    '03:30 PM',
-  ];
+  Future<void> _handleHire() async {
+    setState(() {
+      _isProcessing = true;
+      _error = null;
+    });
+
+    final provider = context.read<ConsultationProvider>();
+    final navigator = Navigator.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    await provider.hireNutritionist(widget.doctor.id, packageType: _selectedPackage);
+
+    if (!mounted) return;
+
+    if (provider.checkoutState == CheckoutState.error) {
+      setState(() {
+        _isProcessing = false;
+        _error = provider.checkoutError;
+      });
+      return;
+    }
+
+    if (provider.checkoutState == CheckoutState.success &&
+        provider.checkoutResult != null) {
+      final result = provider.checkoutResult!;
+      
+      // Load PayOS URLs so WebView knows what to intercept
+      await provider.loadPayOSUrls();
+
+      if (!mounted) return;
+      
+      navigator.pop(); // Close bottom sheet
+
+      // Navigate to payment checkout screen
+      final paymentCompleted = await navigator.push<bool>(
+        MaterialPageRoute(
+          builder: (_) => PaymentCheckoutScreen(
+            checkoutUrl: result.checkoutUrl,
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+
+      if (paymentCompleted == true) {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Verifying payment... Please wait.'),
+            backgroundColor: Colors.blue,
+          ),
+        );
+        provider.resetCheckout();
+        // Crucial step: Poll to load the active contract and swap the UI instantly!
+        await provider.verifyAndLoadActiveContract();
+      } else {
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Payment cancelled.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final doc = widget.doctor;
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.75,
-      maxChildSize: 0.9,
-      minChildSize: 0.5,
-      expand: false,
-      builder: (ctx, scrollCtrl) {
-        return ListView(
-          controller: scrollCtrl,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          children: [
-            // Handle bar
-            Center(
-              child: Container(
-                width: 36,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2.5),
-                ),
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 36,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2.5),
               ),
             ),
-            const SizedBox(height: 20),
+          ),
+          const SizedBox(height: 20),
 
-            // Title
-            Text(
-              'Schedule Consultation',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.tertiary,
-              ),
+          // Title
+          Text(
+            'Hire Nutritionist',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.tertiary,
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Choose your preferred time slot with ${widget.doctor.fullName}',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Confirm hiring ${doc.fullName}',
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+          ),
+          const SizedBox(height: 24),
+
+          // Doctor summary
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(16),
             ),
-            const SizedBox(height: 24),
-
-            // Date Picker Header
-            Text(
-              'SELECT DATE',
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.8,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // Horizontal Date List
-            SizedBox(
-              height: 70,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _dates.length,
-                itemBuilder: (ctx, index) {
-                  final isSelected = index == _selectedDateIndex;
-                  final parts = _dates[index].split(', ');
-                  final dayName = parts[0];
-                  final dayDate = parts[1];
-
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedDateIndex = index),
-                    child: Container(
-                      width: 80,
-                      margin: const EdgeInsets.only(right: 12),
-                      decoration: BoxDecoration(
-                        color: isSelected ? theme.colorScheme.primary : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isSelected ? Colors.transparent : Colors.grey.shade200,
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            dayName,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white70 : Colors.grey.shade500,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            dayDate,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : theme.colorScheme.tertiary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Time Slots Header
-            Text(
-              'SELECT TIME SLOT',
-              style: TextStyle(
-                fontSize: 10,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.8,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // Time Slots Grid
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 2.8,
-              ),
-              itemCount: _times.length,
-              itemBuilder: (ctx, index) {
-                final isSelected = index == _selectedTimeIndex;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedTimeIndex = index),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isSelected ? theme.colorScheme.primary : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isSelected ? Colors.transparent : Colors.grey.shade200,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        _times[index],
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : theme.colorScheme.tertiary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 32),
-
-            // Confirm Button
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _showSuccessDialog(context);
-              },
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(54),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                backgroundColor: theme.colorScheme.primary,
-              ),
-              child: const Text(
-                'Confirm Booking',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showSuccessDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        final theme = Theme.of(context);
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-          backgroundColor: const Color(0xFFFFFCF7),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.check_circle,
-                    size: 56,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Consultation Requested!',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: theme.colorScheme.tertiary,
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.15),
+                  child: Text(
+                    doc.initials,
+                    style: TextStyle(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Your free session request has been submitted.\n\n${widget.doctor.fullName} will verify the slot (${_dates[_selectedDateIndex]} at ${_times[_selectedTimeIndex]}) and notify you shortly.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
-                    height: 1.6,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        doc.fullName,
+                        style: theme.textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        doc.specialization,
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 28),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: const Text(
-                    'Great, thanks!',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'CONSULTATION FEE',
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Colors.grey.shade500,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      _formatCurrency(doc.serviceFee),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.tertiary,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        );
+          const SizedBox(height: 24),
+          
+          // Package Selection
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Select Package Duration',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.tertiary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildPackageOption(
+            context,
+            id: '1_month',
+            title: '1 Month',
+            subtitle: 'Standard plan',
+            price: doc.calculatePriceForPackage('1_month'),
+          ),
+          const SizedBox(height: 8),
+          _buildPackageOption(
+            context,
+            id: '3_months',
+            title: '3 Months',
+            subtitle: 'Save 11%',
+            price: doc.calculatePriceForPackage('3_months'),
+            badge: 'POPULAR',
+          ),
+          const SizedBox(height: 8),
+          _buildPackageOption(
+            context,
+            id: '6_months',
+            title: '6 Months',
+            subtitle: 'Save 16%',
+            price: doc.calculatePriceForPackage('6_months'),
+            badge: 'BEST VALUE',
+          ),
+          const SizedBox(height: 16),
+
+          // Error message
+          if (_error != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline,
+                      color: Colors.red.shade600, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _error!,
+                      style:
+                          TextStyle(color: Colors.red.shade700, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Confirm button
+          FilledButton(
+            onPressed: _isProcessing ? null : _handleHire,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(54),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18)),
+              backgroundColor: theme.colorScheme.primary,
+            ),
+            child: _isProcessing
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    'Confirm & Pay ${_formatCurrency(doc.calculatePriceForPackage(_selectedPackage))}',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPackageOption(BuildContext context, {
+    required String id,
+    required String title,
+    required String subtitle,
+    required int price,
+    String? badge,
+  }) {
+    final theme = Theme.of(context);
+    final isSelected = _selectedPackage == id;
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedPackage = id;
+        });
       },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.1) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? theme.colorScheme.primary : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              color: isSelected ? theme.colorScheme.primary : Colors.grey.shade400,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isSelected ? theme.colorScheme.primary : theme.colorScheme.tertiary,
+                        ),
+                      ),
+                      if (badge != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: badge == 'POPULAR' ? Colors.orange.shade100 : Colors.green.shade100,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            badge,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: badge == 'POPULAR' ? Colors.orange.shade800 : Colors.green.shade800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              _formatCurrency(price),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: theme.colorScheme.tertiary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

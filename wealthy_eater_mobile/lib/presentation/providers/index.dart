@@ -1,4 +1,6 @@
 export 'auth_provider.dart';
+export 'consultation_provider.dart';
 export 'recipe_provider.dart';
 export 'shopping_list_provider.dart';
 export 'notification_provider.dart';
+export 'nutritionist_provider.dart';
