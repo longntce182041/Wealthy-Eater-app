@@ -27,7 +27,7 @@ class NutritionistService {
       const updatedNutritionist = await Nutritionist.findByIdAndUpdate(
         nutritionistId,
         { $set: updateData },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
       );
       return updatedNutritionist;
     } catch (error) {

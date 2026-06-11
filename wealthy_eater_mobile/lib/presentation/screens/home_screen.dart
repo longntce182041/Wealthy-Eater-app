@@ -81,7 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: Text(
-                          '\${notif.unreadCount}',
+                          notif.unreadCount > 99 ? '99+' : notif.unreadCount.toString(),
                           style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ),

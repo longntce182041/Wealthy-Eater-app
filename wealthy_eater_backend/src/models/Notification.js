@@ -20,12 +20,16 @@ const NotificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['system', 'consultation', 'alert', 'other'],
+    enum: ['system', 'consultation', 'alert', 'transaction', 'other'],
     default: 'system'
   },
   is_read: {
     type: Boolean,
     default: false
+  },
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
   }
 }, { timestamps: true });
 

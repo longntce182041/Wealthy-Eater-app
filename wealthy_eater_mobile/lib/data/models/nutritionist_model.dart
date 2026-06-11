@@ -35,4 +35,14 @@ class NutritionistModel {
     }
     return fullName.substring(0, 1).toUpperCase();
   }
+
+  // Pure logic for calculating package prices
+  int calculatePriceForPackage(String packageType) {
+    if (packageType == '3_months') {
+      return (serviceFee * 3 * 0.89).round();
+    } else if (packageType == '6_months') {
+      return (serviceFee * 6 * 0.84).round();
+    }
+    return serviceFee;
+  }
 }
