@@ -16,13 +16,15 @@ export default function RecipeDetail() {
       setError('');
       try {
         const res = await apiClient.get(`/admin/recipes/${id}`);
+        console.log("=== API RECIPE DETAIL RESPONSE ===", res.data);
+        
         if (res.data?.success) {
           setRecipe(res.data.data);
         } else {
-          setError('Không tìm thấy thông tin công thức nấu ăn.');
+          setError('Không tìm thấy dữ liệu công thức này.');
         }
       } catch (err) {
-        console.error('Error fetching recipe detail:', err);
+        console.error('Lỗi khi lấy chi tiết món ăn:', err);
         setError(err?.response?.data?.message || 'Lỗi kết nối đến máy chủ.');
       } finally {
         setLoading(false);
@@ -31,149 +33,155 @@ export default function RecipeDetail() {
     fetchDetail();
   }, [id]);
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontWeight: 600 }}>Loading recipe info...</div>;
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>Đang tải thông tin món ăn...</div>;
   if (error) return <div className="error-banner" style={{ margin: '20px' }}>{error}</div>;
   if (!recipe) return null;
 
-  // Xử lý chuỗi các bước nấu từ Backend (\n) cắt nhỏ thành mảng 
-  const stepsArray = Array.isArray(recipe.cookingStep) 
-    ? recipe.cookingStep 
-    : recipe.cookingStep?.split('\n').filter(step => step.trim() !== '') || [];
+  // =========================================================
+  // 1. XỬ LÝ ĐỘNG NGUYÊN LIỆU (INGREDIENTS) - KHÔNG DÙNG DỮ LIỆU CỨNG
+  // =========================================================
+  const ingredientsArray = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+
+  // =========================================================
+  // 2. XỬ LÝ ĐỘNG CÁC BƯỚC NẤU ĂN (PREPARATION STEPS)
+  // =========================================================
+  let stepsArray = [];
+  const rawSteps = recipe.steps || recipe.cooking_steps || recipe.cookingStep || [];
+  
+  if (Array.isArray(rawSteps)) {
+    stepsArray = rawSteps;
+  } else if (typeof rawSteps === 'string' && rawSteps.trim() !== '') {
+    // Trường hợp backend trả về một chuỗi dài phân tách bằng dấu xuống dòng hoặc dấu gạch đứng
+    stepsArray = rawSteps.split(/\r?\n|\|/).filter(s => s.trim() !== '');
+  }
+
+  // =========================================================
+  // 3. XỬ LÝ CHỈ SỐ DINH DƯỠNG (NUTRITION) - KHÔNG BỊ CỘNG DỒN
+  // =========================================================
+  // Đọc trực tiếp từ object nutrition của Backend trả về, tránh tính toán thủ công bằng vòng lặp re-render làm tăng tiến calo
+  const calories = recipe.nutrition?.calories ?? recipe.calories ?? 0;
+  const carbs = recipe.nutrition?.carbs ?? recipe.carbs ?? 0;
+  const protein = recipe.nutrition?.protein ?? recipe.protein ?? 0;
+  const fat = recipe.nutrition?.fat ?? recipe.fat ?? 0;
 
   return (
     <div style={{ padding: '4px 2px', color: '#f8fafc' }}>
-      {/* Thanh công cụ / Nút quay lại */}
       <div style={{ marginBottom: '24px' }}>
-        <button 
-          onClick={() => navigate('/recipes')} 
-          className="btn-primary"
-          style={{ background: '#334155', border: '1px solid #475569' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12"></line>
-            <polyline points="12 19 5 12 12 5"></polyline>
-          </svg>
-          <span>Back</span>
+        <button onClick={() => navigate('/recipes')} className="btn-primary" style={{ background: '#334155', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }}>
+          ← Quay lại danh sách
         </button>
       </div>
 
-      {/* Bố cục Grid 2 Cột */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px', alignItems: 'start' }}>
         
-        {/* CỘT TRÁI: Tổng quan hình ảnh & Chỉ số Calo Dinh dưỡng */}
+        {/* CỘT TRÁI: HÌNH ẢNH & THÔNG SỐ CALO */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          <div className="table-card" style={{ padding: '20px', textAlign: 'center' }}>
-            {recipe.imageUrl ? (
-              <img src={recipe.imageUrl} alt={recipe.name} style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '12px', marginBottom: '16px', border: '1px solid #334155' }} />
+          <div className="table-card" style={{ padding: '20px', textAlign: 'center', background: '#111827', borderRadius: '12px' }}>
+            {recipe.imageUrl || recipe.image_url ? (
+              <img src={recipe.imageUrl || recipe.image_url} alt={recipe.name} style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '12px', marginBottom: '16px' }} />
             ) : (
               <div style={{ width: '100%', height: '220px', background: '#1e293b', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px', marginBottom: '16px' }}>🍳</div>
             )}
-            <h2 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 8px 0', color: '#fff' }}>{recipe.name}</h2>
-            <p style={{ color: '#94a3b8', fontSize: '13px', lineHeight: '1.6', margin: 0 }}>{recipe.description || 'Không có mô tả cho món ăn này.'}</p>
-            
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
-              <span className={`badge ${recipe.levelCooking}`}>{recipe.levelCooking}</span>
-              <span className="badge" style={{ background: '#1e293b', color: '#cbd5e1' }}>⏱️ {recipe.cookingTime} mins</span>
-              <span className={`badge ${recipe.status}`}>{recipe.status}</span>
+            <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', margin: '10px 0' }}>{recipe.name}</h2>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '12px' }}>
+              <span className={`badge ${recipe.levelCooking || recipe.level_cooking || 'medium'}`}>
+                {recipe.levelCooking || recipe.level_cooking || 'Medium'}
+              </span>
+              <span className="badge" style={{ background: '#1e293b', color: '#94a3b8' }}>
+                ⏱️ {recipe.cookingTime || recipe.cooking_time || 0} Mins
+              </span>
             </div>
           </div>
 
-          {/* Khối hiển thị năng lượng Calories */}
-          <div className="table-card" style={{ padding: '20px' }}>
-            <h4 style={{ fontSize: '13px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 16px 0', fontWeight: 700 }}>Thông số dinh dưỡng</h4>
-            
+          {/* KHỐI DINH DƯỠNG */}
+          <div className="table-card" style={{ padding: '20px', background: '#111827', borderRadius: '12px' }}>
+            <h4 style={{ fontSize: '12px', color: '#64748b', fontWeight: 700, marginBottom: '15px', letterSpacing: '0.05em' }}>THÔNG SỐ DINH DƯỠNG</h4>
             <div style={{ background: 'rgba(56, 189, 248, 0.08)', padding: '16px', borderRadius: '10px', textAlign: 'center', marginBottom: '20px', border: '1px solid rgba(56, 189, 248, 0.15)' }}>
-              <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700, tracking: '0.1em', display: 'block', marginBottom: '2px' }}>TỔNG HÀM LƯỢNG CALO</span>
-              <strong style={{ fontSize: '28px', color: '#38bdf8', fontWeight: '800' }}>{recipe.nutrition?.calories || 0} kcal</strong>
+              <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700, display: 'block', marginBottom: '4px' }}>TỔNG HÀM LƯỢNG CALO</span>
+              <strong style={{ fontSize: '28px', color: '#38bdf8' }}>{calories} kcal</strong>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-                  <span style={{ color: '#94a3b8' }}>Carbohydrates</span>
-                  <strong style={{ color: '#f59e0b' }}>{recipe.nutrition?.carbs || 0}g</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                  <span style={{ color: '#94a3b8' }}>Carbohydrates</span><strong>{carbs}g</strong>
                 </div>
-                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px' }}>
-                  <div style={{ width: `${Math.min((recipe.nutrition?.carbs || 0) * 1.2, 100)}%`, height: '100%', background: '#f59e0b', borderRadius: '3px' }}></div>
-                </div>
-              </div>
-
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-                  <span style={{ color: '#94a3b8' }}>Protein (Đạm)</span>
-                  <strong style={{ color: '#10b981' }}>{recipe.nutrition?.protein || 0}g</strong>
-                </div>
-                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px' }}>
-                  <div style={{ width: `${Math.min((recipe.nutrition?.protein || 0) * 1.2, 100)}%`, height: '100%', background: '#10b981', borderRadius: '3px' }}></div>
+                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', marginTop: '5px' }}>
+                  <div style={{ width: `${Math.min(carbs, 100)}%`, height: '100%', background: '#f59e0b', borderRadius: '3px' }}></div>
                 </div>
               </div>
-
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-                  <span style={{ color: '#94a3b8' }}>Fat (Chất béo)</span>
-                  <strong style={{ color: '#ef4444' }}>{recipe.nutrition?.fat || 0}g</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                  <span style={{ color: '#94a3b8' }}>Protein (Đạm)</span><strong>{protein}g</strong>
                 </div>
-                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px' }}>
-                  <div style={{ width: `${Math.min((recipe.nutrition?.fat || 0) * 1.2, 100)}%`, height: '100%', background: '#ef4444', borderRadius: '3px' }}></div>
+                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', marginTop: '5px' }}>
+                  <div style={{ width: `${Math.min(protein, 100)}%`, height: '100%', background: '#10b981', borderRadius: '3px' }}></div>
+                </div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                  <span style={{ color: '#94a3b8' }}>Fat (Chất béo)</span><strong>{fat}g</strong>
+                </div>
+                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', marginTop: '5px' }}>
+                  <div style={{ width: `${Math.min(fat, 100)}%`, height: '100%', background: '#ef4444', borderRadius: '3px' }}></div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* CỘT PHẢI: Nguyên liệu nhúng đi kèm & Các bước nấu chi tiết */}
+        {/* CỘT PHẢI: NGUYÊN LIỆU THẬT & CÁC BƯỚC THỰC HIỆN ĐỘNG */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
-          {/* Danh mục nguyên liệu nhúng đi kèm */}
-          <div className="table-card" style={{ padding: '22px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 16px 0', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '6px', borderRadius: '6px', color: '#38bdf8', fontSize: '14px' }}>🌿</span>
-              Linked Ingredients Database
-            </h3>
-            
-            {recipe.ingredients && recipe.ingredients.length > 0 ? (
+          {/* DANH MỤC NGUYÊN LIỆU ĐỘNG */}
+          <div className="table-card" style={{ padding: '22px', background: '#111827', borderRadius: '12px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#fff', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>🛒 Danh mục nguyên liệu nhúng kèm</h3>
+            {ingredientsArray.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                {recipe.ingredients.map((ing, idx) => (
-                  <div key={idx} style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #334155' }}>
-                    <span style={{ fontWeight: 600, color: '#e2e8f0' }}>{ing.name || ing.ingredientId?.name || 'Ingredient'}</span>
-                    <span style={{ color: '#38bdf8', fontSize: '13px', fontWeight: 700, background: 'rgba(56, 189, 248, 0.08)', padding: '3px 10px', borderRadius: '6px' }}>
-                      {ing.amount || ing.quantity} {ing.unit || 'g'}
-                    </span>
-                  </div>
-                ))}
+                {ingredientsArray.map((ing, i) => {
+                  // Hỗ trợ bóc tách linh hoạt khi Backend dùng Populate nguyên liệu hoặc Object ID thuần
+                  const name = ing.ingredient_id?.name || ing.ingredient?.name || ing.name || "Nguyên liệu";
+                  const quantity = ing.base_quantity || ing.amount || 0;
+                  const unit = ing.unit || ing.ingredient_id?.unit || 'g';
+
+                  return (
+                    <div key={i} style={{ background: '#1e293b', padding: '12px 16px', borderRadius: '8px', border: '1px solid #334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#e2e8f0', fontSize: '14px' }}>{name}</span>
+                      <strong style={{ color: '#38bdf8', fontSize: '14px' }}>{quantity} {unit}</strong>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div style={{ color: '#64748b', fontSize: '14px', fontStyle: 'italic', padding: '10px 0' }}>No linked ingredients found for this recipe.</div>
+              <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>Chưa nhúng cấu trúc nguyên liệu vào công thức này.</p>
             )}
           </div>
 
-          {/* Danh sách các bước nấu chi tiết */}
-          <div className="table-card" style={{ padding: '22px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 20px 0', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '6px', borderRadius: '6px', color: '#10b981', fontSize: '14px' }}>🍳</span>
-              Detailed Preparation Steps
-            </h3>
-
+          {/* CÁC BƯỚC THỰC HIỆN ĐỘNG */}
+          <div className="table-card" style={{ padding: '22px', background: '#111827', borderRadius: '12px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#fff', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>👨‍🍳 Các bước thực hiện chi tiết</h3>
             {stepsArray.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {stepsArray.map((step, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: '16px', background: '#1e293b', padding: '16px', borderRadius: '10px', borderLeft: '4px solid #10b981', borderTop: '1px solid #334155', borderRight: '1px solid #334155', borderBottom: '1px solid #334155' }}>
-                    <div style={{ background: '#10b981', color: '#fff', minWidth: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '12px', marginTop: '2px' }}>
-                      {idx + 1}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {stepsArray.map((step, idx) => {
+                  // Đề phòng trường hợp phần tử mảng là Object thay vì String thuần
+                  const stepText = typeof step === 'object' ? (step.instruction || step.text || "") : step;
+                  return (
+                    <div key={idx} style={{ display: 'flex', gap: '15px', background: '#1e293b', padding: '14px 16px', borderRadius: '10px', borderLeft: '4px solid #10b981', alignItems: 'flex-start' }}>
+                      <div style={{ background: '#10b981', color: '#fff', minWidth: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', marginTop: '2px' }}>
+                        {idx + 1}
+                      </div>
+                      <div style={{ fontSize: '14px', lineHeight: '1.6', color: '#cbd5e1', flex: 1 }}>{stepText}</div>
                     </div>
-                    <div style={{ fontSize: '14px', lineHeight: '1.6', color: '#cbd5e1', whiteSpace: 'pre-line' }}>
-                      {step.replace(/^\d+\.\s*/, '') /* Xóa số thứ tự cứng ở đầu chuỗi (nếu có) */}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
-              <div style={{ color: '#64748b', fontSize: '14px', fontStyle: 'italic', padding: '10px 0' }}>Công thức này chưa ghi nhận các bước hướng dẫn.</div>
+              <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>Công thức này chưa được thiết lập các bước thực hiện nấu ăn.</p>
             )}
           </div>
 
         </div>
+
       </div>
     </div>
   );

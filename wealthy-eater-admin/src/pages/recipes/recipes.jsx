@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import '../dashboard.css';
+import { toast } from 'react-hot-toast';
 
 export default function RecipesPage() {
   const navigate = useNavigate();
@@ -61,21 +62,52 @@ export default function RecipesPage() {
   }
 
   async function handleDelete(recipeId) {
-    if (!window.confirm('Are you sure you want to archive/delete this recipe?')) return;
-    try {
-      const res = await apiClient.delete(`/admin/recipes/${recipeId}`);
-      if (res.data?.success) {
-        alert('Recipe archived successfully!');
-        fetchRecipes(); 
-      }
-    } catch (err) {
-      if (err.response?.status === 401) {
-        handleForceLogout();
-        return;
-      }
-      alert(err?.response?.data?.message || err.message || 'Failed to delete recipe');
+  if (!window.confirm('Are you sure you want to archive/delete this recipe?')) return;
+  try {
+    const res = await apiClient.delete(`/admin/recipes/${recipeId}`);
+    if (res.data?.success) {
+      
+      // 🚀 Đã chỉnh sửa: Popup Xóa màu xanh lá cây, kích thước lớn và tự ẩn sau 5 giây
+      toast.success('Recipe archived successfully!', {
+        duration: 5000,
+        icon: '🗑️', // Giữ icon thùng rác cho trực quan hành động xóa
+        style: {
+          background: '#16a34a', // Màu xanh lá cây chuẩn (Tailwind green-600)
+          color: '#ffffff',      // Chữ màu trắng
+          padding: '16px 24px',  // Tăng padding giúp popup to và béo hơn
+          fontSize: '16px',      // Chữ to rõ ràng
+          fontWeight: '500',     // Chữ đậm vừa phải thanh lịch
+          borderRadius: '12px',  // Bo góc hiện đại đồng bộ
+          minWidth: '360px',     // Chiều rộng bề thế, không lo bị co chữ
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2)' // Đổ bóng sâu nổi bật
+        },
+      });
+      
+      fetchRecipes(); 
     }
+  } catch (err) {
+    if (err.response?.status === 401) {
+      handleForceLogout();
+      return;
+    }
+    
+    const errorMsg = err.response?.data?.message || err.message || 'Failed to delete recipe';
+    
+    // ❌ Popup thông báo lỗi (Làm to tương đương nhưng dùng màu đỏ hệ thống để cảnh báo)
+    toast.error(errorMsg, {
+      duration: 5000,
+      style: {
+        background: '#dc2626', // Màu đỏ chuẩn hệ thống
+        color: '#ffffff',
+        padding: '16px 24px',
+        fontSize: '16px',
+        borderRadius: '12px',
+        minWidth: '360px',
+        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
+      }
+    });
   }
+}
 
   // Real-time frontend filtering
   const filteredRecipes = recipes.filter(recipe => {
@@ -148,6 +180,9 @@ export default function RecipesPage() {
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0 0' }}>Manage and maintain all culinary recipe database entries across the platform</p>
           </div>
           <div className="table-actions">
+            <button className="btn-primary" style={{ background: '#2563eb' }} onClick={() => navigate('/recipes/add')}>
+                <span>+ Add New Recipe</span>
+            </button>
             <button className="btn-primary" onClick={fetchRecipes}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
