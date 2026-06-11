@@ -6,6 +6,7 @@ import DashboardPage from "../pages/Dashboard.jsx"; // File Dashboard.jsx nằm 
 import IngredientsPage from "../pages/ingredients/ingredients.jsx";
 import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx"; // Trỏ đúng vào file micronutrients.jsx chứ không phải index.jsx
 import RecipesPage from "../pages/recipes/recipes.jsx"; 
+import RecipeDetail from '../pages/recipes/recipe-detail';
 import LoginPage from "../pages/Login.jsx"; // File Login.jsx nằm trực tiếp trong pages
 import AdminLayout from "../layouts/AdminLayout.jsx";
 
@@ -51,6 +52,7 @@ export function AppRoutes() {
             <Route path="ingredients" element={<IngredientsPage />} />
             <Route path="micronutrients" element={<MicronutrientsPage />} />
             <Route path="recipes" element={<RecipesPage />} /> 
+            <Route path="recipes/:id" element={<RecipeDetail />} />
           </Route>
         </Route>
       </Route>

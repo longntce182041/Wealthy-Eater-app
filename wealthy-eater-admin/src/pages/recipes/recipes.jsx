@@ -10,13 +10,13 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // Các Bộ lọc tìm kiếm hỗ trợ Admin thao tác danh mục
+  // Filters for Admin operations
   const [searchTerm, setSearchTerm] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
   useEffect(() => {
-    // Kiểm tra quyền bảo mật hệ thống nghiêm ngặt giống Dashboard
+    // Security check
     const rawUser = localStorage.getItem('admin_user');
     const token = localStorage.getItem('admin_session_jwt_token');
 
@@ -50,7 +50,7 @@ export default function RecipesPage() {
     } catch (err) {
       console.error('Error fetching recipes:', err);
       if (err.response?.status === 401 || err.response?.data?.message?.includes('expired')) {
-        alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!');
+        alert('Session expired, please login again!');
         handleForceLogout();
         return;
       }
@@ -65,7 +65,7 @@ export default function RecipesPage() {
     try {
       const res = await apiClient.delete(`/admin/recipes/${recipeId}`);
       if (res.data?.success) {
-        alert('Recipe soft-deleted successfully!');
+        alert('Recipe archived successfully!');
         fetchRecipes(); 
       }
     } catch (err) {
@@ -77,7 +77,7 @@ export default function RecipesPage() {
     }
   }
 
-  // Lọc dữ liệu Realtime tại giao diện
+  // Real-time frontend filtering
   const filteredRecipes = recipes.filter(recipe => {
     const matchesSearch = recipe.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           recipe.description?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -101,12 +101,12 @@ export default function RecipesPage() {
         </div>
       )}
 
-      {/* THANH ĐIỀU HƯỚNG TÌM KIẾM VÀ BỘ LỌC */}
+      {/* FILTER & SEARCH BAR */}
       <section style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '260px' }}>
           <input 
             type="text" 
-            placeholder="Tìm tên công thức, mô tả món ăn..." 
+            placeholder="Search recipe name, description..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -122,7 +122,7 @@ export default function RecipesPage() {
           onChange={(e) => setLevelFilter(e.target.value)}
           style={{ padding: '12px 16px', borderRadius: '10px', background: '#1e293b', border: '1px solid #334155', color: '#fff', cursor: 'pointer' }}
         >
-          <option value="">Tất cả độ khó</option>
+          <option value="">All Difficulties</option>
           <option value="easy">Easy</option>
           <option value="medium">Medium</option>
           <option value="hard">Hard</option>
@@ -133,19 +133,19 @@ export default function RecipesPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
           style={{ padding: '12px 16px', borderRadius: '10px', background: '#1e293b', border: '1px solid #334155', color: '#fff', cursor: 'pointer' }}
         >
-          <option value="">Tất cả trạng thái</option>
+          <option value="">All Statuses</option>
           <option value="published">Published</option>
           <option value="draft">Draft</option>
           <option value="archived">Archived</option>
         </select>
       </section>
 
-      {/* BẢNG DANH MỤC HIỂN THỊ CÔNG THỨC (UC-71) */}
+      {/* DATATABLE SECTION */}
       <section className="table-card">
         <div className="table-header">
           <div>
             <h3>Recipes Database Management</h3>
-            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0 0' }}>Quản lý danh mục toàn bộ công thức nấu ăn trên hệ thống nền tảng</p>
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0 0' }}>Manage and maintain all culinary recipe database entries across the platform</p>
           </div>
           <div className="table-actions">
             <button className="btn-primary" onClick={fetchRecipes}>
@@ -172,7 +172,6 @@ export default function RecipesPage() {
               <thead>
                 <tr>
                   <th>Recipe Details</th>
-                  {/* TÍCH HỢP CỘT TỔNG HÀM LƯỢNG CALO ĐẠT CHUẨN UC-71 */}
                   <th>Total Calories</th>
                   <th>Level</th>
                   <th>Time</th>
@@ -198,7 +197,6 @@ export default function RecipesPage() {
                       </div>
                     </td>
                     
-                    {/* KHU VỰC CỘT CALO & KHỐI DINH DƯỠNG TRỰC QUAN */}
                     <td>
                       <div style={{ textAlign: 'left' }}>
                         <div style={{ fontWeight: '800', color: '#38bdf8', fontSize: '15px' }}>
@@ -214,7 +212,7 @@ export default function RecipesPage() {
 
                     <td>
                       <span className={`badge ${recipe.levelCooking}`}>
-                        {recipe.levelCooking}
+                        {recipe.levelCooking ? recipe.levelCooking.charAt(0).toUpperCase() + recipe.levelCooking.slice(1) : '—'}
                       </span>
                     </td>
                     
@@ -231,7 +229,7 @@ export default function RecipesPage() {
                     
                     <td>
                       <span className={`badge ${recipe.status}`}>
-                        {recipe.status}
+                        {recipe.status ? recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1) : '—'}
                       </span>
                     </td>
                     
@@ -240,7 +238,7 @@ export default function RecipesPage() {
                         <button
                           className="btn-icon-action"
                           title="View Details"
-                          onClick={() => alert(`Nutrition Metrics: \n\nCalories: ${recipe.nutrition?.calories || 0} kcal\nProtein: ${recipe.nutrition?.protein || 0}g\nCarbs: ${recipe.nutrition?.carbs || 0}g\nFat: ${recipe.nutrition?.fat || 0}g\n\nCooking Steps:\n${recipe.cookingStep || 'No steps written yet.'}`)}
+                          onClick={() => navigate(`/recipes/${recipe.id || recipe._id}`)}
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="1"></circle>
