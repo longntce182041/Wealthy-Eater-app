@@ -62,52 +62,52 @@ export default function RecipesPage() {
   }
 
   async function handleDelete(recipeId) {
-  if (!window.confirm('Are you sure you want to archive/delete this recipe?')) return;
-  try {
-    const res = await apiClient.delete(`/admin/recipes/${recipeId}`);
-    if (res.data?.success) {
-      
-      // 🚀 Đã chỉnh sửa: Popup Xóa màu xanh lá cây, kích thước lớn và tự ẩn sau 5 giây
-      toast.success('Recipe archived successfully!', {
-        duration: 5000,
-        icon: '🗑️', // Giữ icon thùng rác cho trực quan hành động xóa
-        style: {
-          background: '#16a34a', // Màu xanh lá cây chuẩn (Tailwind green-600)
-          color: '#ffffff',      // Chữ màu trắng
-          padding: '16px 24px',  // Tăng padding giúp popup to và béo hơn
-          fontSize: '16px',      // Chữ to rõ ràng
-          fontWeight: '500',     // Chữ đậm vừa phải thanh lịch
-          borderRadius: '12px',  // Bo góc hiện đại đồng bộ
-          minWidth: '360px',     // Chiều rộng bề thế, không lo bị co chữ
-          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2)' // Đổ bóng sâu nổi bật
-        },
-      });
-      
-      fetchRecipes(); 
-    }
-  } catch (err) {
-    if (err.response?.status === 401) {
-      handleForceLogout();
-      return;
-    }
-    
-    const errorMsg = err.response?.data?.message || err.message || 'Failed to delete recipe';
-    
-    // ❌ Popup thông báo lỗi (Làm to tương đương nhưng dùng màu đỏ hệ thống để cảnh báo)
-    toast.error(errorMsg, {
-      duration: 5000,
-      style: {
-        background: '#dc2626', // Màu đỏ chuẩn hệ thống
-        color: '#ffffff',
-        padding: '16px 24px',
-        fontSize: '16px',
-        borderRadius: '12px',
-        minWidth: '360px',
-        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
+    if (!window.confirm('Are you sure you want to archive/delete this recipe?')) return;
+    try {
+      const res = await apiClient.delete(`/admin/recipes/${recipeId}`);
+      if (res.data?.success) {
+        
+        // 🚀 Đã chỉnh sửa: Popup Xóa màu xanh lá cây, kích thước lớn và tự ẩn sau 5 giây
+        toast.success('Recipe archived successfully!', {
+          duration: 5000,
+          icon: '🗑️', // Giữ icon thùng rác cho trực quan hành động xóa
+          style: {
+            background: '#16a34a', // Màu xanh lá cây chuẩn (Tailwind green-600)
+            color: '#ffffff',      // Chữ màu trắng
+            padding: '16px 24px',  // Tăng padding giúp popup to và béo hơn
+            fontSize: '16px',      // Chữ to rõ ràng
+            fontWeight: '500',     // Chữ đậm vừa phải thanh lịch
+            borderRadius: '12px',  // Bo góc hiện đại đồng bộ
+            minWidth: '360px',     // Chiều rộng bề thế, không lo bị co chữ
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2)' // Đổ bóng sâu nổi bật
+          },
+        });
+        
+        fetchRecipes(); 
       }
-    });
+    } catch (err) {
+      if (err.response?.status === 401) {
+        handleForceLogout();
+        return;
+      }
+      
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to delete recipe';
+      
+      // ❌ Popup thông báo lỗi (Làm to tương đương nhưng dùng màu đỏ hệ thống để cảnh báo)
+      toast.error(errorMsg, {
+        duration: 5000,
+        style: {
+          background: '#dc2626', // Màu đỏ chuẩn hệ thống
+          color: '#ffffff',
+          padding: '16px 24px',
+          fontSize: '16px',
+          borderRadius: '12px',
+          minWidth: '360px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
+        }
+      });
+    }
   }
-}
 
   // Real-time frontend filtering
   const filteredRecipes = recipes.filter(recipe => {
@@ -270,6 +270,7 @@ export default function RecipesPage() {
                     
                     <td>
                       <div className="actions-cell">
+                        {/* 👁️ NÚT XEM CHI TIẾT */}
                         <button
                           className="btn-icon-action"
                           title="View Details"
@@ -281,6 +282,21 @@ export default function RecipesPage() {
                             <circle cx="5" cy="12" r="1"></circle>
                           </svg>
                         </button>
+
+                        {/* ✏️ NÚT CHỈNH SỬA EDIT (MỚI ĐƯỢC THÊM VÀO ĐÂY NÈ BÁC) */}
+                        <button
+                          className="btn-icon-action"
+                          title="Edit Recipe"
+                          onClick={() => navigate(`/recipes/edit/${recipe.id || recipe._id}`)}
+                          style={{ color: '#38bdf8' }} /* Màu xanh neon nổi bật */
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 20h9"></path>
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                          </svg>
+                        </button>
+
+                        {/* 🗑️ NÚT XÓA */}
                         {recipe.status !== 'archived' && (
                           <button
                             className="btn-icon-action delete"
