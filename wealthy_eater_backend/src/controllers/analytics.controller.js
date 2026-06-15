@@ -1,0 +1,35 @@
+const analyticsService = require('../services/analytics.service');
+
+/**
+ * Tiếp nhận request và chuẩn hóa chuỗi thời gian cho phân tích tăng trưởng
+ */
+exports.analyzeCustomerGrowth = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Thiết lập thời gian mặc định là 30 ngày gần nhất nếu client không truyền param
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+
+    // Chuẩn hóa thời gian về mốc đầu ngày 00:00:00 và cuối ngày 23:59:59
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    // Triển khai tính toán qua lớp Service
+    const analyticsData = await analyticsService.getCustomerGrowthData(start, end);
+
+    return res.status(200).json({
+      success: true,
+      message: "Customer growth analysis data generated successfully",
+      data: analyticsData
+    });
+
+  } catch (error) {
+    console.error("Error inside analyzeCustomerGrowth controller:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message
+    });
+  }
+};
