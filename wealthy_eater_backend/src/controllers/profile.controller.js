@@ -27,4 +27,27 @@ async function createOrUpdateProfile(req, res) {
   }
 }
 
-module.exports = { getMyProfile, createOrUpdateProfile };
+async function logWeight(req, res) {
+  try {
+    const userId = req.user?.sub;
+    const { weight, timestamp } = req.body;
+    if (!weight) return res.status(400).json({ success: false, message: 'Weight is required.' });
+
+    const log = await ProfileService.logWeight(userId, Number(weight), timestamp);
+    return res.json({ success: true, message: 'Weight logged successfully', data: log });
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+async function getWeightHistory(req, res) {
+  try {
+    const userId = req.user?.sub;
+    const history = await ProfileService.getWeightHistory(userId);
+    return res.json({ success: true, data: history });
+  } catch (err) {
+    return handleError(err, res);
+  }
+}
+
+module.exports = { getMyProfile, createOrUpdateProfile, logWeight, getWeightHistory };

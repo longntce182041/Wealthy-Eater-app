@@ -23,6 +23,7 @@ class NotificationProvider with ChangeNotifier {
   }
 
   Future<void> _initLocalNotifications() async {
+    if (kIsWeb) return;
     tz.initializeTimeZones();
 
     try {
@@ -181,6 +182,7 @@ class NotificationProvider with ChangeNotifier {
   }
 
   Future<void> _scheduleLocalReminders() async {
+    if (kIsWeb) return;
     await _localNotificationsPlugin.cancelAll();
 
     if (settings == null) return;

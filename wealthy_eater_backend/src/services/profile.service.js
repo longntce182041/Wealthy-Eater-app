@@ -1,4 +1,5 @@
 const UserProfileRepo = require('../repositories/userprofile.repository');
+const WeightLogRepo = require('../repositories/weightlog.repository');
 const AppError = require('../utils/AppError');
 
 function calculateBmi(weightKg, heightCm) {
@@ -25,6 +26,15 @@ function activityMultiplier(level) {
     very_active: 1.9,
   };
   return map[level] || 1.2;
+}
+
+function formatDate(date) {
+  if (!date) return null;
+  const d = new Date(date);
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${year}-${month}-${day}`;
 }
 
 class ProfileService {
@@ -63,6 +73,60 @@ class ProfileService {
 
     const saved = await UserProfileRepo.updateByUserId(userId, doc);
     return saved;
+  }
+
+  static async logWeight(userId, weight, timestamp) {
+    if (!weight || isNaN(weight)) throw new AppError('Valid weight is required', 400);
+
+    const logDate = timestamp ? new Date(timestamp) : new Date();
+
+    // Enforce 7-day rate limit check
+    const lastLog = await WeightLogRepo.findLatestByUserId(userId);
+    if (lastLog) {
+      const minInterval = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+      const timeSinceLastLog = logDate.getTime() - new Date(lastLog.date).getTime();
+      if (timeSinceLastLog < minInterval) {
+        const remainingMs = minInterval - timeSinceLastLog;
+        const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+        throw new AppError(`You can only update your weight once every 7 days. Please wait ${remainingDays} more day(s).`, 400);
+      }
+    }
+
+    const log = await WeightLogRepo.create({
+      user_id: userId,
+      weight,
+      date: logDate,
+    });
+
+    // Also update the weight in the user's profile and recalculate metrics if they have a profile
+    const profile = await UserProfileRepo.findByUserId(userId);
+    if (profile) {
+      const height = profile.height;
+      const age = profile.age;
+      const gender = profile.gender;
+      const activity_level = profile.dietary_references?.activity_level;
+
+      const bmi = calculateBmi(weight, height);
+      const bmr = calculateBmr(weight, height, age, gender) || null;
+      const tdee = bmr ? Math.round(bmr * activityMultiplier(activity_level)) : null;
+
+      await UserProfileRepo.updateByUserId(userId, {
+        weight,
+        bmi,
+        bmr,
+        tdee,
+      });
+    }
+
+    return log;
+  }
+
+  static async getWeightHistory(userId) {
+    const logs = await WeightLogRepo.findByUserId(userId);
+    return logs.map(log => ({
+      date: formatDate(log.date),
+      weight: log.weight,
+    }));
   }
 }
 

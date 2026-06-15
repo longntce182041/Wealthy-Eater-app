@@ -150,9 +150,9 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     };
 
     try {
-      await auth.saveUserProfile(data);
+      final success = await auth.saveUserProfile(data);
       if (!mounted) return;
-      if (auth.state == AuthState.error) {
+      if (!success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(auth.errorMessage ?? 'Save failed'),

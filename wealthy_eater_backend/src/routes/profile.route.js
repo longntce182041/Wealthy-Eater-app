@@ -9,4 +9,10 @@ router.get('/me', authenticateToken, ProfileController.getMyProfile);
 // POST /api/profile
 router.post('/', authenticateToken, ProfileController.createOrUpdateProfile);
 
+// POST /api/profile/weight
+router.post('/weight', authenticateToken, ProfileController.logWeight);
+
+// GET /api/profile/weight-history
+router.get('/weight-history', authenticateToken, ProfileController.getWeightHistory);
+
 module.exports = router;
