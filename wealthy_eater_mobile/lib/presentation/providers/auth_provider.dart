@@ -57,6 +57,7 @@ class AuthProvider with ChangeNotifier {
       if (res.statusCode == 200 && res.data['success'] == true) {
         _accessToken = token;
         user = UserEntity.fromJson(res.data['data'] as Map<String, dynamic>);
+        await _fetchUserProfile();
         state = AuthState.authenticated;
       } else {
         await _clearSession();
