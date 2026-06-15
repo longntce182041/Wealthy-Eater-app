@@ -1,12 +1,15 @@
 export 'home_screen.dart';
 export 'dashboard_home_tab.dart';
 export 'login_screen.dart';
+export 'payment_checkout_screen.dart';
 export 'recipe_detail_screen.dart';
 export 'recipe_list_view.dart';
 export 'recipe_list_screen.dart';
 export 'recipe_likes_tab.dart';
 export 'recipe_my_reviews_tab.dart';
+export 'register_screen.dart';
 export 'shopping_list_tab.dart';
+export 'transaction_detail_screen.dart';
 export 'nutritionists_tab.dart';
 export 'nutritionist_detail_screen.dart';
 export 'nutritionist_dashboard_screen.dart';

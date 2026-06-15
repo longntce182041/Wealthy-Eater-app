@@ -8,7 +8,7 @@
  * This separation means app.js can be imported cleanly by test frameworks.
  */
 
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 
 const express = require("express");
 const cors = require("cors");
@@ -29,7 +29,12 @@ if (process.env.NODE_ENV !== "test") {
 }
 
 // ── Body Parsing ──────────────────────────────────────────────────────────────
-app.use(express.json({ limit: "10kb" })); // reject oversized JSON payloads
+// Skip JSON parsing for the PayOS webhook path — it uses express.raw() for
+// HMAC signature verification and needs the raw buffer intact.
+app.use((req, res, next) => {
+  if (req.path === "/api/webhooks/payos") return next();
+  express.json({ limit: "10kb" })(req, res, next);
+});
 app.use(express.urlencoded({ extended: false, limit: "10kb" }));
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
@@ -53,6 +58,9 @@ app.use(
 
       // Allow Android emulator host
       if (origin === "http://10.0.2.2:5000") return callback(null, true);
+
+      // Allow PayOS portal for redirects
+      if (origin === "https://pay.payos.vn") return callback(null, true);
 
       // Allow explicitly whitelisted origins from env
       if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
@@ -101,12 +109,10 @@ app.use(routes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
-  res
-    .status(404)
-    .json({
-      success: false,
-      message: `Route ${req.method} ${req.path} not found`,
-    });
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.path} not found`,
+  });
 });
 
 // ── Global Error Handler ──────────────────────────────────────────────────────

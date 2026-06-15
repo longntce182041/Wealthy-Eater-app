@@ -51,7 +51,7 @@ class UserNotificationService {
     const settings = await NotificationSetting.findOneAndUpdate(
       { user_id },
       { $set: allowedUpdates },
-      { new: true, upsert: true }
+      { returnDocument: 'after', upsert: true }
     );
     return settings;
   }
@@ -83,7 +83,7 @@ class UserNotificationService {
     const notification = await Notification.findOneAndUpdate(
       { _id: notification_id, user_id },
       { $set: { is_read: true } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!notification) {
       const error = new Error('Notification not found');

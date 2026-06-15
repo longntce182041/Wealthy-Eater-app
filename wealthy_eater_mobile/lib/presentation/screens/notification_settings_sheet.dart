@@ -119,9 +119,7 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
 
                 // Card 1: Allow Push Notifications
                 Container(
-                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
@@ -131,28 +129,36 @@ class _NotificationSettingsSheetState extends State<NotificationSettingsSheet> {
                       ),
                     ],
                   ),
-                  child: SwitchListTile(
-                    secondary: CircleAvatar(
-                      backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
-                      child: Icon(Icons.notifications_active_outlined, color: theme.colorScheme.primary),
-                    ),
-                    title: const Text(
-                      'Allow Push Notifications',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
+                  child: Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    clipBehavior: Clip.antiAlias,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: SwitchListTile(
+                        secondary: CircleAvatar(
+                          backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                          child: Icon(Icons.notifications_active_outlined, color: theme.colorScheme.primary),
+                        ),
+                        title: const Text(
+                          'Allow Push Notifications',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Receive alerts, consultation updates, and reminders.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        value: data.isPushEnabled,
+                        activeThumbColor: theme.colorScheme.primary,
+                        contentPadding: EdgeInsets.zero,
+                        onChanged: (val) {
+                          context.read<NotificationProvider>().updateSettings({'is_push_enabled': val});
+                        },
                       ),
                     ),
-                    subtitle: const Text(
-                      'Receive alerts, consultation updates, and reminders.',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    value: data.isPushEnabled,
-                    activeThumbColor: theme.colorScheme.primary,
-                    contentPadding: EdgeInsets.zero,
-                    onChanged: (val) {
-                      context.read<NotificationProvider>().updateSettings({'is_push_enabled': val});
-                    },
                   ),
                 ),
                 const SizedBox(height: 24),

@@ -13,7 +13,6 @@ import 'domain/usecases/recipe_review_usecases.dart';
 import 'domain/usecases/get_my_reviews_list_usecase.dart';
 import 'domain/usecases/shopping_list_usecases.dart';
 import 'presentation/providers/index.dart';
-import 'presentation/providers/nutritionist_provider.dart';
 import 'presentation/screens/index.dart';
 
 void main() {
@@ -63,6 +62,7 @@ class WealthyEaterApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => NotificationProvider(api: api)),
         ChangeNotifierProvider(create: (_) => NutritionistProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => ConsultationProvider(api: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',

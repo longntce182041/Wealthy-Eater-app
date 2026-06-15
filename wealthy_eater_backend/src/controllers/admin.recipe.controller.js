@@ -541,7 +541,7 @@ async function updateRecipe(req, res) {
       await RecipeNutrition.findOneAndUpdate(
         { recipe_id: recipeId },
         { ...processed.nutrition },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
     }
 
