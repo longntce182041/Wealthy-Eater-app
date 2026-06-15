@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import '../dashboard.css';
 import { toast } from 'react-hot-toast';
+import EditRecipePage from './edit-recipes'; 
 
 export default function RecipesPage() {
   const navigate = useNavigate();
@@ -11,13 +12,18 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // Filters for Admin operations
+  // 🔍 UC-75: Các State Bộ Lọc Nâng Cao
   const [searchTerm, setSearchTerm] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dietFilter, setDietFilter] = useState('');       // Xu hướng ăn kiêng
+  const [timeRange, setTimeRange] = useState('');         // Khoảng thời gian nấu
+  const [calorieRange, setCalorieRange] = useState('');   // Khoảng calo định lượng
+
+  // State quản lý ẩn hiện Modal Edit
+  const [editingRecipeId, setEditingRecipeId] = useState(null);
 
   useEffect(() => {
-    // Security check
     const rawUser = localStorage.getItem('admin_user');
     const token = localStorage.getItem('admin_session_jwt_token');
 
@@ -61,61 +67,84 @@ export default function RecipesPage() {
     }
   }
 
+  // 🗑️ Hàm Lưu trữ (Archive) công thức
   async function handleDelete(recipeId) {
-    if (!window.confirm('Are you sure you want to archive/delete this recipe?')) return;
+    if (!window.confirm('Are you sure you want to archive this recipe?')) return;
     try {
       const res = await apiClient.delete(`/admin/recipes/${recipeId}`);
       if (res.data?.success) {
-        
-        // 🚀 Đã chỉnh sửa: Popup Xóa màu xanh lá cây, kích thước lớn và tự ẩn sau 5 giây
-        toast.success('Recipe archived successfully!', {
-          duration: 5000,
-          icon: '🗑️', // Giữ icon thùng rác cho trực quan hành động xóa
-          style: {
-            background: '#16a34a', // Màu xanh lá cây chuẩn (Tailwind green-600)
-            color: '#ffffff',      // Chữ màu trắng
-            padding: '16px 24px',  // Tăng padding giúp popup to và béo hơn
-            fontSize: '16px',      // Chữ to rõ ràng
-            fontWeight: '500',     // Chữ đậm vừa phải thanh lịch
-            borderRadius: '12px',  // Bo góc hiện đại đồng bộ
-            minWidth: '360px',     // Chiều rộng bề thế, không lo bị co chữ
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2)' // Đổ bóng sâu nổi bật
-          },
+        toast.success('Recipe moved to archived status successfully!', {
+          duration: 4000,
+          icon: '🗑️',
+          style: { background: '#16a34a', color: '#fff', borderRadius: '12px' }
         });
-        
         fetchRecipes(); 
       }
     } catch (err) {
-      if (err.response?.status === 401) {
-        handleForceLogout();
-        return;
-      }
-      
       const errorMsg = err.response?.data?.message || err.message || 'Failed to delete recipe';
-      
-      // ❌ Popup thông báo lỗi (Làm to tương đương nhưng dùng màu đỏ hệ thống để cảnh báo)
-      toast.error(errorMsg, {
-        duration: 5000,
-        style: {
-          background: '#dc2626', // Màu đỏ chuẩn hệ thống
-          color: '#ffffff',
-          padding: '16px 24px',
-          fontSize: '16px',
-          borderRadius: '12px',
-          minWidth: '360px',
-          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
-        }
-      });
+      toast.error(errorMsg, { duration: 4000, style: { background: '#dc2626', color: '#fff' } });
     }
   }
 
-  // Real-time frontend filtering
+  // 🔄 Hàm KHÔI PHỤC công thức từ trạng thái "Archived" về "Draft"
+  async function handleRestore(recipeId) {
+    if (!window.confirm('Do you want to restore this archived recipe?')) return;
+    try {
+      // Gửi request PUT/PATCH cập nhật lại status thành draft (hoặc tùy API của bác)
+      const res = await apiClient.put(`/admin/recipes/${recipeId}`, { status: 'draft' });
+      if (res.data?.success) {
+        toast.success('Recipe restored successfully! Status reset to Draft.', {
+          duration: 5000,
+          icon: '🔄',
+          style: {
+            background: '#2563eb', // Màu xanh dương của sự khôi phục hiện đại
+            color: '#ffffff',
+            padding: '16px 24px',
+            fontSize: '16px',
+            fontWeight: '500',
+            borderRadius: '12px',
+            minWidth: '360px',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
+          },
+        });
+        fetchRecipes(); // Tải lại danh sách
+      }
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to restore recipe';
+      toast.error(errorMsg, { duration: 4000, style: { background: '#dc2626', color: '#fff' } });
+    }
+  }
+
+  // 🔍 UC-75: Logic Real-time Frontend Filtering Nâng Cao
   const filteredRecipes = recipes.filter(recipe => {
+    // 1. Tìm kiếm chuỗi văn bản
     const matchesSearch = recipe.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           recipe.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // 2. Lọc theo độ khó & Trạng thái
     const matchesLevel = levelFilter === '' || recipe.levelCooking === levelFilter;
     const matchesStatus = statusFilter === '' || recipe.status === statusFilter;
-    return matchesSearch && matchesLevel && matchesStatus;
+    
+    // 3. Lọc theo xu hướng ăn kiêng (Giả định trường dữ liệu diet hoặc categories trong DB)
+    const matchesDiet = dietFilter === '' || 
+                         (recipe.dietaryTrend?.toLowerCase() === dietFilter.toLowerCase()) ||
+                         (recipe.description?.toLowerCase().includes(dietFilter.toLowerCase()));
+
+    // 4. Lọc theo khoảng thời gian nấu
+    let matchesTime = true;
+    const time = Number(recipe.cookingTime) || 0;
+    if (timeRange === 'short') matchesTime = time < 15;
+    else if (timeRange === 'medium') matchesTime = time >= 15 && time <= 30;
+    else if (timeRange === 'long') matchesTime = time > 30;
+
+    // 5. Lọc theo khoảng Calo định lượng
+    let matchesCalorie = true;
+    const calories = Number(recipe.nutrition?.calories) || 0;
+    if (calorieRange === 'low') matchesCalorie = calories < 200;
+    else if (calorieRange === 'mid') matchesCalorie = calories >= 200 && calories <= 500;
+    else if (calorieRange === 'high') matchesCalorie = calories > 500;
+
+    return matchesSearch && matchesLevel && matchesStatus && matchesDiet && matchesTime && matchesCalorie;
   });
 
   if (!user) return null;
@@ -133,43 +162,73 @@ export default function RecipesPage() {
         </div>
       )}
 
-      {/* FILTER & SEARCH BAR */}
-      <section style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '260px' }}>
-          <input 
-            type="text" 
-            placeholder="Search recipe name, description..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: '100%', padding: '12px 16px', borderRadius: '10px', 
-              background: '#1e293b', border: '1px solid #334155', color: '#fff',
-              boxSizing: 'border-box'
-            }}
-          />
-        </div>
+      {/* 🔍 UC-75: BỘ LỌC TÌM KIẾM NÂNG CAO - ADVANCED FILTER BAR */}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px', background: '#1e293b', padding: '16px', borderRadius: '12px', border: '1px solid #334155' }}>
+        <div style={{ color: '#38bdf8', fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>Search & Filters</div>
         
-        <select 
-          value={levelFilter} 
-          onChange={(e) => setLevelFilter(e.target.value)}
-          style={{ padding: '12px 16px', borderRadius: '10px', background: '#1e293b', border: '1px solid #334155', color: '#fff', cursor: 'pointer' }}
-        >
-          <option value="">All Difficulties</option>
-          <option value="easy">Easy</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
-        </select>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          {/* Tìm văn bản */}
+          <div style={{ flex: 2, minWidth: '240px' }}>
+            <input 
+              type="text" 
+              placeholder="Search recipe name, keywords..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={filterInputStyle}
+            />
+          </div>
 
-        <select 
-          value={statusFilter} 
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ padding: '12px 16px', borderRadius: '10px', background: '#1e293b', border: '1px solid #334155', color: '#fff', cursor: 'pointer' }}
-        >
-          <option value="">All Statuses</option>
-          <option value="published">Published</option>
-          <option value="draft">Draft</option>
-          <option value="archived">Archived</option>
-        </select>
+          {/* Lọc Trạng thái (Quan trọng để tìm kiếm 'Archived') */}
+          <div style={{ flex: 1, minWidth: '130px' }}>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={filterSelectStyle}>
+              <option value="">All Statuses (Active)</option>
+              <option value="published">Published Only</option>
+              <option value="draft">Draft Only</option>
+              <option value="archived" style={{ color: '#fb923c', fontWeight: 'bold' }}>⚠️ Archived (Deleted)</option>
+            </select>
+          </div>
+
+          {/* Lọc Ăn Kiêng */}
+          <div style={{ flex: 1, minWidth: '130px' }}>
+            <select value={dietFilter} onChange={(e) => setDietFilter(e.target.value)} style={filterSelectStyle}>
+              <option value="">Dietary Trend</option>
+              <option value="keto">Keto Diet</option>
+              <option value="vegan">Vegan (Chay)</option>
+              <option value="low-carb">Low-Carb</option>
+              <option value="clean">Eat Clean</option>
+            </select>
+          </div>
+
+          {/* Lọc Thời gian nấu */}
+          <div style={{ flex: 1, minWidth: '130px' }}>
+            <select value={timeRange} onChange={(e) => setTimeRange(e.target.value)} style={filterSelectStyle}>
+              <option value="">Cooking Time</option>
+              <option value="short">Quick (&lt; 15 mins)</option>
+              <option value="medium">Medium (15-30 mins)</option>
+              <option value="long">Elaborate (&gt; 30 mins)</option>
+            </select>
+          </div>
+
+          {/* Lọc Năng lượng Calo */}
+          <div style={{ flex: 1, minWidth: '130px' }}>
+            <select value={calorieRange} onChange={(e) => setCalorieRange(e.target.value)} style={filterSelectStyle}>
+              <option value="">Calories Range</option>
+              <option value="low">Light (&lt; 200 kcal)</option>
+              <option value="mid">Balanced (200-500 kcal)</option>
+              <option value="high">High Energy (&gt; 500 kcal)</option>
+            </select>
+          </div>
+
+          {/* Lọc Độ khó */}
+          <div style={{ flex: 1, minWidth: '110px' }}>
+            <select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} style={filterSelectStyle}>
+              <option value="">Difficulties</option>
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+        </div>
       </section>
 
       {/* DATATABLE SECTION */}
@@ -200,7 +259,7 @@ export default function RecipesPage() {
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
               </svg>
-              <p>No recipes available matching the filters.</p>
+              <p>No recipes available matching the specific filters.</p>
             </div>
           ) : (
             <table className="data-table">
@@ -217,7 +276,7 @@ export default function RecipesPage() {
               </thead>
               <tbody>
                 {filteredRecipes.map((recipe) => (
-                  <tr key={recipe.id || recipe._id}>
+                  <tr key={recipe.id || recipe._id} style={recipe.status === 'archived' ? { opacity: 0.65, background: '#1e293b44' } : {}}>
                     <td>
                       <div className="recipe-cell">
                         {recipe.imageUrl ? (
@@ -226,7 +285,9 @@ export default function RecipesPage() {
                           <div className="recipe-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#334155', color: '#9ca3af' }}>🍳</div>
                         )}
                         <div style={{ textAlign: 'left' }}>
-                          <div className="recipe-title">{recipe.name}</div>
+                          <div className="recipe-title">
+                            {recipe.name} {recipe.status === 'archived' && <span style={{ fontSize: '11px', background: '#7c2d12', color: '#fdba74', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px' }}>Archived</span>}
+                          </div>
                           <div className="recipe-desc">{recipe.description || 'No description provided'}</div>
                         </div>
                       </div>
@@ -283,12 +344,12 @@ export default function RecipesPage() {
                           </svg>
                         </button>
 
-                        {/* ✏️ NÚT CHỈNH SỬA EDIT (MỚI ĐƯỢC THÊM VÀO ĐÂY NÈ BÁC) */}
+                        {/* ✏️ NÚT CHỈNH SỬA */}
                         <button
                           className="btn-icon-action"
                           title="Edit Recipe"
-                          onClick={() => navigate(`/recipes/edit/${recipe.id || recipe._id}`)}
-                          style={{ color: '#38bdf8' }} /* Màu xanh neon nổi bật */
+                          onClick={() => setEditingRecipeId(recipe.id || recipe._id)}
+                          style={{ color: '#38bdf8' }}
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 20h9"></path>
@@ -296,8 +357,22 @@ export default function RecipesPage() {
                           </svg>
                         </button>
 
-                        {/* 🗑️ NÚT XÓA */}
-                        {recipe.status !== 'archived' && (
+                        {/* 🔄 NÚT KHÔI PHỤC HOẶC 🗑️ NÚT XÓA DỰA VÀO STATUS */}
+                        {recipe.status === 'archived' ? (
+                          /* NÚT KHÔI PHỤC (Chỉ xuất hiện khi trạng thái là archived) */
+                          <button
+                            className="btn-icon-action"
+                            title="Restore Recipe"
+                            onClick={() => handleRestore(recipe.id || recipe._id)}
+                            style={{ color: '#22c55e' }} /* Màu xanh lá/dương khôi phục */
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="23 4 23 10 17 10"></polyline>
+                              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                          </button>
+                        ) : (
+                          /* NÚT XÓA / LƯU TRỮ (Dành cho các công thức bình thường) */
                           <button
                             className="btn-icon-action delete"
                             title="Archive Recipe"
@@ -318,6 +393,28 @@ export default function RecipesPage() {
           )}
         </div>
       </section>
+
+      {/* MODAL OVERLAY CHỈNH SỬA CÔNG THỨC */}
+      {editingRecipeId && (
+        <EditRecipePage 
+          id={editingRecipeId} 
+          onClose={() => setEditingRecipeId(null)} 
+          onRefresh={fetchRecipes} 
+        />
+      )}
     </>
   );
 }
+
+// 🎨 Styles phụ trợ cho bộ lọc mới đồng bộ Dashboard Darkmode
+const filterInputStyle = {
+  width: '100%', padding: '10px 14px', borderRadius: '8px', 
+  background: '#0f172a', border: '1px solid #334155', color: '#fff',
+  boxSizing: 'border-box', fontSize: '13px', outline: 'none'
+};
+
+const filterSelectStyle = {
+  width: '100%', padding: '10px 12px', borderRadius: '8px', 
+  background: '#0f172a', border: '1px solid #334155', color: '#fff',
+  cursor: 'pointer', fontSize: '13px', outline: 'none'
+};
