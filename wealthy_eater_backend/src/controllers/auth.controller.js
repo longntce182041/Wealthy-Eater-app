@@ -1,5 +1,5 @@
-const AuthService = require('../services/auth.service');
-const RegistrationService = require('../services/registration.service');
+const AuthService = require("../services/auth.service");
+const RegistrationService = require("../services/registration.service");
 
 // ─── Shared response helper ──────────────────────────────────────────────────
 
@@ -7,7 +7,7 @@ function handleError(err, res) {
   const status = err.statusCode || err.status || 500;
   const message = err.isOperational
     ? err.message
-    : 'An unexpected error occurred. Please try again later.';
+    : "An unexpected error occurred. Please try again later.";
   return res.status(status).json({ success: false, message });
 }
 
@@ -20,16 +20,32 @@ function handleError(err, res) {
 async function login(req, res) {
   try {
     const { email, password, role } = req.body || {};
-    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
-      return res.status(400).json({ success: false, message: 'Email and password must be valid strings' });
+    if (
+      !email ||
+      !password ||
+      typeof email !== "string" ||
+      typeof password !== "string"
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Email and password must be valid strings",
+        });
     }
     if (password.length > 128) {
-      return res.status(400).json({ success: false, message: 'Password is too long' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Password is too long" });
     }
     const cleanEmail = email.trim().toLowerCase();
-    const targetRole = (typeof role === 'string' && role) ? role : 'customer';
+    const targetRole = typeof role === "string" && role ? role : "customer";
     const result = await AuthService.login(cleanEmail, password, targetRole);
-    return res.json({ success: true, message: 'Login successful', data: result });
+    return res.json({
+      success: true,
+      message: "Login successful",
+      data: result,
+    });
   } catch (err) {
     return handleError(err, res);
   }
@@ -43,10 +59,16 @@ async function googleLogin(req, res) {
   try {
     const { idToken } = req.body || {};
     if (!idToken) {
-      return res.status(400).json({ success: false, message: 'idToken is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "idToken is required" });
     }
     const result = await AuthService.googleLogin(idToken);
-    return res.json({ success: true, message: 'Google login successful', data: result });
+    return res.json({
+      success: true,
+      message: "Google login successful",
+      data: result,
+    });
   } catch (err) {
     return handleError(err, res);
   }
@@ -61,10 +83,16 @@ async function refresh(req, res) {
   try {
     const { refreshToken } = req.body || {};
     if (!refreshToken) {
-      return res.status(400).json({ success: false, message: 'refreshToken is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "refreshToken is required" });
     }
     const result = await AuthService.refresh(refreshToken);
-    return res.json({ success: true, message: 'Token refreshed', data: result });
+    return res.json({
+      success: true,
+      message: "Token refreshed",
+      data: result,
+    });
   } catch (err) {
     return handleError(err, res);
   }
@@ -80,7 +108,7 @@ async function getMe(req, res) {
   try {
     const userId = req.user?.sub;
     if (!userId) {
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
     const user = await AuthService.getMe(userId);
     return res.json({ success: true, data: user });
@@ -96,14 +124,29 @@ async function getMe(req, res) {
 async function register(req, res) {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
-      return res.status(400).json({ success: false, message: 'Email and password are required' });
+    if (
+      !email ||
+      !password ||
+      typeof email !== "string" ||
+      typeof password !== "string"
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Email and password are required" });
     }
     if (password.length < 6 || password.length > 128) {
-      return res.status(400).json({ success: false, message: 'Password must be between 6 and 128 characters' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Password must be between 6 and 128 characters",
+        });
     }
     const cleanEmail = email.trim().toLowerCase();
-    const result = await RegistrationService.startRegistration(cleanEmail, password);
+    const result = await RegistrationService.startRegistration(
+      cleanEmail,
+      password,
+    );
     return res.json(result);
   } catch (err) {
     return handleError(err, res);
@@ -118,7 +161,9 @@ async function verifyOtp(req, res) {
   try {
     const { email, otp } = req.body || {};
     if (!email || !otp) {
-      return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email and OTP are required" });
     }
     const result = await RegistrationService.verifyOtp(email, otp);
     return res.json(result);
@@ -126,7 +171,6 @@ async function verifyOtp(req, res) {
     return handleError(err, res);
   }
 }
-
 /**
  * POST /api/auth/resend-otp
  * Body: { email }
@@ -135,7 +179,9 @@ async function resendOtp(req, res) {
   try {
     const { email } = req.body || {};
     if (!email) {
-      return res.status(400).json({ success: false, message: 'Email is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is required" });
     }
     const result = await RegistrationService.resendOtp(email);
     return res.json(result);
@@ -144,4 +190,12 @@ async function resendOtp(req, res) {
   }
 }
 
-module.exports = { login, googleLogin, refresh, getMe, register, verifyOtp, resendOtp };
+module.exports = {
+  login,
+  googleLogin,
+  refresh,
+  getMe,
+  register,
+  verifyOtp,
+  resendOtp,
+};

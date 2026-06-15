@@ -1,19 +1,20 @@
-const { verifyAccessToken } = require('../utils/jwt');
+const { verifyAccessToken } = require("../utils/jwt");
 
 /**
  * Middleware: verify JWT access token from Authorization: Bearer <token> header.
  * Attaches decoded payload to `req.user` on success.
  */
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ')
-    ? authHeader.slice(7)   // remove 'Bearer ' prefix
-    : null;
+  const authHeader = req.headers["authorization"];
+  const token =
+    authHeader && authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7) // remove 'Bearer ' prefix
+      : null;
 
   if (!token) {
     return res.status(401).json({
       success: false,
-      message: 'Access token not provided.',
+      message: "Access token not provided.",
     });
   }
 
@@ -21,10 +22,12 @@ const authenticateToken = (req, res, next) => {
     req.user = verifyAccessToken(token);
     next();
   } catch (err) {
-    const isExpired = err.name === 'TokenExpiredError';
+    const isExpired = err.name === "TokenExpiredError";
     return res.status(401).json({
       success: false,
-      message: isExpired ? 'Access token has expired.' : 'Invalid access token.',
+      message: isExpired
+        ? "Access token has expired."
+        : "Invalid access token.",
     });
   }
 };
@@ -43,7 +46,7 @@ const authorizeRoles = (...permittedRoles) => {
     if (!req.user || !permittedRoles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: 'You do not have permission to perform this action.',
+        message: "You do not have permission to perform this action.",
       });
     }
     next();
