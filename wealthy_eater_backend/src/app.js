@@ -10,12 +10,12 @@
 
 require('dotenv').config({ quiet: true });
 
-const express    = require('express');
-const cors       = require('cors');
-const helmet     = require('helmet');
-const morgan     = require('morgan');
-const rateLimit  = require('express-rate-limit');
-const routes     = require('./routes');
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const routes = require('./routes');
 
 const app = express();
 
@@ -82,7 +82,7 @@ const authLimiter = rateLimit({
   max: 20,                      // max 20 auth requests per window per IP
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, message: 'Too many requests. Please try again in 15 minutes.' },
+  message: { success: false, data: null, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again in 15 minutes.' } },
 });
 
 // General API limiter
@@ -91,7 +91,7 @@ const apiLimiter = rateLimit({
   max: 120,               // 120 requests per minute per IP
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, message: 'Too many requests. Please slow down.' },
+  message: { success: false, data: null, error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please slow down.' } },
 });
 
 app.use('/api/auth', authLimiter);
@@ -99,15 +99,19 @@ app.use('/api', apiLimiter);
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
-  res.json({ success: true, message: 'Wealthy Eater API is running' });
+  res.json({ success: true, data: { message: 'Wealthy Eater API is running' }, error: null });
 });
+
+// ── Serve Uploaded Chat Images as Static Files ────────────────────────────────
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // ── API Routes ────────────────────────────────────────────────────────────────
 app.use(routes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
-  res.status(404).json({ success: false, message: `Route ${req.method} ${req.path} not found` });
+  res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: `Route ${req.method} ${req.path} not found` } });
 });
 
 // ── Global Error Handler ──────────────────────────────────────────────────────
@@ -125,12 +129,17 @@ app.use((err, req, res, next) => {
   const message = err.isOperational
     ? err.message
     : 'An unexpected server error occurred.';
+  const code = err.errorCode || err.code || 'INTERNAL_SERVER_ERROR';
 
   res.status(statusCode).json({
     success: false,
-    message,
-    // Include stack trace only in development for debugging
-    ...(isDev && { stack: err.stack }),
+    data: null,
+    error: {
+      code: typeof code === 'string' ? code : 'INTERNAL_SERVER_ERROR',
+      message,
+      // Include stack trace only in development for debugging
+      ...(isDev && { stack: err.stack }),
+    }
   });
 });
 

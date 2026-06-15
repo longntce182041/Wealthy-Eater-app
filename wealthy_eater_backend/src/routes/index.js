@@ -4,18 +4,20 @@ const router = express.Router();
 // ============================================================================
 // 1. IMPORT ROUTE FILES (Alphabetical order to minimize Git conflicts)
 // ============================================================================
-const adminRecipeRoute = require('./admin.recipe.routes');
-const adminUserRoute = require('./admin.user.routes');
-const authRoute = require('./auth.route');
-const consultationRoute = require('./user.consultation.routes');
-const ingredientRoute = require('./ingredient.management.routes');
-const micronutrientRoute = require('./micronutrient.management.routes');
-const notificationRoute = require('./user.notification.routes');
-const nutritionistRoute = require('./nutritionist.routes');
-const profileRoute = require('./profile.route');
-const shoppingListRoute = require('./shopping_list.route');
-const userRecipeRoute = require('./user.recipe.route');
-const webhookRoute = require('./webhook.routes');
+const adminRecipeRoute      = require('./admin.recipe.routes');
+const adminUserRoute        = require('./admin.user.routes');
+const authRoute             = require('./auth.route');
+const chatRoute             = require('./chat.routes');
+const consultationRoute     = require('./user.consultation.routes');
+const ingredientRoute       = require('./ingredient.management.routes');
+const micronutrientRoute    = require('./micronutrient.management.routes');
+const notificationRoute     = require('./user.notification.routes');
+const nutritionistRoute     = require('./nutritionist.routes');
+const nutritionistChatRoute = require('./nutritionist.chat.routes');
+const profileRoute          = require('./profile.route');
+const shoppingListRoute     = require('./shopping_list.route');
+const userRecipeRoute       = require('./user.recipe.route');
+const webhookRoute          = require('./webhook.routes');
 
 // ============================================================================
 // 2. MAPPING API ENDPOINTS (Grouped logically to minimize Git conflicts)
@@ -33,12 +35,16 @@ router.use('/api/admin/recipes', adminRecipeRoute);
 
 // ─── NUTRITIONIST ROUTES ────────────────────────────────────────────────────
 router.use('/api/nutritionists', nutritionistRoute);
+router.use('/api/nutritionist', nutritionistChatRoute);
 
 // ─── USER / CUSTOMER ROUTES ─────────────────────────────────────────────────
 router.use('/api/user/consultations', consultationRoute);
 router.use('/api/user/notifications', notificationRoute);
 router.use('/api/user/recipes', userRecipeRoute);
 router.use('/api/user/shopping-list', shoppingListRoute);
+
+// ─── CHAT ROUTES (shared: user + nutritionist) ───────────────────────────────
+router.use('/api/chat', chatRoute);
 
 // ─── WEBHOOK ROUTES (unauthenticated, verified via signature) ───────────────
 router.use('/api/webhooks', webhookRoute);

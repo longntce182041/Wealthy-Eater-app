@@ -17,7 +17,7 @@ const ConsultationContractSchema = new mongoose.Schema({
   },
   status: { 
     type: String, 
-    enum: ['pending_payment', 'active', 'completed', 'terminated'], 
+    enum: ['pending_payment', 'active', 'completed', 'terminated', 'cancelled'], 
     default: 'pending_payment' 
   },
   package_type: {

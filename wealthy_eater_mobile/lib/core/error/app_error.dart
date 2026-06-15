@@ -18,7 +18,13 @@ AppError mapError(Object error) {
 
   if (error is DioException) {
     final data = error.response?.data;
-    final serverMsg = data is Map ? data['message']?.toString() : null;
+    String? serverMsg;
+    if (data is Map) {
+      if (data['error'] is Map) {
+        serverMsg = data['error']['message']?.toString();
+      }
+      serverMsg ??= data['message']?.toString();
+    }
 
     switch (error.type) {
       case DioExceptionType.connectionTimeout:

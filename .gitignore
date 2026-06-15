@@ -29,3 +29,9 @@ venv/
 # Local Environment Overrides
 .env
 .env.*
+
+# Agent Skills
+.agent
+
+# Markdown files
+*.md

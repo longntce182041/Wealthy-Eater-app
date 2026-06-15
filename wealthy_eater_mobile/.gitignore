@@ -50,3 +50,6 @@ app.*.map.json
 
 # Dependency directories
 node_modules/
+
+# Markdown files
+*.md
