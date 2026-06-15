@@ -104,7 +104,7 @@ async function processRecipeIngredients(recipeId, ingredientsInput) {
 }
 
 /**
- * Mapeia dados da receita para o formato retornado
+ * Mapeia dados da receita para o formato retornado chuẩn Frontend
  */
 function mapRecipeForAdmin(recipe, nutrition, reviewStats, ingredientsCount, stepsCount, ingredientsList = [], stepsList = []) {
   return {
@@ -131,8 +131,8 @@ function mapRecipeForAdmin(recipe, nutrition, reviewStats, ingredientsCount, ste
     },
     ingredientsCount: ingredientsCount || 0,
     stepsCount: stepsCount || 0,
-    ingredients: ingredientsList, // Trả dữ liệu thật ra Frontend
-    steps: stepsList // Trả dữ liệu thật ra Frontend
+    ingredients: ingredientsList, 
+    steps: stepsList 
   };
 }
 
@@ -235,7 +235,7 @@ async function getRecipesStats(req, res) {
 }
 
 /**
- * GET /api/admin/recipes/:id (CHỈNH SỬA TOÀN DIỆN ĐỂ SỬA LỖI TRANG DETAIL)
+ * GET /api/admin/recipes/:id 
  */
 async function getRecipeDetail(req, res) {
   try {
@@ -244,7 +244,6 @@ async function getRecipeDetail(req, res) {
       return res.status(404).json({ success: false, message: 'Recipe not found' });
     }
 
-    // KHẮC PHỤC LỖI TẠI ĐÂY: Lấy mảng Nguyên liệu và các Bước nấu từ DB ra
     const [nutrition, reviewStats, dbIngredients, dbSteps] = await Promise.all([
       RecipeNutrition.findOne({ recipe_id: recipe._id }).lean(),
       RecipeReview.aggregate([{ $match: { recipe_id: recipe._id } }, { $group: { _id: null, count: { $sum: 1 }, avgRating: { $avg: '$rating' } } }]),
@@ -252,7 +251,6 @@ async function getRecipeDetail(req, res) {
       RecipeStep.find({ recipe_id: recipe._id }).sort({ step_number: 1 }).lean()
     ]);
 
-    // Tiến hành populate thủ công để lấy thông tin chi tiết tên nguyên liệu (Tránh lỗi văng n+1)
     let enrichedIngredients = [];
     if (dbIngredients.length > 0) {
       const ingIds = dbIngredients.map(i => i.ingredient_id);
@@ -267,7 +265,6 @@ async function getRecipeDetail(req, res) {
       }));
     }
 
-    // Chuyển đổi cấu trúc mảng steps thành mảng chuỗi text thuần túy cho đồng bộ Frontend
     const stepsList = dbSteps.map(s => s.instruction);
     const revStats = reviewStats[0] || { count: 0, avgRating: 0 };
 
@@ -277,8 +274,8 @@ async function getRecipeDetail(req, res) {
       revStats,
       enrichedIngredients.length,
       stepsList.length,
-      enrichedIngredients, // Đưa vào hàm map
-      stepsList // Đưa vào hàm map
+      enrichedIngredients, 
+      stepsList 
     );
 
     return res.json({ success: true, message: 'Recipe loaded successfully', data });
@@ -289,7 +286,7 @@ async function getRecipeDetail(req, res) {
 }
 
 /**
- * UC-73: POST /api/admin/recipes (SỬA LỖI TÍNH TOÁN CALO CỘNG DỒN)
+ * UC-73: POST /api/admin/recipes
  */
 async function addRecipe(req, res) {
   try {
@@ -308,18 +305,20 @@ async function addRecipe(req, res) {
     });
     await recipe.save();
 
-    // SỬA LỖI TẠI ĐÂY: Chỉ tính toán khi mảng thực sự có dữ liệu nguyên liệu
+    let savedNutrition = { calories: 0, protein: 0, fat: 0, carbs: 0 };
+
     if (ingredients && Array.isArray(ingredients) && ingredients.length > 0) {
       const processed = await processRecipeIngredients(recipe._id, ingredients);
       if (processed.recipeIngredientDocs.length > 0) {
         await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
-        await RecipeNutrition.create({ recipe_id: recipe._id, ...processed.nutrition });
+        const nutritionDoc = await RecipeNutrition.create({ recipe_id: recipe._id, ...processed.nutrition });
+        savedNutrition = nutritionDoc.toObject();
       }
     } else {
-      // Nếu mảng rỗng, lưu chỉ số mặc định bằng 0, tuyệt đối không cộng rác vào RAM
       await RecipeNutrition.create({ recipe_id: recipe._id, calories: 0, protein: 0, fat: 0, carbs: 0 });
     }
 
+    let stepsList = [];
     if (steps && Array.isArray(steps) && steps.length > 0) {
       const recipeStepDocs = steps.map((stepContent, index) => ({
         recipe_id: recipe._id,
@@ -327,9 +326,13 @@ async function addRecipe(req, res) {
         instruction: typeof stepContent === 'object' ? stepContent.instruction : stepContent,
       }));
       await RecipeStep.insertMany(recipeStepDocs);
+      stepsList = recipeStepDocs.map(s => s.instruction);
     }
 
-    return res.status(201).json({ success: true, message: 'Tạo công thức thành công!', data: recipe });
+    // 🌟 ĐỒNG BỘ: Trả về cấu trúc map chuẩn giống hàm detail để Frontend không lỗi
+    const responseData = mapRecipeForAdmin(recipe.toObject(), savedNutrition, null, ingredients?.length || 0, stepsList.length, [], stepsList);
+
+    return res.status(201).json({ success: true, message: 'Tạo công thức thành công!', data: responseData });
   } catch (err) {
     console.error('❌ Error adding recipe:', err);
     return res.status(500).json({ success: false, message: 'Tạo công thức thất bại.' });
@@ -356,29 +359,38 @@ async function updateRecipe(req, res) {
     if (level_cooking) recipe.level_cooking = level_cooking;
     await recipe.save();
 
+    let savedNutrition = { calories: 0, protein: 0, fat: 0, carbs: 0 };
+
     if (ingredients && Array.isArray(ingredients)) {
       await RecipeIngredient.deleteMany({ recipe_id: recipeId });
       if (ingredients.length > 0) {
         const processed = await processRecipeIngredients(recipeId, ingredients);
         if (processed.recipeIngredientDocs.length > 0) {
           await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
-          await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { ...processed.nutrition }, { upsert: true, new: true });
+          const nutDoc = await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { ...processed.nutrition }, { upsert: true, new: true });
+          if (nutDoc) savedNutrition = nutDoc;
         }
       } else {
         await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { calories: 0, protein: 0, fat: 0, carbs: 0 }, { upsert: true });
       }
     }
 
+    let stepsList = [];
     if (steps && Array.isArray(steps)) {
       await RecipeStep.deleteMany({ recipe_id: recipeId });
       if (steps.length > 0) {
         const recipeStepDocs = steps.map((stepContent, index) => ({ recipe_id: recipeId, step_number: index + 1, instruction: typeof stepContent === 'object' ? stepContent.instruction : stepContent }));
         await RecipeStep.insertMany(recipeStepDocs);
+        stepsList = recipeStepDocs.map(s => s.instruction);
       }
     }
 
-    return res.json({ success: true, message: 'Cập nhật công thức thành công!', data: recipe });
+    // 🌟 ĐỒNG BỘ: Trả về cấu trúc map chuẩn giống hàm detail
+    const responseData = mapRecipeForAdmin(recipe.toObject(), savedNutrition, null, ingredients?.length || 0, stepsList.length, [], stepsList);
+
+    return res.json({ success: true, message: 'Cập nhật công thức thành công!', data: responseData });
   } catch (err) {
+    console.error('❌ Error updating recipe:', err);
     return res.status(500).json({ success: false, message: 'Cập nhật thất bại.' });
   }
 }
@@ -399,7 +411,7 @@ async function deleteRecipe(req, res) {
 }
 
 /**
- * UC-75: GET /api/recipes
+ * UC-75: GET /api/recipes (User search)
  */
 async function searchAndFilterRecipes(req, res) {
   try {
@@ -463,7 +475,9 @@ async function importRecipesExcel(req, res) {
       const row = rows[i], rowNumber = i + 2, name = row.Name || row.name;
       if (!name) { errorLog.push(`Dòng ${rowNumber}: Thiếu trường Name.`); continue; }
 
-      const recipeId = new mongoose.Types.ObjectId().toString();
+      // 🌟 SỬA LỖI TẠI ĐÂY: Tạo ObjectId thuần, không dùng .toString() để né lỗi ép kiểu string trong MongoDB
+      const recipeId = new mongoose.Types.ObjectId(); 
+      
       const rawIngsStr = row.Ingredients || row.ingredients || '';
       const rawIngredients = rawIngsStr ? String(rawIngsStr).split('|') : [];
       
@@ -506,6 +520,7 @@ async function importRecipesExcel(req, res) {
 
     return res.status(201).json({ success: true, message: 'Import thành công!', data: { totalProcessed: rows.length, totalImported: recipesToInsert.length } });
   } catch (err) {
+    console.error('❌ Error importing excel:', err);
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống khi import.' });
   }
 }
