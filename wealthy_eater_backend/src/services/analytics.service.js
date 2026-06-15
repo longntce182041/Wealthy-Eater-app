@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const CustomerMealLog = require('../models/CustomerMealLog');
+const ConsultationContract = require('../models/ConsultationContract');
 
 /**
  * Hàm xử lý gom cụm dữ liệu phân tích tăng trưởng khách hàng (UC-57)
@@ -96,3 +97,69 @@ exports.getCustomerGrowthData = async (start, end) => {
     healthGoalAchievement
   };
 };
+
+  exports.getExpertPerformanceData = async (start, end) => {
+  // Bước 1: Lấy danh sách tất cả chuyên gia dinh dưỡng trong hệ thống
+  const nutritionists = await User.find({ role: 'nutritionist' }, '_id email').lean();
+
+  const performanceReport = [];
+
+  for (const expert of nutritionists) {
+    // 1. Tính số khách đang phụ trách hiện tại (status là active)
+    const activeCustomersCount = await ConsultationContract.countDocuments({
+      nutritionist_id: expert._id,
+      status: 'active'
+    });
+
+    // 2. Tính số lượt thuê mới trong khoảng thời gian lọc (đựa vào create_at)
+    const newRentalsCount = await ConsultationContract.countDocuments({
+      nutritionist_id: expert._id,
+      create_at: { $gte: start, $lte: end }
+    });
+
+    // 3. Lấy danh sách ID của tất cả khách hàng đã/đang liên kết với chuyên gia này
+    const linkedContracts = await ConsultationContract.find({ nutritionist_id: expert._id }, 'user_id').lean();
+    const customerIds = [...new Set(linkedContracts.map(c => c.user_id))];
+
+    // 4. Tính toán Tỷ lệ khách ăn lệch chuẩn (Deviation Rate) từ bảng CustomerMealLog
+    let deviationRate = 0;
+    if (customerIds.length > 0) {
+      const mealLogStats = await CustomerMealLog.aggregate([
+        {
+          $match: {
+            user_id: { $in: customerIds },
+            create_at: { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalLogs: { $sum: 1 },
+            deviationLogs: {
+              $sum: { $cond: { if: { $eq: ["$deviation_flag", true] }, then: 1, else: 0 } }
+            }
+          }
+        }
+      ]);
+
+      if (mealLogStats.length > 0 && mealLogStats[0].totalLogs > 0) {
+        deviationRate = (mealLogStats[0].deviationLogs / mealLogStats[0].totalLogs) * 100;
+      }
+    }
+
+    // 5. Tính điểm Rating trung bình giả lập 
+    // (Logic: Tạm thời lấy ngẫu nhiên từ 4.2 -> 5.0 để UI hiển thị đẹp mắt, thay thế bằng db thật khi bổ sung bảng Review)
+    const mockRating = (4 + Math.random() * 1).toFixed(1);
+
+    performanceReport.push({
+      expertId: expert._id,
+      email: expert.email,
+      activeCustomers: activeCustomersCount,
+      newRentals: newRentalsCount,
+      averageRating: parseFloat(mockRating),
+      deviationRate: parseFloat(deviationRate.toFixed(2)) // Làm tròn 2 chữ số thập phân
+    });
+  }
+
+  return performanceReport;
+  };

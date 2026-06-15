@@ -33,3 +33,32 @@ exports.analyzeCustomerGrowth = async (req, res) => {
     });
   }
 };
+
+exports.evaluateExpertPerformance = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Mặc định lấy thống kê trong vòng 30 ngày
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+    
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    // Gọi tầng nghiệp vụ tính toán hiệu suất
+    const performanceData = await analyticsService.getExpertPerformanceData(start, end);
+
+    return res.status(200).json({
+      success: true,
+      message: "Expert performance evaluation report generated successfully",
+      data: performanceData
+    });
+  } catch (error) {
+    console.error("Error in evaluateExpertPerformance controller:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message
+    });
+  }
+};
