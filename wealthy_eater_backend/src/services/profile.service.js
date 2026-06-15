@@ -10,7 +10,8 @@ function calculateBmi(weightKg, heightCm) {
 function calculateBmr(weightKg, heightCm, age, gender) {
   // Mifflin-St Jeor Equation
   if (!weightKg || !heightCm || !age || !gender) return null;
-  const s = gender.toLowerCase().startsWith('m') ? 5 : -161;
+  const g = gender.toLowerCase();
+  const s = g.startsWith('m') ? 5 : (g.startsWith('f') ? -161 : -78);
   const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + s;
   return Math.round(bmr);
 }

@@ -166,6 +166,9 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
             backgroundColor: Colors.green,
           ),
         );
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -192,7 +195,12 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
                 icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF2D2D2D)),
                 onPressed: _prevPage,
               )
-            : null,
+            : (Navigator.canPop(context)
+                ? IconButton(
+                    icon: const Icon(Icons.close, color: Color(0xFF2D2D2D)),
+                    onPressed: () => Navigator.pop(context),
+                  )
+                : null),
         title: _currentStep > 0
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(4),
