@@ -1,3 +1,4 @@
+const AppError = require('../utils/AppError');
 const mealPlanService = require("../services/mealPlan.service");
 
 const matchTemplateEndpoint = async (req, res) => {

@@ -8,7 +8,7 @@
 const express        = require('express');
 const router         = express.Router();
 const { protect }    = require('../middlewares/authMiddleware');
-const { chatUpload } = require('../config/upload.config');
+const { chatUpload } = require('../config/cloudinary.config');
 const chatController = require('../controllers/chat.controller');
 
 // ── Message History ───────────────────────────────────────────────────────────

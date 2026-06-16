@@ -6,7 +6,7 @@ const { signAccessToken, signRefreshToken } = require("../utils/jwt");
 const {
   validateNutritionistRegistration,
 } = require("../validators/nutritionist.validation");
-const { uploadNutritionistCertificate } = require("../utils/cloudinary");
+const { uploadNutritionistCertificate } = require("../config/cloudinary.config");
 
 const ACTIVE_REGISTRATION_STATUSES = [
   "pending",

@@ -4,10 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../../domain/entities/user.dart';
-import '../providers/recipe_provider.dart';
 import '../providers/auth_provider.dart';
-import 'recipe_detail_screen.dart';
-import 'notification_settings_sheet.dart';
 import 'profile_form_screen.dart';
 
 class DashboardHomeTab extends StatefulWidget {
@@ -42,7 +39,6 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    final displayName = widget.user?.fullName ?? 'User';
     final auth = context.watch<AuthProvider>();
     final profile = auth.userProfile;
 
@@ -51,10 +47,6 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
       _weightLogCtrl.text = profile['weight'].toString();
       _hasPrepopulated = true;
     }
-
-    return Consumer<RecipeProvider>(
-      builder: (context, recipeProvider, _) {
-        final featuredRecipes = recipeProvider.recipes.take(3).toList();
 
         // Extract health metric statistics from profile
         final double bmi = (profile?['bmi'] as num?)?.toDouble() ?? 0.0;
@@ -91,12 +83,9 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
           }
         }
 
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-          children: [
-            _HeroCard(name: displayName),
-            const SizedBox(height: 20),
-
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      children: [
             // Health Status Cards / Banner
             if (profile == null) ...[
               const _SetupProfileCard(),
@@ -376,102 +365,7 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               _buildWeightTrackingCard(context, auth),
               const SizedBox(height: 20),
             ],
-
-            // Quick Actions
-            _SectionCard(
-              title: 'Quick actions',
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  FilledButton.icon(
-                    onPressed: widget.onExploreRecipes,
-                    icon: const Icon(Icons.restaurant_menu),
-                    label: const Text('Browse recipes'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => NotificationSettingsSheet.show(context),
-                    icon: const Icon(Icons.notifications_active_outlined),
-                    label: const Text('Reminders'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: recipeProvider.refreshRecipes,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Featured Recipes
-            _SectionCard(
-              title: 'Featured recipes',
-              trailing: TextButton(onPressed: widget.onExploreRecipes, child: const Text('See all')),
-              child: featuredRecipes.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        'No recipes loaded yet.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade500),
-                      ),
-                    )
-                  : Column(
-                      children: featuredRecipes.map((recipe) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Material(
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(16),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(16),
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => RecipeDetailScreen(recipeId: recipe.id)),
-                              ),
-                              child: Row(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(14),
-                                    child: Container(
-                                      width: 72,
-                                      height: 72,
-                                      color: Theme.of(context).colorScheme.primary.withAlpha(30),
-                                      child: recipe.imageUrl.isNotEmpty
-                                          ? Image.network(recipe.imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.fastfood))
-                                          : const Icon(Icons.fastfood, size: 32),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          recipe.name,
-                                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${recipe.cookingTime} min · ${recipe.difficulty}',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey.shade500),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const Icon(Icons.chevron_right, color: Colors.grey),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-            ),
-          ],
-        );
-      },
+      ],
     );
   }
 
@@ -712,45 +606,7 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
   }
 }
 
-class _HeroCard extends StatelessWidget {
-  final String name;
 
-  const _HeroCard({required this.name});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.secondary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Welcome back 👋',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white.withAlpha(220)),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            name,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Discover healthy recipes and build better eating habits.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white.withAlpha(220)),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _SetupProfileCard extends StatelessWidget {
   const _SetupProfileCard();
@@ -935,37 +791,6 @@ class _BmiGauge extends StatelessWidget {
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final Widget child;
-  final Widget? trailing;
-
-  const _SectionCard({required this.title, required this.child, this.trailing});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                ),
-                if (trailing != null) trailing!,
-              ],
-            ),
-            const SizedBox(height: 14),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _WeightHistoryChart extends StatelessWidget {
   final List<Map<String, dynamic>> history;

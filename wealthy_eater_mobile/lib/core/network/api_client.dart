@@ -89,6 +89,7 @@ class _AuthInterceptor extends Interceptor {
   final FlutterSecureStorage _storage;
   final Dio _dio;
   bool _isRefreshing = false;
+  final List<Map<String, dynamic>> _failedRequests = [];
 
   _AuthInterceptor(this._storage, this._dio);
 
@@ -112,13 +113,23 @@ class _AuthInterceptor extends Interceptor {
 
   @override
   Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
-    if (err.response?.statusCode == 401 && !_isRefreshing) {
+    if (err.response?.statusCode == 401) {
+      // If we're already refreshing, just queue this request and return immediately.
+      if (_isRefreshing) {
+        _failedRequests.add({
+          'options': err.requestOptions,
+          'handler': handler,
+        });
+        return;
+      }
+
       final refreshToken = await _storage.read(key: 'refreshToken');
       if (refreshToken != null && refreshToken.isNotEmpty) {
         _isRefreshing = true;
         try {
-          // Attempt to refresh the token directly via Dio
-          final refreshRes = await _dio.post('/api/auth/refresh', data: {
+          // Use a separate Dio instance to avoid interceptor recursion
+          final refreshDio = Dio(BaseOptions(baseUrl: _dio.options.baseUrl));
+          final refreshRes = await refreshDio.post('/api/auth/refresh', data: {
             'refreshToken': refreshToken,
           });
 
@@ -126,20 +137,56 @@ class _AuthInterceptor extends Interceptor {
             final newAccessToken = refreshRes.data['data']['accessToken'];
             await _storage.write(key: 'accessToken', value: newAccessToken);
 
-            // Retry the original request with the new token
+            // Retry all queued requests with the new token
+            for (var req in _failedRequests) {
+              final options = req['options'] as RequestOptions;
+              final reqHandler = req['handler'] as ErrorInterceptorHandler;
+              
+              options.headers['Authorization'] = 'Bearer $newAccessToken';
+              try {
+                final response = await _dio.fetch(options);
+                reqHandler.resolve(response);
+              } on DioException catch (e) {
+                reqHandler.next(e);
+              }
+            }
+            _failedRequests.clear();
+
+            // Retry the original request that triggered the refresh
             final options = err.requestOptions;
             options.headers['Authorization'] = 'Bearer $newAccessToken';
             
             final retryRes = await _dio.fetch(options);
             _isRefreshing = false;
             return handler.resolve(retryRes);
+          } else {
+             await _clearTokens();
+             _rejectQueue(err);
           }
         } catch (_) {
-          // Refresh failed, fall through to error
+          await _clearTokens();
+          _rejectQueue(err);
+        } finally {
+          _isRefreshing = false;
         }
-        _isRefreshing = false;
+      } else {
+        _rejectQueue(err);
       }
+    } else {
+      return handler.next(err);
     }
-    return handler.next(err);
+  }
+
+  void _rejectQueue(DioException err) {
+    for (var req in _failedRequests) {
+      (req['handler'] as ErrorInterceptorHandler).next(err);
+    }
+    _failedRequests.clear();
+  }
+
+  Future<void> _clearTokens() async {
+    await _storage.delete(key: 'accessToken');
+    await _storage.delete(key: 'refreshToken');
+    await _storage.delete(key: 'user');
   }
 }

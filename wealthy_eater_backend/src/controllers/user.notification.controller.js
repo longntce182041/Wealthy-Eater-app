@@ -1,15 +1,16 @@
+const AppError = require('../utils/AppError');
 const userNotificationService = require('../services/user.notification.service');
 
 // ─── Shared response helper ──────────────────────────────────────────────────
 function handleError(err, res, context) {
   if (err.code === 'NOT_FOUND') {
-    return res.status(404).json({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Notification not found' } });
+    return next(new AppError('Notification not found', 404)); // TODO: pass errorCode NOT_FOUND
   }
   console.error(`[Notification Controller] ${context} error:`, err);
-  return res.status(500).json({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' } });
+  return next(new AppError('An unexpected error occurred', 500)); // TODO: pass errorCode INTERNAL_ERROR
 }
 
-exports.getSettings = async (req, res) => {
+exports.getSettings = async (req, res, next) => {
   try {
     const user_id = req.user.sub || req.user.id;
     const settings = await userNotificationService.getSettings(user_id);
@@ -19,7 +20,7 @@ exports.getSettings = async (req, res) => {
   }
 };
 
-exports.updateSettings = async (req, res) => {
+exports.updateSettings = async (req, res, next) => {
   try {
     const user_id = req.user.sub || req.user.id;
     const settings = await userNotificationService.updateSettings(user_id, req.body);
@@ -29,7 +30,7 @@ exports.updateSettings = async (req, res) => {
   }
 };
 
-exports.getHistory = async (req, res) => {
+exports.getHistory = async (req, res, next) => {
   try {
     const user_id = req.user.sub || req.user.id;
     const limit = parseInt(req.query.limit, 10) || 20;
@@ -42,7 +43,7 @@ exports.getHistory = async (req, res) => {
   }
 };
 
-exports.markAsRead = async (req, res) => {
+exports.markAsRead = async (req, res, next) => {
   try {
     const user_id = req.user.sub || req.user.id;
     const { notification_id } = req.params;

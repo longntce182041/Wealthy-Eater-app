@@ -945,7 +945,9 @@ class _IngredientTile extends StatelessWidget {
               child: Text(ingredient,
                   style: const TextStyle(fontWeight: FontWeight.w600))),
           Text(quantity,
-              style: Theme.of(context).textTheme.labelLarge),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+              )),
         ],
       ),
     );

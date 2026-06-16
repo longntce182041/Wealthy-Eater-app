@@ -3,6 +3,7 @@
  * API para listar, criar, editar, deletar e importar receitas do sistema com paginação e filtros
  */
 
+const AppError = require('../utils/AppError');
 const mongoose = require('mongoose');
 const xlsx = require('xlsx');
 const Recipe = require('../models/Recipe');
@@ -68,7 +69,7 @@ async function processRecipeIngredients(recipeId, ingredientsInput) {
 
   const ingredientIds = ingredientsInput.map(i => i.ingredient_id).filter(Boolean);
   const ingredientDataList = await Ingredient.find({ _id: { $in: ingredientIds } }).lean();
-  
+
   const ingredientMap = {};
   for (const data of ingredientDataList) {
     ingredientMap[data._id.toString()] = data;
@@ -131,15 +132,15 @@ function mapRecipeForAdmin(recipe, nutrition, reviewStats, ingredientsCount, ste
     },
     ingredientsCount: ingredientsCount || 0,
     stepsCount: stepsCount || 0,
-    ingredients: ingredientsList, 
-    steps: stepsList 
+    ingredients: ingredientsList,
+    steps: stepsList
   };
 }
 
 /**
  * UC-71: GET /api/admin/recipes
  */
-async function getRecipesList(req, res) {
+async function getRecipesList(req, res, next) {
   try {
     const filter = buildAdminFilter(req.query || {});
 
@@ -205,14 +206,14 @@ async function getRecipesList(req, res) {
     return res.json({ success: true, message: 'Recipes loaded successfully', data, meta: { page, limit, total, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 } });
   } catch (err) {
     console.error('❌ Error fetching recipes:', err);
-    return res.status(500).json({ success: false, message: 'Failed to load recipes' });
+    return next(new AppError(err.message || 'Failed to load recipes', 500, null, process.env.NODE_ENV === 'development' ? err.stack : undefined));
   }
 }
 
 /**
  * UC-71: GET /api/admin/recipes/stats
  */
-async function getRecipesStats(req, res) {
+async function getRecipesStats(req, res, next) {
   try {
     const [totalRecipes, publishedRecipes, draftRecipes, totalReviews, avgRating, topRecipeByRating] = await Promise.all([
       Recipe.countDocuments({}),
@@ -230,18 +231,19 @@ async function getRecipesStats(req, res) {
     };
     return res.json({ success: true, message: 'Stats loaded successfully', data: stats });
   } catch (err) {
-    return res.status(500).json({ success: false, message: 'Failed to load stats' });
+    console.error('❌ Error fetching stats:', err);
+    return next(new AppError(err.message || 'Failed to load stats', 500));
   }
 }
 
 /**
  * GET /api/admin/recipes/:id 
  */
-async function getRecipeDetail(req, res) {
+async function getRecipeDetail(req, res, next) {
   try {
     const recipe = await Recipe.findById(req.params.id).lean();
     if (!recipe) {
-      return res.status(404).json({ success: false, message: 'Recipe not found' });
+      return next(new AppError('Recipe not found', 404));
     }
 
     const [nutrition, reviewStats, dbIngredients, dbSteps] = await Promise.all([
@@ -257,7 +259,7 @@ async function getRecipeDetail(req, res) {
       const ingsData = await Ingredient.find({ _id: { $in: ingIds } }).lean();
       const ingMap = {};
       ingsData.forEach(d => { ingMap[d._id.toString()] = d; });
-      
+
       enrichedIngredients = dbIngredients.map(item => ({
         ...item,
         name: ingMap[item.ingredient_id]?.name || "Nguyên liệu ẩn",
@@ -274,26 +276,26 @@ async function getRecipeDetail(req, res) {
       revStats,
       enrichedIngredients.length,
       stepsList.length,
-      enrichedIngredients, 
-      stepsList 
+      enrichedIngredients,
+      stepsList
     );
 
     return res.json({ success: true, message: 'Recipe loaded successfully', data });
   } catch (err) {
     console.error('❌ Error fetching recipe detail:', err);
-    return res.status(500).json({ success: false, message: 'Failed to load recipe' });
+    return next(new AppError(err.message || 'Failed to load recipe', 500));
   }
 }
 
 /**
  * UC-73: POST /api/admin/recipes
  */
-async function addRecipe(req, res) {
+async function addRecipe(req, res, next) {
   try {
     const { name, description, image_url, cooking_time, base_servings, status, level_cooking, ingredients, steps } = req.body;
 
     if (!name) {
-      return res.status(400).json({ success: false, message: 'Tên công thức là bắt buộc.' });
+      return next(new AppError('Tên công thức là bắt buộc.', 400));
     }
 
     const recipe = new Recipe({
@@ -335,20 +337,22 @@ async function addRecipe(req, res) {
     return res.status(201).json({ success: true, message: 'Tạo công thức thành công!', data: responseData });
   } catch (err) {
     console.error('❌ Error adding recipe:', err);
-    return res.status(500).json({ success: false, message: 'Tạo công thức thất bại.' });
+    return next(new AppError(err.message || 'Tạo công thức thất bại.', 500));
   }
 }
 
 /**
  * UC-74: PUT /api/admin/recipes/:id
  */
-async function updateRecipe(req, res) {
+async function updateRecipe(req, res, next) {
   try {
     const recipeId = req.params.id;
     const { name, description, image_url, cooking_time, base_servings, status, level_cooking, ingredients, steps } = req.body;
 
     const recipe = await Recipe.findById(recipeId);
-    if (!recipe) return res.status(404).json({ success: false, message: 'Không tìm thấy công thức.' });
+    if (!recipe) {
+      return next(new AppError('Không tìm thấy công thức để cập nhật.', 404));
+    }
 
     if (name) recipe.name = name;
     if (description !== undefined) recipe.description = description;
@@ -391,29 +395,36 @@ async function updateRecipe(req, res) {
     return res.json({ success: true, message: 'Cập nhật công thức thành công!', data: responseData });
   } catch (err) {
     console.error('❌ Error updating recipe:', err);
-    return res.status(500).json({ success: false, message: 'Cập nhật thất bại.' });
+    return next(new AppError(err.message || 'Cập nhật công thức thất bại.', 500));
   }
 }
 
 /**
  * UC-74: DELETE /api/admin/recipes/:id
  */
-async function deleteRecipe(req, res) {
+async function deleteRecipe(req, res, next) {
   try {
-    const recipe = await Recipe.findById(req.params.id);
-    if (!recipe) return res.status(404).json({ success: false, message: 'Không tìm thấy công thức.' });
+    const recipeId = req.params.id;
+
+    const recipe = await Recipe.findById(recipeId);
+    if (!recipe) {
+      return next(new AppError('Không tìm thấy công thức.', 404));
+    }
+
+    // Xóa mềm: Chuyển trạng thái sang 'archived' thay vì xóa vật lý (hard delete)
     recipe.status = 'archived';
     await recipe.save();
     return res.json({ success: true, message: 'Đã xóa mềm công thức thành công.' });
   } catch (err) {
-    return res.status(500).json({ success: false, message: 'Xóa công thức thất bại.' });
+    console.error('❌ Error deleting recipe:', err);
+    return next(new AppError(err.message || 'Xóa công thức thất bại.', 500));
   }
 }
 
 /**
  * UC-75: GET /api/recipes (User search)
  */
-async function searchAndFilterRecipes(req, res) {
+async function searchAndFilterRecipes(req, res, next) {
   try {
     const { search, diet_trend, minTime, maxTime, minCalories, maxCalories, page = 1, limit = 10 } = req.query;
     const pageNum = Number(page) || 1, limitNum = Number(limit) || 10, skipNum = (pageNum - 1) * limitNum;
@@ -444,21 +455,30 @@ async function searchAndFilterRecipes(req, res) {
     const recipesList = result[0]?.data || [], totalRecords = result[0]?.metadata[0]?.total || 0;
     return res.json({ success: true, message: 'Tìm kiếm thành công!', pagination: { totalItems: totalRecords, totalPages: Math.ceil(totalRecords / limitNum), currentPage: pageNum, pageSize: limitNum }, data: recipesList });
   } catch (err) {
-    return res.status(500).json({ success: false, message: 'Xảy ra lỗi khi lọc công thức.' });
+    console.error('❌ Error in Search/Filter Recipes:', err);
+    return next(new AppError(err.message || 'Xảy ra lỗi trong quá trình tìm kiếm công thức.', 500));
   }
 }
 
 /**
  * UC-76: POST /api/admin/recipes/import-excel
  */
-async function importRecipesExcel(req, res) {
+async function importRecipesExcel(req, res, next) {
   try {
-    if (!req.file) return res.status(400).json({ success: false, message: 'Vui lòng cung cấp tệp Excel.' });
+    if (!req.file) {
+      return next(new AppError('Vui lòng cung cấp tệp Excel (.xlsx hoặc .xls).', 400));
+    }
 
     const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-    if (rows.length === 0) return res.status(400).json({ success: false, message: 'Tệp Excel trống.' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(worksheet);
 
+    if (rows.length === 0) {
+      return next(new AppError('Tệp Excel trống không có dữ liệu.', 400));
+    }
+
+    // 2. Thu thập trước tất cả các ID nguyên liệu xuất hiện trong Excel để tìm kiếm hàng loạt (Tránh N+1)
     const uniqueIngredientIds = new Set();
     rows.forEach(row => {
       const rawIngs = row.Ingredients || row.ingredients;
@@ -476,11 +496,11 @@ async function importRecipesExcel(req, res) {
       if (!name) { errorLog.push(`Dòng ${rowNumber}: Thiếu trường Name.`); continue; }
 
       // 🌟 SỬA LỖI TẠI ĐÂY: Tạo ObjectId thuần, không dùng .toString() để né lỗi ép kiểu string trong MongoDB
-      const recipeId = new mongoose.Types.ObjectId(); 
-      
+      const recipeId = new mongoose.Types.ObjectId();
+
       const rawIngsStr = row.Ingredients || row.ingredients || '';
       const rawIngredients = rawIngsStr ? String(rawIngsStr).split('|') : [];
-      
+
       let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0, hasIngredientError = false;
       const rowIngredientDocs = [];
 
@@ -511,17 +531,29 @@ async function importRecipesExcel(req, res) {
       nutritionsToInsert.push({ recipe_id: recipeId, calories: Math.round(totalCalories * 10) / 10, protein: Math.round(totalProtein * 10) / 10, fat: Math.round(totalFat * 10) / 10, carbs: Math.round(totalCarbs * 10) / 10 });
     }
 
-    if (errorLog.length > 0) return res.status(422).json({ success: false, errors: errorLog });
+    // 4. Trả về toàn bộ log lỗi phát hiện được, không thực hiện lưu bất kỳ bản ghi nào (All-or-Nothing)
+    if (errorLog.length > 0) {
+      return next(new AppError('Import thất bại do dữ liệu file Excel chứa lỗi logic.', 422, null, errorLog));
+    }
 
-    if (recipesToInsert.length > 0) await Recipe.insertMany(recipesToInsert);
-    if (ingredientsToInsert.length > 0) await RecipeIngredient.insertMany(ingredientsToInsert);
-    if (stepsToInsert.length > 0) await RecipeStep.insertMany(stepsToInsert);
-    if (nutritionsToInsert.length > 0) await RecipeNutrition.insertMany(nutritionsToInsert);
+    // 5. Thực thi TRUE BULK INSERT đồng loạt vào 4 bảng
+    if (recipesToInsert.length > 0) {
+      await Recipe.insertMany(recipesToInsert);
+    }
+    if (ingredientsToInsert.length > 0) {
+      await RecipeIngredient.insertMany(ingredientsToInsert);
+    }
+    if (stepsToInsert.length > 0) {
+      await RecipeStep.insertMany(stepsToInsert);
+    }
+    if (nutritionsToInsert.length > 0) {
+      await RecipeNutrition.insertMany(nutritionsToInsert);
+    }
 
     return res.status(201).json({ success: true, message: 'Import thành công!', data: { totalProcessed: rows.length, totalImported: recipesToInsert.length } });
   } catch (err) {
-    console.error('❌ Error importing excel:', err);
-    return res.status(500).json({ success: false, message: 'Lỗi hệ thống khi import.' });
+    console.error('❌ Error Importing Excel Recipes:', err);
+    return next(new AppError(err.message || 'Xảy ra lỗi hệ thống khi nhập dữ liệu tệp Excel.', 500));
   }
 }
 

@@ -19,7 +19,7 @@ export default function Login() {
       const payload = resp.data && resp.data.data;
       if (!payload) throw new Error('Invalid response from server');
 
-      const { accessToken, user } = payload;
+      const { accessToken, refreshToken, user } = payload;
       if (!accessToken) throw new Error('Missing access token');
 
       // Only allow admin role here
@@ -30,6 +30,9 @@ export default function Login() {
       }
 
       localStorage.setItem('admin_session_jwt_token', accessToken);
+      if (refreshToken) {
+        localStorage.setItem('admin_refresh_token', refreshToken);
+      }
       localStorage.setItem('admin_user', JSON.stringify(user));
 
       navigate('/dashboard');

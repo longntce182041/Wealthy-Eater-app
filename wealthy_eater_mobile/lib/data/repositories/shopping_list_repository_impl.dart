@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../core/error/app_error.dart';
 import '../../core/network/api_client.dart';
 import '../../domain/entities/shopping_list.dart';
 import '../../domain/repositories/shopping_list_repository.dart';
@@ -40,11 +41,10 @@ class ShoppingListRepositoryImpl implements ShoppingListRepository {
             .toList();
       }
 
-      throw Exception(
+      throw AppError(
           response.data['error']?['message'] ?? 'Failed to add ingredients');
-    } on DioException catch (e) {
-      final msg = e.response?.data?['error']?['message'] as String?;
-      throw Exception(msg ?? e.message ?? 'Failed to add ingredients');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -82,11 +82,10 @@ class ShoppingListRepositoryImpl implements ShoppingListRepository {
         };
       }
 
-      throw Exception(
+      throw AppError(
           response.data['error']?['message'] ?? 'Failed to load shopping list');
-    } on DioException catch (e) {
-      final msg = e.response?.data?['error']?['message'] as String?;
-      throw Exception(msg ?? e.message ?? 'Failed to load shopping list');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -104,11 +103,10 @@ class ShoppingListRepositoryImpl implements ShoppingListRepository {
         );
       }
 
-      throw Exception(
+      throw AppError(
           response.data['error']?['message'] ?? 'Failed to toggle item');
-    } on DioException catch (e) {
-      final msg = e.response?.data?['error']?['message'] as String?;
-      throw Exception(msg ?? e.message ?? 'Failed to toggle item');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -121,12 +119,11 @@ class ShoppingListRepositoryImpl implements ShoppingListRepository {
           await _apiClient.delete('/api/user/shopping-list/$itemId');
 
       if (response.statusCode != 200 || response.data['success'] != true) {
-        throw Exception(
+        throw AppError(
             response.data['error']?['message'] ?? 'Failed to remove item');
       }
-    } on DioException catch (e) {
-      final msg = e.response?.data?['error']?['message'] as String?;
-      throw Exception(msg ?? e.message ?? 'Failed to remove item');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -139,12 +136,11 @@ class ShoppingListRepositoryImpl implements ShoppingListRepository {
           await _apiClient.delete('/api/user/shopping-list/clear/purchased');
 
       if (response.statusCode != 200 || response.data['success'] != true) {
-        throw Exception(
+        throw AppError(
             response.data['error']?['message'] ?? 'Failed to clear purchased');
       }
-    } on DioException catch (e) {
-      final msg = e.response?.data?['error']?['message'] as String?;
-      throw Exception(msg ?? e.message ?? 'Failed to clear purchased');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -157,12 +153,11 @@ class ShoppingListRepositoryImpl implements ShoppingListRepository {
           await _apiClient.delete('/api/user/shopping-list/clear/all');
 
       if (response.statusCode != 200 || response.data['success'] != true) {
-        throw Exception(
+        throw AppError(
             response.data['error']?['message'] ?? 'Failed to clear all items');
       }
-    } on DioException catch (e) {
-      final msg = e.response?.data?['error']?['message'] as String?;
-      throw Exception(msg ?? e.message ?? 'Failed to clear all items');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -177,11 +172,10 @@ class ShoppingListRepositoryImpl implements ShoppingListRepository {
         return response.data['data'] as Map<String, dynamic>? ?? {};
       }
 
-      throw Exception(
+      throw AppError(
           response.data['error']?['message'] ?? 'Failed to fetch stats');
-    } on DioException catch (e) {
-      final msg = e.response?.data?['error']?['message'] as String?;
-      throw Exception(msg ?? e.message ?? 'Failed to fetch stats');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 }

@@ -157,6 +157,7 @@ app.use((err, req, res, next) => {
     error: {
       code: typeof code === 'string' ? code : 'INTERNAL_SERVER_ERROR',
       message,
+      ...(err.errors && { errors: err.errors }),
       // Include stack trace only in development for debugging
       ...(isDev && { stack: err.stack }),
     }
