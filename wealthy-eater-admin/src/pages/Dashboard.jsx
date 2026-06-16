@@ -1,17 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../services/api';
-import { 
-  Utensils, 
-  CheckCircle, 
-  FileEdit, 
-  Star, 
-  RefreshCw, 
-  Inbox, 
-  Eye, 
-  Trash2,
-  AlertCircle
-} from 'lucide-react';
+import './dashboard.css';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -29,9 +19,11 @@ export default function Dashboard() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    // 1. Kiểm tra nghiêm ngặt CẢ Thông tin User và Token bảo mật
     const rawUser = localStorage.getItem('admin_user');
     const token = localStorage.getItem('admin_session_jwt_token');
 
+    // Nếu thiếu 1 trong 2, dọn sạch bộ nhớ và đá về trang Login ngay
     if (!rawUser || !token) {
       handleForceLogout();
       return;
@@ -39,12 +31,13 @@ export default function Dashboard() {
 
     try {
       setUser(JSON.parse(rawUser));
-      fetchData();
+      fetchData(); // Chỉ gọi API khi xác nhận có đủ cả user và token
     } catch (e) {
       handleForceLogout();
     }
   }, [navigate]);
 
+  // Hàm dọn dẹp bộ nhớ khi không hợp lệ hoặc hết hạn
   function handleForceLogout() {
     localStorage.removeItem('admin_user');
     localStorage.removeItem('admin_session_jwt_token');
@@ -69,6 +62,7 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       
+      // 2. NẾU BACKEND BÁO TOKEN HẾT HẠN (401) HOẶC SAI LỖI -> ĐÁ VỀ LOGIN LUÔN
       if (err.response?.status === 401 || err.response?.data?.message?.includes('expired')) {
         alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!');
         handleForceLogout();
@@ -101,119 +95,133 @@ export default function Dashboard() {
   if (!user) return null;
 
   return (
-    <div className="space-y-6">
+    <>
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl flex items-center gap-2 text-sm font-medium">
-          <AlertCircle size={20} />
+        <div className="error-banner" style={{ marginBottom: '30px' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
           <span>{error}</span>
         </div>
       )}
 
       {/* Metric Cards Grid */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center justify-between">
-          <div>
-            <h4 className="text-slate-500 text-sm font-medium mb-1">Total Recipes</h4>
-            <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.totalRecipes}</p>
+      <section className="metrics-grid">
+        <div className="metric-card">
+          <div className="metric-info">
+            <h4>Total Recipes</h4>
+            <p>{loading ? '...' : stats.totalRecipes}</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
-            <Utensils size={24} />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center justify-between">
-          <div>
-            <h4 className="text-slate-500 text-sm font-medium mb-1">Published</h4>
-            <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.publishedRecipes}</p>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
-            <CheckCircle size={24} />
+          <div className="metric-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center justify-between">
-          <div>
-            <h4 className="text-slate-500 text-sm font-medium mb-1">Drafts</h4>
-            <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.draftRecipes}</p>
+        <div className="metric-card">
+          <div className="metric-info">
+            <h4>Published</h4>
+            <p>{loading ? '...' : stats.publishedRecipes}</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
-            <FileEdit size={24} />
+          <div className="metric-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center justify-between">
-          <div>
-            <h4 className="text-slate-500 text-sm font-medium mb-1">Average Rating</h4>
-            <p className="text-2xl font-bold text-slate-900">{loading ? '...' : `${stats.averageRating} ★`}</p>
+        <div className="metric-card">
+          <div className="metric-info">
+            <h4>Drafts</h4>
+            <p>{loading ? '...' : stats.draftRecipes}</p>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-red-100 text-red-600 flex items-center justify-center">
-            <Star size={24} />
+          <div className="metric-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-info">
+            <h4>Average Rating</h4>
+            <p>{loading ? '...' : `${stats.averageRating} ★`}</p>
+          </div>
+          <div className="metric-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
           </div>
         </div>
       </section>
 
       {/* Recipes Table Card */}
-      <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h3 className="text-lg font-bold text-slate-800">Recipes List</h3>
-          <button 
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-semibold transition-colors"
-            onClick={fetchData}
-          >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-            <span>Refresh Data</span>
-          </button>
+      <section className="table-card">
+        <div className="table-header">
+          <h3>Recipes List</h3>
+          <div className="table-actions">
+            <button className="btn-primary" onClick={fetchData}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+              </svg>
+              <span>Refresh Data</span>
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="data-table-wrapper">
           {loading ? (
-            <div className="py-16 text-center text-slate-500 flex flex-col items-center">
-              <RefreshCw size={32} className="animate-spin mb-4 opacity-50 text-emerald-500" />
-              <div className="font-semibold text-sm">Loading recipes database...</div>
-            </div>
+            <div style={{ padding: '40px', textAlign: 'center', fontWeight: 600 }}>Loading recipes database...</div>
           ) : recipes.length === 0 ? (
-            <div className="py-16 text-center text-slate-400 flex flex-col items-center">
-              <Inbox size={48} className="mb-4 opacity-50" />
-              <p className="font-medium text-sm">No recipes available in the database.</p>
+            <div className="empty-state">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+              </svg>
+              <p>No recipes available in the database.</p>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[800px]">
+            <table className="data-table">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-semibold">
-                  <th className="px-6 py-4">Recipe Details</th>
-                  <th className="px-6 py-4">Nutrition</th>
-                  <th className="px-6 py-4">Level</th>
-                  <th className="px-6 py-4">Time</th>
-                  <th className="px-6 py-4">Rating</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                <tr>
+                  <th>Recipe Details</th>
+                  {/* CHỨC NĂNG UC-71: Thêm cột tiêu đề hiển thị tổng hàm lượng Calo */}
+                  <th>TOTAL CALORIES</th>
+                  <th>LEVEL</th>
+                  <th>TIME (MINS)</th>
+                  <th>RATING</th>
+                  <th>STATUS</th>
+                  <th>ACTIONS</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {recipes.map((recipe) => (
-                  <tr key={recipe.id || recipe._id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-4">
-                        {recipe.image_url || recipe.imageUrl ? (
-                          <img className="w-12 h-12 rounded-xl object-cover border border-slate-200" src={recipe.image_url || recipe.imageUrl} alt={recipe.name} />
+                  <tr key={recipe.id || recipe._id}>
+                    <td>
+                      <div className="recipe-cell">
+                        {recipe.imageUrl ? (
+                          <img className="recipe-img" src={recipe.imageUrl} alt={recipe.name} />
                         ) : (
-                          <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center border border-slate-200">
-                            <Utensils size={20} />
-                          </div>
+                          <div className="recipe-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>🍳</div>
                         )}
-                        <div>
-                          <div className="font-semibold text-slate-900 mb-0.5">{recipe.name}</div>
-                          <div className="text-xs text-slate-500 line-clamp-1 max-w-[200px]">{recipe.description}</div>
+                        <div style={{ textAlign: 'left' }}>
+                          <div className="recipe-title">{recipe.name}</div>
+                          <div className="recipe-desc">{recipe.description}</div>
                         </div>
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <div>
-                        <div className="font-bold text-blue-600 text-sm mb-1">
+                    {/* CHỨC NĂNG UC-71: Render dữ liệu Calo và Macros (Carb, Protein, Fat) */}
+                    <td>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: '700', color: '#38bdf8', fontSize: '15px', marginBottom: '2px' }}>
                           {recipe.nutrition?.calories || recipe.calories || 0} kcal
                         </div>
-                        <div className="text-[11px] text-slate-500 flex gap-2 font-medium">
+                        <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', gap: '6px' }}>
                           <span>C: {recipe.nutrition?.carbs || recipe.carbs || 0}g</span>
                           <span>P: {recipe.nutrition?.protein || recipe.protein || 0}g</span>
                           <span>F: {recipe.nutrition?.fat || recipe.fat || 0}g</span>
@@ -221,53 +229,46 @@ export default function Dashboard() {
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize
-                        ${recipe.levelCooking === 'easy' ? 'bg-emerald-100 text-emerald-700' : 
-                          recipe.levelCooking === 'medium' ? 'bg-amber-100 text-amber-700' : 
-                          'bg-red-100 text-red-700'}`}
-                      >
+                    <td>
+                      <span className={`badge ${recipe.levelCooking}`}>
                         {recipe.levelCooking}
                       </span>
                     </td>
-                    
-                    <td className="px-6 py-4 text-sm font-medium text-slate-600">
-                      {recipe.cookingTime} mins
-                    </td>
-                    
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1 font-semibold text-amber-500 text-sm">
+                    <td>{recipe.cookingTime} mins</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: '#f59e0b' }}>
                         <span>{recipe.reviewStats?.averageRating || '—'}</span>
-                        {recipe.reviewStats?.averageRating > 0 && <Star size={14} className="fill-current" />}
+                        {recipe.reviewStats?.averageRating > 0 && <span>★</span>}
                       </div>
                     </td>
-                    
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize
-                        ${recipe.status === 'published' ? 'bg-blue-100 text-blue-700' : 
-                          recipe.status === 'draft' ? 'bg-slate-100 text-slate-700' : 
-                          'bg-slate-100 text-slate-600'}`}
-                      >
+                    <td>
+                      <span className={`badge ${recipe.status}`}>
                         {recipe.status}
                       </span>
                     </td>
-                    
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td>
+                      <div className="actions-cell">
                         <button
-                          className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                          className="btn-icon-action"
                           title="View Details"
                           onClick={() => alert(`Details: \n\nName: ${recipe.name}\nCalories: ${recipe.nutrition?.calories || 0} kcal\nProtein: ${recipe.nutrition?.protein || 0}g\nCarbs: ${recipe.nutrition?.carbs || 0}g\nFat: ${recipe.nutrition?.fat || 0}g\n\nSteps:\n${recipe.cookingStep}`)}
                         >
-                          <Eye size={18} />
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="1"></circle>
+                            <circle cx="19" cy="12" r="1"></circle>
+                            <circle cx="5" cy="12" r="1"></circle>
+                          </svg>
                         </button>
                         {recipe.status !== 'archived' && (
                           <button
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="btn-icon-action delete"
                             title="Archive Recipe"
                             onClick={() => handleDelete(recipe.id || recipe._id)}
                           >
-                            <Trash2 size={18} />
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
                           </button>
                         )}
                       </div>
@@ -279,6 +280,6 @@ export default function Dashboard() {
           )}
         </div>
       </section>
-    </div>
+    </>
   );
 }

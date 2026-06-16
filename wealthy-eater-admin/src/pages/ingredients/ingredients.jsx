@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import apiClient from '../../services/api';
-import { Trash2, Edit, Plus, Image as ImageIcon, Search, Filter, FileUp } from 'lucide-react';
+import { Trash2, Edit, Plus, X, Image as ImageIcon, Search, Filter, ChevronLeft, ChevronRight, FileUp } from 'lucide-react';
 import { toast } from 'react-toastify';
-import Pagination from '../../components/common/Pagination';
-import Modal from '../../components/common/Modal';
 
 const IngredientPage = () => {
     const [ingredients, setIngredients] = useState([]);
@@ -28,7 +26,7 @@ const IngredientPage = () => {
 
     // --- STATE FORM DATA ---
     const [formData, setFormData] = useState({
-        name: '', calories_per_unit: '', protein: '', carbs: '', fat: '', unit: 'gram', image_url: '', imageFile: null, description: ''
+        name: '', calories_per_unit: '', protein: '', carbs: '', fats: '', unit: 'gram', ImageUrl: '', description: ''
     });
 
     const [availableMicros, setAvailableMicros] = useState([]);
@@ -76,7 +74,9 @@ const IngredientPage = () => {
         return () => clearTimeout(timer);
     }, [fetchIngredients]);
 
-
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filters]);
 
     useEffect(() => {
         const fetchMicros = async () => {
@@ -129,7 +129,7 @@ const IngredientPage = () => {
 
     const handleOpenCreate = () => {
         setIsEditing(false);
-        setFormData({ name: '', calories_per_unit: '', protein: '', carbs: '', fat: '', unit: 'gram', image_url: '', imageFile: null, description: '' });
+        setFormData({ name: '', calories_per_unit: '', protein: '', carbs: '', fats: '', unit: 'gram', ImageUrl: '', description: '' });
         setSelectedMicros([]);
         setShowModal(true);
     };
@@ -146,10 +146,9 @@ const IngredientPage = () => {
                     calories_per_unit: data.calories_per_unit || '',
                     protein: data.protein || '',
                     carbs: data.carbs || '',
-                    fat: data.fat || '',
+                    fats: data.fats || '',
                     unit: data.unit || 'gram',
-                    image_url: data.image_url || '',
-                    imageFile: null,
+                    ImageUrl: data.ImageUrl || '',
                     description: data.description || ''
                 });
                 const micros = (data.micronutrients || []).map(m => ({ 
@@ -158,12 +157,12 @@ const IngredientPage = () => {
                 }));
                 setSelectedMicros(micros);
             } else {
-                setFormData({ ...item, image_url: item.image_url || '', imageFile: null, description: item.description || '' });
+                setFormData({ ...item, ImageUrl: item.ImageUrl || '', description: item.description || '' });
                 setSelectedMicros([]);
             }
         } catch (error) {
             console.error(error);
-            setFormData({ ...item, image_url: item.image_url || '', imageFile: null, description: item.description || '' });
+            setFormData({ ...item, ImageUrl: item.ImageUrl || '', description: item.description || '' });
             setSelectedMicros([]);
         }
         setShowModal(true);
@@ -197,148 +196,89 @@ const IngredientPage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const payload = new FormData();
-            payload.append('name', formData.name);
-            payload.append('calories_per_unit', formData.calories_per_unit);
-            payload.append('protein', formData.protein);
-            payload.append('carbs', formData.carbs);
-            payload.append('fat', formData.fat);
-            payload.append('unit', formData.unit);
-            payload.append('description', formData.description || '');
-            
-            if (formData.imageFile) {
-                payload.append('image', formData.imageFile);
-            }
-            
-            payload.append('micronutrients', JSON.stringify(selectedMicros));
-
+            const payload = { ...formData, micronutrients: selectedMicros };
             let res;
             if (isEditing) {
-                res = await apiClient.put(`/admin/ingredients/update/${currentId}`, payload, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+                res = await apiClient.put(`/admin/ingredients/update/${currentId}`, payload);
             } else {
-                res = await apiClient.post('/admin/ingredients/create', payload, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+                res = await apiClient.post('/admin/ingredients/create', payload);
             }
             toast.success(res.data.message);
             setShowModal(false);
             fetchIngredients();
         } catch (error) {
-            const serverMessage = error.response?.data?.message || error.response?.data?.errors?.map?.(e => Object.values(e)[0])?.join(', ');
+            const serverMessage = error.response?.data?.message;
             toast.error(serverMessage || "Action failed");
         }
     };
 
     return (
-        <div className="space-y-6">
+        <div>
+            <h2 style={{ color: '#30a5ff', marginBottom: '20px' }}>Ingredients Management</h2>
+
             {/* --- TOOLBAR --- */}
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-4 items-center justify-between">
-                <div className="flex flex-1 gap-4 w-full sm:w-auto">
-                    <div className="relative flex-1 max-w-md">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                            <Search size={18} />
-                        </div>
-                        <input
-                            type="text" placeholder="Search ingredients..."
-                            value={filters.keyword} 
-                            onChange={(e) => {
-                                setFilters({ ...filters, keyword: e.target.value });
-                                setCurrentPage(1);
-                            }}
-                            className="block w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
-                        />
-                    </div>
-                    <div className="relative w-40">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                            <Filter size={16} />
-                        </div>
-                        <select
-                            value={filters.unit}
-                            onChange={(e) => {
-                                setFilters({ ...filters, unit: e.target.value });
-                                setCurrentPage(1);
-                            }}
-                            className="block w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors appearance-none"
-                        >
-                            <option value="">All Units</option>
-                            <option value="gram">gram</option>
-                            <option value="ml">ml</option>
-                            <option value="piece">piece</option>
-                            <option value="cup">cup</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div className="flex gap-3 w-full sm:w-auto">
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleImportExcel} 
-                        accept=".xlsx, .xls" 
-                        className="hidden" 
+            <div style={{ background: 'white', padding: '15px', borderRadius: '5px', marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                    <Search size={18} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
+                    <input
+                        type="text" placeholder="Search ingredients..."
+                        value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
+                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', color: '#333', background: 'white' }}
                     />
-                    <button 
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-sm font-semibold transition-colors"
-                        onClick={() => fileInputRef.current.click()} 
-                        title="Import ingredients from Excel template file"
-                    >
-                        <FileUp size={18} />
-                        <span>Import Excel</span>
-                    </button>
-
-                    <button 
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 text-white hover:bg-emerald-600 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-emerald-500/20"
-                        onClick={handleOpenCreate}
-                    >
-                        <Plus size={18} />
-                        <span>Add Ingredient</span>
-                    </button>
                 </div>
+                <div style={{ position: 'relative', width: '170px' }}>
+                    <Filter size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
+                    <select
+                        value={filters.unit} onChange={(e) => setFilters({ ...filters, unit: e.target.value })}
+                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer', color: '#333', background: 'white' }}
+                    >
+                        <option value="">All Units</option>
+                        <option value="gram">gram</option>
+                        <option value="ml">ml</option>
+                        <option value="piece">piece</option>
+                        <option value="cup">cup</option>
+                    </select>
+                </div>
+
+                <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleImportExcel} 
+                    accept=".xlsx, .xls" 
+                    style={{ display: 'none' }} 
+                />
+                <button 
+                    onClick={() => fileInputRef.current.click()} 
+                    style={{ background: '#28a745', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', display: 'flex', gap: '6px', fontWeight: 'bold', alignItems: 'center' }}
+                    title="Import ingredients from Excel template file"
+                >
+                    <FileUp size={18} /> Import Excel
+                </button>
+
+                <button onClick={handleOpenCreate} style={{ background: '#30a5ff', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', display: 'flex', gap: '5px', fontWeight: 'bold', alignItems: 'center' }}>
+                    <Plus size={18} /> Add Ingredient
+                </button>
             </div>
 
             {/* --- LIST CARDS --- */}
-            {loading ? (
-                <div className="py-12 text-center text-slate-500 flex flex-col items-center">
-                    <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <p className="font-medium text-sm">Loading data...</p>
-                </div>
-            ) : (
+            {loading ? <p style={{ textAlign: 'center', color: '#666' }}>Loading data...</p> : (
                 <>
                     {ingredients.length === 0 ? (
-                        <div className="py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 border-dashed flex flex-col items-center">
-                            <ImageIcon size={48} className="mb-4 opacity-50" />
-                            <p className="font-medium text-sm">No ingredients found.</p>
-                        </div>
+                        <p style={{ textAlign: 'center', color: '#999', margin: '40px 0' }}>No ingredients found.</p>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
                             {ingredients.map((item) => (
-                                <div key={item._id} className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow group flex flex-col">
-                                    <div className="aspect-[4/3] bg-slate-100 relative overflow-hidden flex items-center justify-center border-b border-slate-100">
-                                        {item.image_url ? (
-                                            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                        ) : (
-                                            <ImageIcon size={40} className="text-slate-300" />
-                                        )}
+                                <div key={item._id} style={{ background: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 2px 5px rgba(0,0,0,0.1)', border: '1px solid #eee' }}>
+                                    <div style={{ height: '160px', background: '#f8f9fa' }}>
+                                        {item.ImageUrl ? <img src={item.ImageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#ccc' }}><ImageIcon size={40} /></div>}
                                     </div>
-                                    <div className="p-4 flex flex-col flex-1">
-                                        <h3 className="font-bold text-slate-900 mb-1 line-clamp-1">{item.name}</h3>
-                                        <p className="text-sm text-slate-500 mb-4">
-                                            Calories: <strong className="text-emerald-600 font-bold">{item.calories_per_unit}</strong> / {item.unit}
-                                        </p>
-                                        <div className="mt-auto flex items-center justify-between pt-4 border-t border-slate-100">
-                                            <button onClick={() => handleView(item._id)} className="text-xs font-bold text-slate-600 hover:text-emerald-600 uppercase tracking-wider px-2 py-1 transition-colors">
-                                                View
-                                            </button>
-                                            <div className="flex gap-1">
-                                                <button onClick={() => handleOpenEdit(item)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">
-                                                    <Edit size={16} />
-                                                </button>
-                                                <button onClick={() => handleDelete(item._id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
+                                    <div style={{ padding: '15px' }}>
+                                        <h3 style={{ margin: '0 0 5px 0', color: '#333' }}>{item.name}</h3>
+                                        <p style={{ margin: '0', color: '#666', fontSize: '14px' }}>Calories: <strong style={{ color: '#30a5ff' }}>{item.calories_per_unit}</strong> / {item.unit}</p>
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '15px', gap: '15px' }}>
+                                            <button onClick={() => handleView(item._id)} style={{ color: '#555', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '500' }}>View</button>
+                                            <button onClick={() => handleOpenEdit(item)} style={{ color: '#30a5ff', background: 'none', border: 'none', cursor: 'pointer' }}><Edit size={20} /></button>
+                                            <button onClick={() => handleDelete(item._id)} style={{ color: '#f9243f', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={20} /></button>
                                         </div>
                                     </div>
                                 </div>
@@ -348,201 +288,183 @@ const IngredientPage = () => {
 
                     {/* --- PAGINATION CONTROLS --- */}
                     {ingredients.length > 0 && (
-                        <Pagination 
-                            currentPage={currentPage} 
-                            totalPages={totalPages} 
-                            onPrevPage={handlePrevPage} 
-                            onNextPage={handleNextPage} 
-                        />
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginTop: '30px', paddingBottom: '20px' }}>
+                            <button
+                                onClick={handlePrevPage} disabled={currentPage === 1}
+                                style={{ background: currentPage === 1 ? '#eee' : 'white', border: '1px solid #ddd', padding: '8px 15px', borderRadius: '5px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '5px', color: currentPage === 1 ? '#999' : '#333' }}
+                            >
+                                <ChevronLeft size={18} /> Previous
+                            </button>
+                            <span style={{ fontWeight: 'bold', color: '#5f6468' }}>Page {currentPage} of {totalPages}</span>
+                            <button
+                                onClick={handleNextPage} disabled={currentPage === totalPages}
+                                style={{ background: currentPage === totalPages ? '#eee' : 'white', border: '1px solid #ddd', padding: '8px 15px', borderRadius: '5px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '5px', color: currentPage === totalPages ? '#999' : '#333' }}
+                            >
+                                Next <ChevronRight size={18} />
+                            </button>
+                        </div>
                     )}
                 </>
             )}
 
             {/* --- MODAL CREATE / EDIT --- */}
-            <Modal
-                isOpen={showModal}
-                onClose={() => setShowModal(false)}
-                title={isEditing ? 'Edit Ingredient' : 'Add New Ingredient'}
-                footer={
-                    <>
-                        <button type="button" className="px-5 py-2.5 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors" onClick={() => setShowModal(false)}>Cancel</button>
-                        <button type="button" onClick={handleSubmit} className="px-5 py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-colors shadow-sm shadow-emerald-500/20">{isEditing ? 'Update Ingredient' : 'Add Ingredient'}</button>
-                    </>
-                }
-            >
-                <form id="ingredientForm" onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-semibold text-slate-700">Ingredient Name</label>
-                        <input type="text" className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <label className="block text-sm font-semibold text-slate-700">Calories / Unit</label>
-                            <input type="number" className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" onKeyDown={blockInvalidChar} value={formData.calories_per_unit} onChange={e => handleNumberChange('calories_per_unit', e.target.value)} required />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="block text-sm font-semibold text-slate-700">Unit</label>
-                            <select className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors appearance-none" value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })}>
-                                <option value="gram">gram</option>
-                                <option value="ml">ml</option>
-                                <option value="piece">piece</option>
-                                <option value="cup">cup</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                        <div className="space-y-1.5">
-                            <label className="block text-sm font-semibold text-slate-700">Protein (g)</label>
-                            <input type="number" className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" onKeyDown={blockInvalidChar} value={formData.protein} onChange={e => handleNumberChange('protein', e.target.value)} required />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="block text-sm font-semibold text-slate-700">Carbs (g)</label>
-                            <input type="number" className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" onKeyDown={blockInvalidChar} value={formData.carbs} onChange={e => handleNumberChange('carbs', e.target.value)} required />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="block text-sm font-semibold text-slate-700">Fats (g)</label>
-                            <input type="number" className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" onKeyDown={blockInvalidChar} value={formData.fat} onChange={e => handleNumberChange('fat', e.target.value)} required />
-                        </div>
-                    </div>
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-semibold text-slate-700">Image</label>
-                        <div className="flex gap-4 items-center">
-                            {formData.image_url && !formData.imageFile && (
-                                <img src={formData.image_url} alt="Current" className="w-16 h-16 object-cover rounded-xl border border-slate-200" />
-                            )}
-                            {formData.imageFile && (
-                                <img src={URL.createObjectURL(formData.imageFile)} alt="Preview" className="w-16 h-16 object-cover rounded-xl border border-slate-200" />
-                            )}
-                            <input type="file" className="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 transition-colors cursor-pointer" accept="image/*" onChange={e => setFormData({ ...formData, imageFile: e.target.files[0] })} />
-                        </div>
-                    </div>
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-semibold text-slate-700">Description</label>
-                        <textarea className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" rows="2" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })}></textarea>
-                    </div>
+            {showModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+                    <div style={{ background: 'white', padding: '30px', borderRadius: '8px', width: '500px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+                        <button onClick={() => setShowModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} style={{ color: '#666' }} /></button>
+                        <h3 style={{ marginTop: 0, color: '#30a5ff', fontWeight: 'bold' }}>{isEditing ? 'Edit Ingredient' : 'Add New Ingredient'}</h3>
+                        <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
+                            <div style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Ingredient Name</label>
+                                <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Calories / Unit</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.calories_per_unit} onChange={e => handleNumberChange('calories_per_unit', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Unit</label>
+                                    <select value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }}>
+                                        <option value="gram">gram</option>
+                                        <option value="ml">ml</option>
+                                        <option value="piece">piece</option>
+                                        <option value="cup">cup</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: '#333' }}>Protein (g)</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.protein} onChange={e => handleNumberChange('protein', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: '#333' }}>Carbs (g)</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.carbs} onChange={e => handleNumberChange('carbs', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: '#333' }}>Fats (g)</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.fats} onChange={e => handleNumberChange('fats', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
+                                </div>
+                            </div>
+                            <div style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Image URL</label>
+                                <input type="text" value={formData.ImageUrl} onChange={e => setFormData({ ...formData, ImageUrl: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} placeholder="https://..." />
+                            </div>
+                            <div style={{ marginBottom: '15px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Description</label>
+                                <textarea rows="2" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white', fontFamily: 'inherit' }}></textarea>
+                            </div>
 
-                    {/* MICRONUTRIENTS SECTION */}
-                    <div className="space-y-3 pt-2">
-                        <label className="block text-sm font-semibold text-slate-700">Micronutrients (optional)</label>
-                        {selectedMicros.map((m, idx) => (
-                            <div key={idx} className="flex gap-2">
-                                <select
-                                    className="block flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors appearance-none"
-                                    value={m.micronutrientId || ''}
-                                    onChange={e => {
-                                        const copy = [...selectedMicros];
-                                        copy[idx].micronutrientId = e.target.value;
-                                        setSelectedMicros(copy);
-                                    }}
+                            {/* MICRONUTRIENTS SECTION */}
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '6px', color: '#333', fontWeight: '500' }}>Micronutrients (optional)</label>
+                                {selectedMicros.map((m, idx) => (
+                                    <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                                        <select
+                                            value={m.micronutrientId || ''}
+                                            onChange={e => {
+                                                const copy = [...selectedMicros];
+                                                copy[idx].micronutrientId = e.target.value;
+                                                setSelectedMicros(copy);
+                                            }}
+                                            style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px', color: '#333', background: 'white' }}
+                                        >
+                                            <option value="">Select micronutrient</option>
+                                            {availableMicros
+                                                .filter(a => {
+                                                    const id = a._id || a.id;
+                                                    const already = selectedMicros.some((s, si) => s.micronutrientId === id && si !== idx);
+                                                    return !already || (m.micronutrientId && (m.micronutrientId === id));
+                                                })
+                                                .map(a => <option key={a._id || a.id} value={a._id || a.id} style={{ color: '#333' }}>{a.name}</option>)}
+                                        </select>
+                                        <input type="number" min="0" onKeyDown={blockInvalidChar} value={m.amount}
+                                            onChange={e => {
+                                                const copy = [...selectedMicros];
+                                                copy[idx].amount = e.target.value;
+                                                setSelectedMicros(copy);
+                                            }}
+                                            placeholder="amount" style={{ width: '110px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', color: '#333', background: 'white' }} />
+                                        <button type="button" onClick={() => { const copy = selectedMicros.filter((_, i) => i !== idx); setSelectedMicros(copy); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#f9243f' }}><Trash2 size={16} /></button>
+                                    </div>
+                                ))}
+                                <div>
+                                    <button type="button" onClick={() => setSelectedMicros([...selectedMicros, { micronutrientId: '', amount: '' }])} style={{ background: '#eef6ff', border: '1px dashed #30a5ff', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', color: '#30a5ff', fontWeight: '500' }}>
+                                        + Add micronutrient
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* 🎯 Đã cập nhật hàng nút điều hướng: Thêm nút Cancel đồng bộ đẹp mắt */}
+                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                <button 
+                                    type="button" 
+                                    onClick={() => setShowModal(false)} 
+                                    style={{ background: '#f1f1f1', color: '#333', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
                                 >
-                                    <option value="">Select micronutrient</option>
-                                    {availableMicros
-                                        .filter(a => {
-                                            const id = a._id || a.id;
-                                            const already = selectedMicros.some((s, si) => s.micronutrientId === id && si !== idx);
-                                            return !already || (m.micronutrientId && (m.micronutrientId === id));
-                                        })
-                                        .map(a => <option key={a._id || a.id} value={a._id || a.id}>{a.name}</option>)}
-                                </select>
-                                <input type="number" className="block w-28 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" min="0" onKeyDown={blockInvalidChar} value={m.amount}
-                                    onChange={e => {
-                                        const copy = [...selectedMicros];
-                                        copy[idx].amount = e.target.value;
-                                        setSelectedMicros(copy);
-                                    }}
-                                    placeholder="amount" />
-                                <button type="button" onClick={() => { const copy = selectedMicros.filter((_, i) => i !== idx); setSelectedMicros(copy); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0">
-                                    <Trash2 size={18} />
+                                    Cancel
+                                </button>
+                                <button type="submit" style={{ padding: '10px 20px', background: '#30a5ff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
+                                    {isEditing ? 'Update' : 'Add'}
                                 </button>
                             </div>
-                        ))}
-                        <div className="pt-2">
-                            <button type="button" onClick={() => setSelectedMicros([...selectedMicros, { micronutrientId: '', amount: '' }])} className="w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 rounded-xl text-sm font-semibold transition-colors">
-                                <Plus size={16} /> Add micronutrient
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* --- DETAIL MODAL --- */}
+            {showDetail && detailData && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
+                    <div style={{ background: 'white', padding: '24px', borderRadius: '8px', width: '520px', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
+                        <button onClick={() => { setShowDetail(false); setDetailData(null); }} style={{ position: 'absolute', top: '15px', right: '15px', border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} style={{ color: '#666' }} /></button>
+                        <h3 style={{ marginTop: 0, color: '#30a5ff', fontWeight: 'bold', fontSize: '18px' }}>{detailData.name}</h3>
+                        
+                        <div style={{ marginTop: '15px', color: '#333', lineHeight: '1.6' }}>
+                            <p><strong>Unit:</strong> {detailData.unit} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Calories/Unit:</strong> {detailData.calories_per_unit}</p>
+                            <p><strong>Protein:</strong> {detailData.protein}g &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Carbs:</strong> {detailData.carbs}g &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Fats:</strong> {detailData.fats}g</p>
+                            <p style={{ whiteSpace: 'pre-wrap', color: '#555', background: '#f9f9f9', padding: '10px', borderRadius: '4px', marginTop: '10px' }}>
+                                <strong>Description:</strong><br/>{detailData.description || 'No description available.'}
+                            </p>
+                        </div>
+
+                        <h4 style={{ marginTop: '20px', marginBottom: '8px', color: '#333', borderBottom: '2px solid #30a5ff', paddingBottom: '4px', display: 'inline-block', fontWeight: 'bold' }}>Micronutrients Linkage</h4>
+                        {detailData.micronutrients && detailData.micronutrients.length ? (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px' }}>
+                                <thead>
+                                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #eee', background: '#f8f9fa' }}>
+                                        <th style={{ padding: '8px', color: '#333' }}>Name</th>
+                                        <th style={{ padding: '8px', color: '#333' }}>Amount</th>
+                                        <th style={{ padding: '8px', color: '#333' }}>Unit</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {detailData.micronutrients.map((m, i) => (
+                                        <tr key={i} style={{ borderBottom: '1px solid #fafafa' }}>
+                                            <td style={{ padding: '8px', fontWeight: '500', color: '#333' }}>{m.micronutrientId?.name || m.name || m.micronutrientId}</td>
+                                            <td style={{ padding: '8px', color: '#30a5ff', fontWeight: 'bold' }}>{m.amount}</td>
+                                            <td style={{ padding: '8px', color: '#666' }}>{m.micronutrientId?.unit || m.unit || '-'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <p style={{ color: '#666', fontSize: '14px', fontStyle: 'italic', marginTop: '5px' }}>No micronutrients linked to this ingredient.</p>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => { setShowDetail(false); setDetailData(null); }} 
+                                style={{ background: '#f1f1f1', color: '#333', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                            >
+                                Close
                             </button>
                         </div>
                     </div>
-                </form>
-            </Modal>
-
-            {/* --- DETAIL MODAL --- */}
-            <Modal
-                isOpen={showDetail && !!detailData}
-                onClose={() => { setShowDetail(false); setDetailData(null); }}
-                title={detailData?.name}
-                footer={
-                    <button type="button" className="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors" onClick={() => { setShowDetail(false); setDetailData(null); }}>Close</button>
-                }
-            >
-                {detailData && (
-                    <>
-                        <div className="grid grid-cols-2 gap-4 mb-6">
-                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                <div className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Unit</div>
-                                <div className="text-lg font-bold text-slate-900">{detailData.unit}</div>
-                            </div>
-                            <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
-                                <div className="text-xs font-semibold text-emerald-600/80 mb-1 uppercase tracking-wider">Calories</div>
-                                <div className="text-lg font-bold text-emerald-700">{detailData.calories_per_unit}</div>
-                            </div>
-                        </div>
-                        
-                        <div className="bg-white border border-slate-200 p-4 rounded-xl mb-6 flex justify-between text-center divide-x divide-slate-100 shadow-sm">
-                            <div className="flex-1">
-                                <div className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Protein</div>
-                                <div className="text-lg font-bold text-slate-900">{detailData.protein}g</div>
-                            </div>
-                            <div className="flex-1">
-                                <div className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Carbs</div>
-                                <div className="text-lg font-bold text-slate-900">{detailData.carbs}g</div>
-                            </div>
-                            <div className="flex-1">
-                                <div className="text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wider">Fats</div>
-                                <div className="text-lg font-bold text-slate-900">{detailData.fat || detailData.fats}g</div>
-                            </div>
-                        </div>
-
-                        {detailData.description && (
-                            <div className="mb-6 space-y-2">
-                                <label className="block text-sm font-semibold text-slate-700">Description</label>
-                                <div className="bg-slate-50 text-slate-700 p-4 rounded-xl text-sm leading-relaxed border border-slate-100">
-                                    {detailData.description}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="pt-2 border-t border-slate-100">
-                            <h4 className="font-bold text-slate-900 mb-4">Micronutrients</h4>
-                            {detailData.micronutrients && detailData.micronutrients.length ? (
-                                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-semibold">
-                                                <th className="px-4 py-3">Name</th>
-                                                <th className="px-4 py-3">Amount</th>
-                                                <th className="px-4 py-3">Unit</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 bg-white">
-                                            {detailData.micronutrients.map((m, i) => (
-                                                <tr key={i} className="hover:bg-slate-50/50">
-                                                    <td className="px-4 py-3 font-medium text-slate-900">{m.micronutrientId?.name || m.name || m.micronutrientId}</td>
-                                                    <td className="px-4 py-3 font-bold text-emerald-600">{m.amount}</td>
-                                                    <td className="px-4 py-3 text-slate-600 text-sm">{m.micronutrientId?.unit || m.unit || '-'}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
-                                <div className="bg-slate-50 text-slate-500 text-center py-8 rounded-xl border border-slate-100 border-dashed text-sm font-medium">
-                                    No micronutrients linked to this ingredient.
-                                </div>
-                            )}
-                        </div>
-                    </>
-                )}
-            </Modal>
+                </div>
+            )}
         </div>
     );
 };

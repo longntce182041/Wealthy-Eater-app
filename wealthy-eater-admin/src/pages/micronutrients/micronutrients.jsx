@@ -1,16 +1,22 @@
-import { useCallback, useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Filter } from 'lucide-react';
+import React, { useCallback, useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, Search, Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import apiClient from '../../services/api'; 
 import { toast } from 'react-toastify';
-import Modal from '../../components/common/Modal';
-import Pagination from '../../components/common/Pagination';
 
 // ==========================================
-// COMPONENT SUB-FORM
+// COMPONENT SUB-FORM (ĐÃ SỬA LỖI MÀU CHỮ Ô UNIT)
 // ==========================================
 const MicronutrientForm = ({ initialData, unitOptions = [], onSubmit, onCancel, isEditing }) => {
-    const [formData, setFormData] = useState(initialData || { name: '', unit: 'mg', description: '' });
+    const [formData, setFormData] = useState({ name: '', unit: 'mg', description: '' });
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (initialData) {
+            setFormData(initialData);
+        } else {
+            setFormData({ name: '', unit: 'mg', description: '' });
+        }
+    }, [initialData]);
 
     const normalizedUnitOptions = Array.from(
         new Set([...unitOptions, formData.unit].filter(Boolean))
@@ -34,75 +40,78 @@ const MicronutrientForm = ({ initialData, unitOptions = [], onSubmit, onCancel, 
     };
 
     return (
-        <Modal
-            isOpen={true}
-            onClose={onCancel}
-            title={isEditing ? 'Edit Micronutrient' : 'Add New Micronutrient'}
-            footer={
-                <>
-                    <button 
-                        type="button" 
-                        onClick={onCancel} 
-                        className="px-5 py-2.5 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
-                        disabled={loading}
-                    >
-                        Cancel
-                    </button>
-                    <button 
-                        type="submit"
-                        form="micronutrientForm"
-                        className="px-5 py-2.5 text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 rounded-xl transition-colors shadow-sm shadow-emerald-500/20"
-                        disabled={loading}
-                    >
-                        {loading ? 'Saving...' : (isEditing ? 'Update' : 'Add')}
-                    </button>
-                </>
-            }
-        >
-            <form id="micronutrientForm" onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-                <div className="space-y-4">
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-semibold text-slate-700">Micronutrient Name *</label>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+            <div style={{ background: 'white', padding: '30px', borderRadius: '8px', width: '500px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+                <button onClick={onCancel} style={{ position: 'absolute', top: '15px', right: '15px', border: 'none', background: 'none', cursor: 'pointer' }} disabled={loading}>
+                    <X size={20} style={{ color: '#666' }} />
+                </button>
+                
+                <h3 style={{ marginTop: 0, color: '#30a5ff', fontSize: '18px', fontWeight: 'bold' }}>
+                    {isEditing ? 'Edit Micronutrient' : 'Add New Micronutrient'}
+                </h3>
+                
+                <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
+                    <div style={{ marginBottom: '15px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#333', fontWeight: '500' }}>Micronutrient Name *</label>
                         <input 
                             type="text" 
-                            className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
                             value={formData.name} 
                             onChange={e => setFormData({ ...formData, name: e.target.value })} 
+                            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} 
                             placeholder="e.g., Vitamin C, Iron"
                             required 
                             disabled={loading}
                         />
                     </div>
                     
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-semibold text-slate-700">Unit *</label>
+                    <div style={{ marginBottom: '15px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#333', fontWeight: '500' }}>Unit *</label>
+                        {/* 🎯 Fix ép màu chữ sang đen #333 để không bị trắng tươi */}
                         <select 
-                            className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors appearance-none"
                             value={formData.unit} 
                             onChange={e => setFormData({ ...formData, unit: e.target.value })} 
+                            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', background: 'white', color: '#333' }}
                             disabled={loading}
                         >
-                            <option value="">Select unit</option>
+                            <option value="" style={{ color: '#333' }}>Select unit</option>
                             {normalizedUnitOptions.map((unit) => (
-                                <option key={unit} value={unit}>{unit}</option>
+                                <option key={unit} value={unit} style={{ color: '#333' }}>{unit}</option>
                             ))}
                         </select>
                     </div>
 
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-semibold text-slate-700">Description</label>
+                    <div style={{ marginBottom: '25px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#333', fontWeight: '500' }}>Description</label>
                         <textarea 
                             rows="3" 
-                            className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
                             value={formData.description} 
                             onChange={e => setFormData({ ...formData, description: e.target.value })} 
+                            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', fontFamily: 'inherit', color: '#333', background: 'white' }}
                             placeholder="Enter description (optional)"
                             disabled={loading}
                         ></textarea>
                     </div>
-                </div>
-            </form>
-        </Modal>
+
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                        <button 
+                            type="button" 
+                            onClick={onCancel} 
+                            style={{ background: '#f1f1f1', color: '#333', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                            disabled={loading}
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            style={{ background: '#30a5ff', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }} 
+                            disabled={loading}
+                        >
+                            {loading ? 'Saving...' : (isEditing ? 'Update' : 'Add')}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     );
 };
 
@@ -158,7 +167,9 @@ const MicronutrientList = () => {
         return () => clearTimeout(timer);
     }, [fetchMicronutrients]);
 
-
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [filters]);
 
     const handlePrevPage = () => { if (currentPage > 1) setCurrentPage(prev => prev - 1); };
     const handleNextPage = () => { if (currentPage < totalPages) setCurrentPage(prev => prev + 1); };
@@ -213,92 +224,67 @@ const MicronutrientList = () => {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col gap-1">
-                <h2 className="text-2xl font-bold text-slate-900">Micronutrients Management</h2>
-            </div>
+        <div>
+            <h2 style={{ color: '#30a5ff', marginBottom: '20px' }}>Micronutrients Management</h2>
 
             {/* --- TOOLBAR --- */}
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">
-                <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto flex-1">
-                    <div className="relative flex-1 max-w-md">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                            <Search size={18} />
-                        </div>
-                        <input
-                            type="text" 
-                            className="block w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
-                            placeholder="Search micronutrients..."
-                            value={filters.keyword} 
-                            onChange={(e) => {
-                                setFilters({ ...filters, keyword: e.target.value });
-                                setCurrentPage(1);
-                            }}
-                        />
-                    </div>
-                    
-                    <div className="relative w-full sm:w-48">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                            <Filter size={16} />
-                        </div>
-                        <select
-                            className="block w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors appearance-none"
-                            value={filters.unit}
-                            onChange={(e) => {
-                                setFilters({ ...filters, unit: e.target.value });
-                                setCurrentPage(1);
-                            }}
-                        >
-                            <option value="">All Units</option>
-                            {availableUnits.map(u => (
-                                <option key={u} value={u}>{u}</option>
-                            ))}
-                        </select>
-                    </div>
+            <div style={{ background: 'white', padding: '15px', borderRadius: '5px', marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                    <Search size={18} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
+                    <input
+                        type="text" 
+                        placeholder="Search micronutrients..."
+                        value={filters.keyword} 
+                        onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
+                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', boxSizing: 'border-box', color: '#333', background: 'white' }}
+                    />
+                </div>
+                
+                <div style={{ position: 'relative', width: '170px' }}>
+                    <Filter size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
+                    <select
+                        value={filters.unit} 
+                        onChange={(e) => setFilters({ ...filters, unit: e.target.value })}
+                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer', background: 'white', color: '#333' }}
+                    >
+                        <option value="">All Units</option>
+                        {availableUnits.map(u => (
+                            <option key={u} value={u}>{u}</option>
+                        ))}
+                    </select>
                 </div>
 
-                <div className="w-full md:w-auto shrink-0">
-                    <button onClick={handleOpenCreate} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 text-white hover:bg-emerald-600 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-emerald-500/20">
-                        <Plus size={18} /> Add Micronutrient
-                    </button>
-                </div>
+                <button onClick={handleOpenCreate} style={{ background: '#30a5ff', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', display: 'flex', gap: '5px', fontWeight: 'bold', alignItems: 'center' }}>
+                    <Plus size={18} /> Add Micronutrient
+                </button>
             </div>
 
             {/* --- LIST CARDS --- */}
-            {loading ? (
-                <div className="py-12 text-center text-slate-500 flex flex-col items-center">
-                    <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <p className="font-medium text-sm">Loading data...</p>
-                </div>
-            ) : (
+            {loading ? <p style={{ textAlign: 'center', color: '#666' }}>Loading data...</p> : (
                 <>
                     {micronutrients.length === 0 ? (
-                        <div className="py-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 border-dashed flex flex-col items-center">
-                            <p className="font-medium text-sm">No micronutrients found.</p>
-                        </div>
+                        <p style={{ textAlign: 'center', color: '#999', margin: '40px 0' }}>No micronutrients found.</p>
                     ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
                             {micronutrients.map((item) => (
-                                <div key={item._id} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow group flex flex-col h-full">
-                                    <div className="flex-1 flex flex-col cursor-pointer" onClick={() => handleOpenEdit(item)}>
-                                        <h3 className="text-lg font-bold text-slate-900 group-hover:text-emerald-600 transition-colors line-clamp-1 mb-1">
+                                <div key={item._id} style={{ background: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 2px 5px rgba(0,0,0,0.1)', border: '1px solid #eee', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                    <div style={{ padding: '15px' }}>
+                                        <h3 onClick={() => handleOpenEdit(item)} style={{ margin: '0 0 5px 0', color: '#333', cursor: 'pointer' }} title="Click to edit">
                                             {item.name}
                                         </h3>
-                                        <div className="text-sm text-slate-500 mb-3">
-                                            Unit: <strong className="text-emerald-600">{item.unit}</strong>
-                                        </div>
-                                        <p className="text-sm text-slate-600 line-clamp-3 leading-relaxed mt-auto">
-                                            {item.description || <span className="italic text-slate-400">No description available.</span>}
+                                        <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '14px' }}>
+                                            Unit: <strong style={{ color: '#30a5ff' }}>{item.unit}</strong>
+                                        </p>
+                                        <p style={{ margin: '0', color: '#888', fontSize: '13px', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                            {item.description || 'No description available.'}
                                         </p>
                                     </div>
                                     
-                                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-end gap-1">
-                                        <button onClick={() => handleOpenEdit(item)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Edit">
-                                            <Edit2 size={16} />
-                                        </button>
-                                        <button onClick={() => handleDelete(item._id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                                            <Trash2 size={16} />
-                                        </button>
+                                    <div style={{ padding: '0 15px 15px 15px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', borderTop: '1px solid #f5f5f5', paddingTop: '12px' }}>
+                                            <button onClick={() => handleOpenEdit(item)} style={{ color: '#30a5ff', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Edit"><Edit2 size={20} /></button>
+                                            <button onClick={() => handleDelete(item._id)} style={{ color: '#f9243f', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Delete"><Trash2 size={20} /></button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -307,12 +293,21 @@ const MicronutrientList = () => {
 
                     {/* --- PAGINATION --- */}
                     {micronutrients.length > 0 && (
-                        <Pagination 
-                            currentPage={currentPage} 
-                            totalPages={totalPages} 
-                            onPrevPage={handlePrevPage} 
-                            onNextPage={handleNextPage} 
-                        />
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginTop: '30px', paddingBottom: '20px' }}>
+                            <button
+                                onClick={handlePrevPage} disabled={currentPage === 1}
+                                style={{ background: currentPage === 1 ? '#eee' : 'white', border: '1px solid #ddd', padding: '8px 15px', borderRadius: '5px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '5px', color: currentPage === 1 ? '#999' : '#333' }}
+                            >
+                                <ChevronLeft size={18} /> Previous
+                            </button>
+                            <span style={{ fontWeight: 'bold', color: '#5f6468' }}>Page {currentPage} of {totalPages}</span>
+                            <button
+                                onClick={handleNextPage} disabled={currentPage === totalPages}
+                                style={{ background: currentPage === totalPages ? '#eee' : 'white', border: '1px solid #ddd', padding: '8px 15px', borderRadius: '5px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '5px', color: currentPage === totalPages ? '#999' : '#333' }}
+                            >
+                                Next <ChevronRight size={18} />
+                            </button>
+                        </div>
                     )}
                 </>
             )}

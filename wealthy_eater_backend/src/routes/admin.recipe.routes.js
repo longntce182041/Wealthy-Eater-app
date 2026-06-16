@@ -9,7 +9,6 @@ const router = express.Router();
 const AdminRecipeController = require('../controllers/admin.recipe.controller');
 const { authenticateToken } = require('../middlewares/auth');
 const validateObjectId = require('../middlewares/validateObjectId');
-const { recipeUpload } = require('../config/upload.config');
 
 /**
  * Middleware kiểm tra xem người dùng có phải là admin không
@@ -44,7 +43,7 @@ router.get('/', AdminRecipeController.getRecipesList);
  * UC-73: POST /api/admin/recipes
  * Tạo công thức nấu ăn mới và tự động tính toán tổng dinh dưỡng
  */
-router.post('/', recipeUpload.single('image'), AdminRecipeController.addRecipe);
+router.post('/', AdminRecipeController.addRecipe);
 
 /**
  * GET /api/admin/recipes/stats

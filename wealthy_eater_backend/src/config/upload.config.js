@@ -63,7 +63,6 @@ const createCloudinaryStorage = (folderName) => {
 
 const chatStorage = createCloudinaryStorage('chat');
 const avatarStorage = createCloudinaryStorage('avatars');
-const recipeStorage = createCloudinaryStorage('recipes');
 
 // ── Export Configured Multer Instances ────────────────────────────────────────
 
@@ -79,18 +78,7 @@ const avatarUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
 });
 
-const recipeUpload = multer({
-  storage: recipeStorage,
-  fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
-});
 
-const ingredientStorage = createCloudinaryStorage('ingredients');
-const ingredientUpload = multer({
-  storage: ingredientStorage,
-  fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
-});
 
 /**
  * Trích xuất public_id từ URL Cloudinary để dọn dẹp file cũ (tránh leak storage)
@@ -137,7 +125,5 @@ module.exports = {
   cloudinary, 
   chatUpload,
   avatarUpload,
-  recipeUpload,
-  ingredientUpload,
   extractCloudinaryPublicId
 };

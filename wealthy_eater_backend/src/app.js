@@ -115,6 +115,9 @@ app.get("/", (req, res) => {
   res.json({ success: true, data: { message: "Wealthy Eater API is running" }, error: null });
 });
 
+// ── Serve Uploaded Chat Images as Static Files ────────────────────────────────
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // ── API Routes ────────────────────────────────────────────────────────────────
 app.use(routes);

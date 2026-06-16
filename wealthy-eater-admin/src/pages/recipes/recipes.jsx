@@ -1,18 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
-import { Search, Filter, RefreshCw, Eye, Trash2 } from 'lucide-react';
+import '../dashboard.css';
 
 export default function RecipesPage() {
   const navigate = useNavigate();
-  const [user] = useState(() => {
-    try {
-      const rawUser = localStorage.getItem('admin_user');
-      return rawUser ? JSON.parse(rawUser) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -22,13 +15,31 @@ export default function RecipesPage() {
   const [levelFilter, setLevelFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  const handleForceLogout = useCallback(() => {
+  useEffect(() => {
+    // Security check
+    const rawUser = localStorage.getItem('admin_user');
+    const token = localStorage.getItem('admin_session_jwt_token');
+
+    if (!rawUser || !token) {
+      handleForceLogout();
+      return;
+    }
+
+    try {
+      setUser(JSON.parse(rawUser));
+      fetchRecipes(); 
+    } catch (e) {
+      handleForceLogout();
+    }
+  }, [navigate]);
+
+  function handleForceLogout() {
     localStorage.removeItem('admin_user');
     localStorage.removeItem('admin_session_jwt_token');
     navigate('/login');
-  }, [navigate]);
+  }
 
-  const fetchRecipes = useCallback(async () => {
+  async function fetchRecipes() {
     setLoading(true);
     setError('');
     try {
@@ -47,21 +58,7 @@ export default function RecipesPage() {
     } finally {
       setLoading(false);
     }
-  }, [handleForceLogout]);
-
-  useEffect(() => {
-    // Security check
-    const token = localStorage.getItem('admin_session_jwt_token');
-    if (!user || !token) {
-      handleForceLogout();
-      return;
-    }
-    // Call it after the first render tick to avoid cascading render warnings
-    const timer = setTimeout(() => {
-      fetchRecipes(); 
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [user, handleForceLogout, fetchRecipes]);
+  }
 
   async function handleDelete(recipeId) {
     if (!window.confirm('Are you sure you want to archive/delete this recipe?')) return;
@@ -92,193 +89,173 @@ export default function RecipesPage() {
   if (!user) return null;
 
   return (
-    <div className="space-y-6">
+    <>
       {error && (
-        <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl border border-red-200 shadow-sm text-sm font-medium">
+        <div className="error-banner" style={{ marginBottom: '30px' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
           <span>{error}</span>
         </div>
       )}
 
-      <div className="flex flex-col gap-1">
-        <h2 className="text-2xl font-bold text-slate-900">Recipes Management</h2>
-        <p className="text-slate-500 text-sm">
-          Manage and maintain all culinary recipe database entries across the platform
-        </p>
-      </div>
-
       {/* FILTER & SEARCH BAR */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto flex-1">
-          <div className="relative flex-1 max-w-md">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search size={18} />
-            </div>
-            <input 
-              type="text" 
-              className="block w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
-              placeholder="Search recipe name, description..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          
-          <div className="relative w-full sm:w-48">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Filter size={16} />
-            </div>
-            <select 
-              className="block w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors appearance-none"
-              value={levelFilter} 
-              onChange={(e) => setLevelFilter(e.target.value)}
-            >
-              <option value="">All Difficulties</option>
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-          </div>
-
-          <div className="relative w-full sm:w-48">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Filter size={16} />
-            </div>
-            <select 
-              className="block w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors appearance-none"
-              value={statusFilter} 
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">All Statuses</option>
-              <option value="published">Published</option>
-              <option value="draft">Draft</option>
-              <option value="archived">Archived</option>
-            </select>
-          </div>
+      <section style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: '260px' }}>
+          <input 
+            type="text" 
+            placeholder="Search recipe name, description..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '100%', padding: '12px 16px', borderRadius: '10px', 
+              background: '#1e293b', border: '1px solid #334155', color: '#fff',
+              boxSizing: 'border-box'
+            }}
+          />
         </div>
         
-        <div className="w-full md:w-auto shrink-0">
-          <button 
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 text-white hover:bg-emerald-600 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-emerald-500/20" 
-            onClick={fetchRecipes}
-          >
-            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-            <span>Refresh Data</span>
-          </button>
-        </div>
-      </div>
+        <select 
+          value={levelFilter} 
+          onChange={(e) => setLevelFilter(e.target.value)}
+          style={{ padding: '12px 16px', borderRadius: '10px', background: '#1e293b', border: '1px solid #334155', color: '#fff', cursor: 'pointer' }}
+        >
+          <option value="">All Difficulties</option>
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+
+        <select 
+          value={statusFilter} 
+          onChange={(e) => setStatusFilter(e.target.value)}
+          style={{ padding: '12px 16px', borderRadius: '10px', background: '#1e293b', border: '1px solid #334155', color: '#fff', cursor: 'pointer' }}
+        >
+          <option value="">All Statuses</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+          <option value="archived">Archived</option>
+        </select>
+      </section>
 
       {/* DATATABLE SECTION */}
-      <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
+      <section className="table-card">
+        <div className="table-header">
+          <div>
+            <h3>Recipes Database Management</h3>
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0 0' }}>Manage and maintain all culinary recipe database entries across the platform</p>
+          </div>
+          <div className="table-actions">
+            <button className="btn-primary" onClick={fetchRecipes}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+              </svg>
+              <span>Refresh Data</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="data-table-wrapper">
           {loading ? (
-            <div className="py-12 text-center text-slate-500 flex flex-col items-center">
-                <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                <p className="font-medium text-sm">Loading recipes database...</p>
-            </div>
+            <div style={{ padding: '40px', textAlign: 'center', fontWeight: 600, color: '#94a3b8' }}>Loading recipes database...</div>
           ) : filteredRecipes.length === 0 ? (
-            <div className="py-16 text-center text-slate-400 flex flex-col items-center">
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
-                <Search size={24} className="opacity-50" />
-              </div>
-              <p className="font-medium text-sm">No recipes available matching the filters.</p>
+            <div className="empty-state">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+              </svg>
+              <p>No recipes available matching the filters.</p>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[800px]">
+            <table className="data-table">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-semibold">
-                  <th className="px-6 py-4">Recipe Details</th>
-                  <th className="px-6 py-4">Total Calories</th>
-                  <th className="px-6 py-4">Level</th>
-                  <th className="px-6 py-4">Time</th>
-                  <th className="px-6 py-4">Rating</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                <tr>
+                  <th>Recipe Details</th>
+                  <th>Total Calories</th>
+                  <th>Level</th>
+                  <th>Time</th>
+                  <th>Rating</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
+              <tbody>
                 {filteredRecipes.map((recipe) => (
-                  <tr key={recipe.id || recipe._id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-4">
-                        {recipe.image_url || recipe.imageUrl ? (
-                          <img 
-                            className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-sm shrink-0" 
-                            src={recipe.image_url || recipe.imageUrl} 
-                            alt={recipe.name} 
-                          />
+                  <tr key={recipe.id || recipe._id}>
+                    <td>
+                      <div className="recipe-cell">
+                        {recipe.imageUrl ? (
+                          <img className="recipe-img" src={recipe.imageUrl} alt={recipe.name} />
                         ) : (
-                          <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center text-xl shrink-0 border border-slate-200 shadow-sm">
-                            🍳
-                          </div>
+                          <div className="recipe-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#334155', color: '#9ca3af' }}>🍳</div>
                         )}
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-slate-900 truncate mb-0.5">{recipe.name}</div>
-                          <div className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{recipe.description || 'No description provided'}</div>
+                        <div style={{ textAlign: 'left' }}>
+                          <div className="recipe-title">{recipe.name}</div>
+                          <div className="recipe-desc">{recipe.description || 'No description provided'}</div>
                         </div>
                       </div>
                     </td>
                     
-                    <td className="px-6 py-4">
-                      <div>
-                        <div className="font-bold text-emerald-600 text-sm mb-1">
+                    <td>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: '800', color: '#38bdf8', fontSize: '15px' }}>
                           {recipe.nutrition?.calories || 0} kcal
                         </div>
-                        <div className="text-[11px] font-medium text-slate-500 flex gap-2">
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded">C: {recipe.nutrition?.carbs || 0}g</span>
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded">P: {recipe.nutrition?.protein || 0}g</span>
-                          <span className="bg-slate-100 px-1.5 py-0.5 rounded">F: {recipe.nutrition?.fat || 0}g</span>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px', display: 'flex', gap: '6px' }}>
+                          <span>C: {recipe.nutrition?.carbs || 0}g</span>
+                          <span>P: {recipe.nutrition?.protein || 0}g</span>
+                          <span>F: {recipe.nutrition?.fat || 0}g</span>
                         </div>
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold
-                        ${recipe.levelCooking === 'easy' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                          recipe.levelCooking === 'medium' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                          recipe.levelCooking === 'hard' ? 'bg-red-50 text-red-700 border border-red-200' :
-                          'bg-slate-50 text-slate-700 border border-slate-200'}
-                      `}>
+                    <td>
+                      <span className={`badge ${recipe.levelCooking}`}>
                         {recipe.levelCooking ? recipe.levelCooking.charAt(0).toUpperCase() + recipe.levelCooking.slice(1) : '—'}
                       </span>
                     </td>
                     
-                    <td className="px-6 py-4">
-                      <span className="font-semibold text-slate-700 text-sm">{recipe.cookingTime} mins</span>
+                    <td>
+                      <span style={{ fontWeight: 500 }}>{recipe.cookingTime} mins</span>
                     </td>
                     
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1 font-bold text-amber-500 text-sm">
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: '#f59e0b' }}>
                         <span>{recipe.reviewStats?.averageRating || '—'}</span>
                         {recipe.reviewStats?.averageRating > 0 && <span>★</span>}
                       </div>
                     </td>
                     
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold
-                        ${recipe.status === 'published' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                          recipe.status === 'draft' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                          recipe.status === 'archived' ? 'bg-slate-100 text-slate-600 border border-slate-200' :
-                          'bg-slate-50 text-slate-700 border border-slate-200'}
-                      `}>
+                    <td>
+                      <span className={`badge ${recipe.status}`}>
                         {recipe.status ? recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1) : '—'}
                       </span>
                     </td>
                     
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td>
+                      <div className="actions-cell">
                         <button
-                          className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors"
+                          className="btn-icon-action"
                           title="View Details"
-                          onClick={() => navigate(`/admin/recipes/${recipe.id || recipe._id}`)}
+                          onClick={() => navigate(`/recipes/${recipe.id || recipe._id}`)}
                         >
-                          <Eye size={18} />
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="1"></circle>
+                            <circle cx="19" cy="12" r="1"></circle>
+                            <circle cx="5" cy="12" r="1"></circle>
+                          </svg>
                         </button>
                         {recipe.status !== 'archived' && (
                           <button
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                            className="btn-icon-action delete"
                             title="Archive Recipe"
                             onClick={() => handleDelete(recipe.id || recipe._id)}
                           >
-                            <Trash2 size={18} />
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
                           </button>
                         )}
                       </div>
@@ -290,6 +267,6 @@ export default function RecipesPage() {
           )}
         </div>
       </section>
-    </div>
+    </>
   );
 }

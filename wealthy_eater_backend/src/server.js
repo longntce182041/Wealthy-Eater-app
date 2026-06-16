@@ -5,7 +5,7 @@
  *  1. Connect to MongoDB
  *  2. Wrap Express app in an http.Server (required for Socket.IO)
  *  3. Initialise Socket.IO and attach it to the http.Server
- *  4. Start listening
+ *  4. Serve the uploads/ directory as static files for chat images
  *  5. Start listening
  */
 
@@ -34,10 +34,11 @@ async function bootstrap() {
   //    Usage in controllers: const io = req.app.get('io');
   app.set('io', io);
 
-  // 4. Start listening
+  // 5. Start listening
   httpServer.listen(PORT, () => {
     console.log(`✔ Server running on http://localhost:${PORT} [${process.env.NODE_ENV || 'development'}]`);
     console.log(`✔ Socket.IO attached on same port`);
+    console.log(`✔ Static uploads served at /uploads`);
   });
 
   // ── Graceful Shutdown ────────────────────────────────────────────────────────
