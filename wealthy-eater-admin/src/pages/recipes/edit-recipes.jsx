@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import apiClient from '../../services/api';
-import '../dashboard.css';
 import { toast } from 'react-hot-toast';
+import { AdminButton } from '../../components/ui/AdminButton';
 
 // 🌟 THAY ĐỔI CHÍNH: Nhận id, onClose (đóng popup), và onRefresh (tải lại danh sách) từ file cha recipes.jsx
 export default function EditRecipePage({ id, onClose, onRefresh }) {
@@ -175,83 +175,83 @@ export default function EditRecipePage({ id, onClose, onRefresh }) {
 
   // GIAO DIỆN CHUYỂN THÀNH MODAL OVERLAY CHỨ KHÔNG PHẢI MỘT TRANG ĐỘC LẬP
   return (
-    <div style={overlayStyle}>
-      <div style={modalContentStyle}>
+    <div className="fixed inset-0 bg-black/75 flex justify-center items-center z-[1000] p-5 box-border">
+      <div className="bg-white p-7 rounded-[14px] w-full max-w-[950px] max-h-[92vh] overflow-y-auto border border-slate-200 text-slate-900 shadow-xl relative">
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+        <div className="flex justify-between items-center mb-8">
           <div>
-            <h2 style={{ margin: 0, fontSize: '24px', color: '#fff' }}>Edit Recipe</h2>
-            <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#94a3b8' }}>Modify implementation steps, ingredients or general fields</p>
+            <h2 className="m-0 text-2xl text-slate-900 font-bold">Edit Recipe</h2>
+            <p className="mt-1 text-sm text-slate-500">Modify implementation steps, ingredients or general fields</p>
           </div>
           {/* Thay vì dùng navigate quay lại trang cũ, đổi thành hàm onClose đóng popup */}
-          <button type="button" className="btn-primary" style={{ background: '#334155', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer' }} onClick={onClose}>
+        <button type="button" className="btn-secondary" onClick={onClose}>
             ✕ Cancel
           </button>
         </div>
 
         {error && (
-          <div style={{ marginBottom: '24px', padding: '12px', background: '#ef444422', border: '1px solid #ef4444', color: '#f87171', borderRadius: '8px' }}>
+          <div className="mb-6 p-3 bg-red-50 border border-red-500 text-red-500 rounded-lg">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmitForm} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <form onSubmit={handleSubmitForm} className="flex flex-col gap-6">
           
           {/* THÔNG TIN CƠ BẢN */}
-          <div className="table-card" style={{ padding: '24px', background: '#1e293b', borderRadius: '12px' }}>
-            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', color: '#38bdf8', borderBottom: '1px solid #334155', paddingBottom: '10px' }}>General information</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-200">
+            <h3 className="m-0 mb-5 pb-2.5 text-lg text-primary border-b border-slate-200 font-semibold">General information</h3>
+            <div className="flex flex-col gap-4">
               <div>
-                <label style={labelStyle}>Name of dish recipe *</label>
-                <input type="text" name="name" required value={formData.name} onChange={handleInputChange} style={inputStyle} />
+                <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Name of dish recipe *</label>
+                <input type="text" name="name" required value={formData.name} onChange={handleInputChange} className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
               </div>
               <div>
-                <label style={labelStyle}>Description</label>
-                <textarea name="description" rows="2" value={formData.description} onChange={handleInputChange} style={{ ...inputStyle, resize: 'vertical' }} />
+                <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Description</label>
+                <textarea name="description" rows="2" value={formData.description} onChange={handleInputChange} className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-y" />
               </div>
-              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label style={labelStyle}>Difficulty level</label>
-                  <select name="levelCooking" value={formData.levelCooking} onChange={handleInputChange} style={inputStyle}>
+              <div className="flex gap-4 flex-wrap">
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Difficulty level</label>
+                  <select name="levelCooking" value={formData.levelCooking} onChange={handleInputChange} className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
                   </select>
                 </div>
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label style={labelStyle}>Cooking time (minutes) *</label>
-                  <input type="number" name="cookingTime" required min="1" value={formData.cookingTime} onChange={handleInputChange} style={inputStyle} />
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Cooking time (minutes) *</label>
+                  <input type="number" name="cookingTime" required min="1" value={formData.cookingTime} onChange={handleInputChange} className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
                 </div>
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label style={labelStyle}>Serving size (per person) *</label>
-                  <input type="number" name="baseServings" required min="1" value={formData.baseServings} onChange={handleInputChange} style={inputStyle} />
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Serving size (per person) *</label>
+                  <input type="number" name="baseServings" required min="1" value={formData.baseServings} onChange={handleInputChange} className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
                 </div>
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label style={labelStyle}>Status</label>
-                  <select name="status" value={formData.status} onChange={handleInputChange} style={inputStyle}>
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Status</label>
+                  <select name="status" value={formData.status} onChange={handleInputChange} className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                     <option value="draft">Draft</option>
                     <option value="published">Published</option>
                   </select>
                 </div>
               </div>
               <div>
-                <label style={labelStyle}>Image URL</label>
-                <input type="url" name="imageUrl" value={formData.imageUrl} onChange={handleInputChange} style={inputStyle} />
+                <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Image URL</label>
+                <input type="url" name="imageUrl" value={formData.imageUrl} onChange={handleInputChange} className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
               </div>
             </div>
           </div>
 
           {/* THÀNH PHẦN NGUYÊN LIỆU */}
-          <div className="table-card" style={{ padding: '24px', background: '#1e293b', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #334155', paddingBottom: '10px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', color: '#38bdf8' }}>Ingredients</h3>
-              <button type="button" onClick={addNewIngredientField} style={addBtnStyle}>+ Add Ingredient</button>
+          <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="flex justify-between items-center mb-5 pb-2.5 border-b border-slate-200">
+              <h3 className="m-0 text-lg text-primary font-semibold">Ingredients</h3>
+              <button type="button" onClick={addNewIngredientField} className="px-3.5 py-1.5 bg-slate-100 text-primary border border-slate-200 rounded-md cursor-pointer font-semibold text-[13px] hover:bg-slate-200 transition-colors">+ Add Ingredient</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div className="flex flex-col gap-3">
               {selectedIngredients.map((item, index) => (
-                <div key={index} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                  <div style={{ flex: 2 }}>
-                    <select value={item.ingredient_id} onChange={(e) => handleIngredientChange(index, 'ingredient_id', e.target.value)} style={inputStyle}>
+                <div key={index} className="flex gap-3 items-center">
+                  <div className="flex-[2]">
+                    <select value={item.ingredient_id} onChange={(e) => handleIngredientChange(index, 'ingredient_id', e.target.value)} className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
                       <option value="">-- Select ingredients --</option>
                       {systemIngredients.map(ing => (
                         <option key={ing._id || ing.id} value={ing._id || ing.id}>
@@ -260,12 +260,12 @@ export default function EditRecipePage({ id, onClose, onRefresh }) {
                       ))}
                     </select>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <input type="number" placeholder="Quantity" min="0.1" step="any" value={item.base_quantity} onChange={(e) => handleIngredientChange(index, 'base_quantity', e.target.value)} style={inputStyle} />
+                  <div className="flex-1">
+                    <input type="number" placeholder="Quantity" min="0.1" step="any" value={item.base_quantity} onChange={(e) => handleIngredientChange(index, 'base_quantity', e.target.value)} className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
                   </div>
-                  <div style={{ width: '60px', color: '#94a3b8', fontSize: '14px', fontWeight: 'bold' }}>{item.unit}</div>
+                  <div className="w-[60px] text-slate-400 text-sm font-bold">{item.unit}</div>
                   {selectedIngredients.length > 1 && (
-                    <button type="button" onClick={() => removeIngredientField(index)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '10px 12px', borderRadius: '8px', cursor: 'pointer' }}>🗑️</button>
+                    <button type="button" onClick={() => removeIngredientField(index)} className="bg-red-500 text-white border-none py-2 px-3 rounded-lg cursor-pointer hover:bg-red-600 transition-colors">🗑️</button>
                   )}
                 </div>
               ))}
@@ -273,45 +273,38 @@ export default function EditRecipePage({ id, onClose, onRefresh }) {
           </div>
 
           {/* CÁC BƯỚC THỰC HIỆN */}
-          <div className="table-card" style={{ padding: '24px', background: '#1e293b', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #334155', paddingBottom: '10px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', color: '#38bdf8' }}>Implementation steps</h3>
-              <button type="button" onClick={addNewStepField} style={addBtnStyle}>+ Add next step</button>
+          <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="flex justify-between items-center mb-5 pb-2.5 border-b border-slate-200">
+              <h3 className="m-0 text-lg text-primary font-semibold">Implementation steps</h3>
+              <button type="button" onClick={addNewStepField} className="px-3.5 py-1.5 bg-slate-100 text-primary border border-slate-200 rounded-md cursor-pointer font-semibold text-[13px] hover:bg-slate-200 transition-colors">+ Add next step</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div className="flex flex-col gap-3.5">
               {cookingSteps.map((stepText, index) => (
-                <div key={index} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                  <div style={{ background: '#334155', color: '#38bdf8', minWidth: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '13px' }}>
+                <div key={index} className="flex gap-3 items-center">
+                  <div className="bg-slate-100 text-primary min-w-[28px] h-[28px] rounded-full flex items-center justify-center font-bold text-[13px]">
                     {index + 1}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <input type="text" value={stepText} required onChange={(e) => handleStepTextChange(index, e.target.value)} placeholder={`Detailed instructions for step ${index + 1}...`} style={inputStyle} />
+                  <div className="flex-1">
+                    <input type="text" value={stepText} required onChange={(e) => handleStepTextChange(index, e.target.value)} placeholder={`Detailed instructions for step ${index + 1}...`} className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
                   </div>
                   {cookingSteps.length > 1 && (
-                    <button type="button" onClick={() => removeStepField(index)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '10px 12px', borderRadius: '8px', cursor: 'pointer' }}>🗑️</button>
+                    <button type="button" onClick={() => removeStepField(index)} className="bg-red-500 text-white border-none py-2 px-3 rounded-lg cursor-pointer hover:bg-red-600 transition-colors">🗑️</button>
                   )}
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px', gap: '12px' }}>
-            <button type="button" onClick={onClose} style={{ padding: '14px 24px', background: '#334155', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
+          <div className="flex justify-end mt-4 gap-3">
+            <AdminButton type="button" onClick={onClose} variant="secondary" className="px-6 h-12">
               Close
-            </button>
-            <button type="submit" disabled={loading} style={{ minWidth: '180px', padding: '14px', fontSize: '15px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>
-              {loading ? 'Processing...' : 'Save Changes'}
-            </button>
+            </AdminButton>
+            <AdminButton type="submit" isLoading={loading} className="min-w-[180px] h-[48px] text-[15px]">
+              Save Changes
+            </AdminButton>
           </div>
         </form>
       </div>
     </div>
   );
 }
-
-// Styles bổ trợ bọc giao diện nổi đè lên danh sách
-const overlayStyle = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.75)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px', boxSizing: 'border-box' };
-const modalContentStyle = { background: '#111827', padding: '28px', borderRadius: '14px', width: '100%', maxWidth: '950px', maxHeight: '92vh', overflowY: 'auto', border: '1px solid #334155', color: '#f8fafc' };
-const labelStyle = { display: 'block', marginBottom: '6px', fontSize: '13px', color: '#94a3b8', fontWeight: 500 };
-const inputStyle = { width: '100%', padding: '10px 14px', borderRadius: '8px', background: '#0f172a', border: '1px solid #334155', color: '#fff', boxSizing: 'border-box', fontSize: '14px', outline: 'none' };
-const addBtnStyle = { padding: '6px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' };
