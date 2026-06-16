@@ -7,6 +7,8 @@ import IngredientsPage from "../pages/ingredients/ingredients.jsx";
 import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx"; 
 import RecipesPage from "../pages/recipes/recipes.jsx"; 
 import RecipeDetail from '../pages/recipes/recipe-detail';
+import AddRecipePage from "../pages/recipes/add-recipe";
+import EditRecipePage from "../pages/recipes/edit-recipes.jsx"; // Nhớ trỏ đúng đường dẫn đến file edit-recipes của ní
 import LoginPage from "../pages/Login.jsx"; // File Login.jsx nằm trực tiếp trong pages
 import AdminLayout from "../layouts/AdminLayout.jsx";
 import PlatformAnalyticsPage from "../pages/analytics/PlatformAnalytics.jsx";
@@ -52,8 +54,16 @@ export function AppRoutes() {
           <Route path="analytics" element={<PlatformAnalyticsPage />} />
             <Route path="ingredients" element={<IngredientsPage />} />
             <Route path="micronutrients" element={<MicronutrientsPage />} />
+            
+            {/* 1. Trang danh sách công thức */}
             <Route path="recipes" element={<RecipesPage />} /> 
+            
+            2. ✅ ĐƯA TRANG ADD LÊN TRÊN (Để tránh bị nhầm add là một cái id)
+            <Route path="recipes/add" element={<AddRecipePage />} />
+            <Route path="recipes/edit/:id" element={<EditRecipePage />} />
+            {/* 3. ĐƯA TRANG CHI TIẾT XUỐNG DƯỚI CÙNG */}
             <Route path="recipes/:id" element={<RecipeDetail />} />
+            
           </Route>
         </Route>
       </Route>
