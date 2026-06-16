@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/notification_provider.dart';
 import '../widgets/water_reminder_card.dart';
 import '../widgets/meal_reminder_card.dart';
+import 'transaction_detail_screen.dart';
 
 class NotificationHistoryScreen extends StatefulWidget {
   const NotificationHistoryScreen({super.key});
@@ -84,9 +85,7 @@ class _RemindersTab extends StatelessWidget {
           children: [
             // Allow Push Notifications Card
             Container(
-              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
@@ -96,31 +95,39 @@ class _RemindersTab extends StatelessWidget {
                   ),
                 ],
               ),
-              child: SwitchListTile(
-                secondary: CircleAvatar(
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
-                  child: Icon(Icons.notifications_active_outlined, color: theme.colorScheme.primary),
-                ),
-                title: const Text(
-                  'Allow Push Notifications',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
+              child: Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                clipBehavior: Clip.antiAlias,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: SwitchListTile(
+                  secondary: CircleAvatar(
+                    backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                    child: Icon(Icons.notifications_active_outlined, color: theme.colorScheme.primary),
                   ),
+                  title: const Text(
+                    'Allow Push Notifications',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Receive alerts, consultation updates, and reminders.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: data.isPushEnabled,
+                  activeThumbColor: theme.colorScheme.primary,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (val) {
+                    context.read<NotificationProvider>().updateSettings({'is_push_enabled': val});
+                  },
                 ),
-                subtitle: const Text(
-                  'Receive alerts, consultation updates, and reminders.',
-                  style: TextStyle(fontSize: 12),
-                ),
-                value: data.isPushEnabled,
-                activeThumbColor: theme.colorScheme.primary,
-                contentPadding: EdgeInsets.zero,
-                onChanged: (val) {
-                  context.read<NotificationProvider>().updateSettings({'is_push_enabled': val});
-                },
               ),
             ),
-            const SizedBox(height: 24),
+          ),
+          const SizedBox(height: 24),
 
             // Daily Reminders Header
             Row(
@@ -219,6 +226,19 @@ class _HistoryTab extends StatelessWidget {
                 if (!isRead) {
                   provider.markAsRead(notification['_id']);
                 }
+
+                // If it's a transaction, navigate to detail screen
+                if (notification['type'] == 'transaction' &&
+                    notification['metadata'] != null &&
+                    notification['metadata']['transaction_id'] != null) {
+                  final txId = notification['metadata']['transaction_id'];
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TransactionDetailScreen(transactionId: txId),
+                    ),
+                  );
+                }
               },
             );
           },
@@ -229,6 +249,8 @@ class _HistoryTab extends StatelessWidget {
 
   IconData _getIconForType(String? type) {
     switch (type) {
+      case 'transaction':
+        return Icons.receipt_long;
       case 'consultation':
         return Icons.medical_services_outlined;
       case 'reminder':

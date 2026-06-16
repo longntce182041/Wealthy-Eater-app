@@ -11,7 +11,7 @@ class RegistrationRepository {
   }
 
   static updateById(id, patch) {
-    return RegistrationOtp.findByIdAndUpdate(id, patch, { new: true }).exec();
+    return RegistrationOtp.findByIdAndUpdate(id, patch, { returnDocument: 'after' }).exec();
   }
 
   static deleteByEmail(email) {

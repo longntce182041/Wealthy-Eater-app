@@ -96,7 +96,7 @@ class NutritionistDetailScreen extends StatelessWidget {
                   icon: Icons.payments_outlined,
                   iconColor: Colors.green,
                   label: 'Fee',
-                  value: '${nutritionist.serviceFee.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')} đ',
+                  value: '${nutritionist.serviceFee.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')} VND',
                 ),
               ],
             ),
@@ -158,6 +158,39 @@ class NutritionistDetailScreen extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(height: 24),
+
+            // Benefits Section
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Benefits',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.tertiary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
+              ),
+              child: Column(
+                children: [
+                  _buildBenefitRow(context, 'Daily 1:1 Chat with Expert'),
+                  const SizedBox(height: 12),
+                  _buildBenefitRow(context, 'Customized Meal Plans'),
+                  const SizedBox(height: 12),
+                  _buildBenefitRow(context, 'Weekly Progress Reviews'),
+                  const SizedBox(height: 12),
+                  _buildBenefitRow(context, 'Direct Video Consultations'),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -168,9 +201,9 @@ class NutritionistDetailScreen extends StatelessWidget {
             onPressed: () {
               Navigator.pop(context, true); // Returns true to signal booking
             },
-            icon: const Icon(Icons.calendar_month, size: 20),
+            icon: const Icon(Icons.handshake_outlined, size: 20),
             label: const Text(
-              'Book Free Consultation',
+              'Hire Nutritionist',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             style: FilledButton.styleFrom(
@@ -183,6 +216,21 @@ class NutritionistDetailScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBenefitRow(BuildContext context, String text) {
+    return Row(
+      children: [
+        Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
+        ),
+      ],
     );
   }
 

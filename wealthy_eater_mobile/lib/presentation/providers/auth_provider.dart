@@ -30,6 +30,7 @@ class AuthProvider with ChangeNotifier {
   String? errorMessage;
   UserEntity? user;
   Map<String, dynamic>? userProfile;
+  List<Map<String, dynamic>> weightHistory = [];
   String? _accessToken;
 
   bool get isAuthenticated => state == AuthState.authenticated && _accessToken != null;
@@ -57,6 +58,8 @@ class AuthProvider with ChangeNotifier {
       if (res.statusCode == 200 && res.data['success'] == true) {
         _accessToken = token;
         user = UserEntity.fromJson(res.data['data'] as Map<String, dynamic>);
+        await _fetchUserProfile();
+        await _fetchWeightHistory();
         state = AuthState.authenticated;
       } else {
         await _clearSession();
@@ -233,6 +236,7 @@ class AuthProvider with ChangeNotifier {
     errorMessage = null;
     // Fetch profile after successful login
     await _fetchUserProfile();
+    await _fetchWeightHistory();
     notifyListeners();
   }
 
@@ -252,21 +256,68 @@ class AuthProvider with ChangeNotifier {
   /// Public wrapper to fetch user profile on demand.
   Future<void> fetchUserProfile() async => _fetchUserProfile();
 
+  Future<void> _fetchWeightHistory() async {
+    try {
+      final res = await _api.get('/api/profile/weight-history');
+      if (res.statusCode == 200 && res.data['success'] == true && res.data['data'] != null) {
+        weightHistory = List<Map<String, dynamic>>.from(
+          (res.data['data'] as List).map((x) => Map<String, dynamic>.from(x as Map)),
+        );
+      } else {
+        weightHistory = [];
+      }
+    } catch (_) {
+      weightHistory = [];
+    }
+  }
+
+  /// Public wrapper to fetch weight logs on demand.
+  Future<void> fetchWeightHistory() async => _fetchWeightHistory();
+
+  /// Log user weight via API, refresh user profile to recalculate health indexes, and refresh weight history.
+  Future<bool> logWeight(double weight) async {
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final res = await _api.post('/api/profile/weight', data: {'weight': weight});
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        await _fetchUserProfile();
+        await _fetchWeightHistory();
+        errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        errorMessage = res.data['message']?.toString() ?? 'Log weight failed';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      errorMessage = mapError(e).message;
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Save or update user profile via API and refresh local cache.
-  Future<void> saveUserProfile(Map<String, dynamic> data) async {
-    _setLoading();
+  Future<bool> saveUserProfile(Map<String, dynamic> data) async {
+    errorMessage = null;
+    notifyListeners();
     try {
       final res = await _api.post('/api/profile', data: data);
       if (res.statusCode == 200 && res.data['success'] == true) {
         await _fetchUserProfile();
-        state = AuthState.authenticated;
         errorMessage = null;
         notifyListeners();
+        return true;
       } else {
-        _setError(res.data['message']?.toString() ?? 'Save profile failed');
+        errorMessage = res.data['message']?.toString() ?? 'Save profile failed';
+        notifyListeners();
+        return false;
       }
     } catch (e) {
-      _setError(mapError(e).message);
+      errorMessage = mapError(e).message;
+      notifyListeners();
+      return false;
     }
   }
 

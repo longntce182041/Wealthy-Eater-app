@@ -2,7 +2,7 @@
  * Admin User Controller - UC-77: View List User
  * API lấy danh sách người dùng hỗ trợ phân trang dữ liệu nâng cao, tìm kiếm và lọc theo vai trò/trạng thái
  */
-console.log('Loaded admin.user.controller');
+
 
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
@@ -165,7 +165,7 @@ async function getUsersList(req, res) {
     });
 
     // 6. Gộp dữ liệu hoàn chỉnh từ 3 bảng thông qua hàm Helper
-    const data = users.map(user => 
+    const data = users.map(user =>
       mapUserForAdmin(
         user,
         profileMap[user._id] || null,
