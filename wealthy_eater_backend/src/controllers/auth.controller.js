@@ -18,7 +18,7 @@ async function login(req, res, next) {
       throw new AppError('Password is too long', 400, 'VALIDATION_ERROR');
     }
     const cleanEmail = email.trim().toLowerCase();
-    const targetRole = (typeof role === 'string' && role) ? role : 'customer';
+    const targetRole = typeof role === "string" && role ? role : "customer";
     const result = await AuthService.login(cleanEmail, password, targetRole);
     return res.json({ success: true, data: result, error: null });
   } catch (err) {
@@ -117,7 +117,6 @@ async function verifyOtp(req, res, next) {
     return next(err);
   }
 }
-
 /**
  * POST /api/auth/resend-otp
  * Body: { email }
@@ -135,4 +134,12 @@ async function resendOtp(req, res, next) {
   }
 }
 
-module.exports = { login, googleLogin, refresh, getMe, register, verifyOtp, resendOtp };
+module.exports = {
+  login,
+  googleLogin,
+  refresh,
+  getMe,
+  register,
+  verifyOtp,
+  resendOtp,
+};

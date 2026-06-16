@@ -33,7 +33,7 @@ const UserProfileSchema = new mongoose.Schema({
 
   },
   bmr: {
-    type: String
+    type: Number
 
   },
   dietary_references: {
