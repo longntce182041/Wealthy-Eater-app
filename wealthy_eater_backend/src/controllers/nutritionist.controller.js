@@ -1,3 +1,4 @@
+const AppError = require('../utils/AppError');
 const nutritionistService = require('../services/nutritionist.service');
 
 class NutritionistController {
@@ -16,14 +17,7 @@ class NutritionistController {
       });
     } catch (error) {
       console.error('NutritionistController.getNutritionists Error:', error);
-      return res.status(500).json({
-        success: false,
-        data: null,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch nutritionists. Please try again later.'
-        }
-      });
+      return next(new AppError('Failed to fetch nutritionists. Please try again later.', 500)); // TODO: pass errorCode INTERNAL_SERVER_ERROR
     }
   }
 }

@@ -1,9 +1,10 @@
+const AppError = require('../utils/AppError');
 const analyticsService = require('../services/analytics.service');
 
 /**
  * Tiếp nhận request và chuẩn hóa chuỗi thời gian cho phân tích tăng trưởng
  */
-exports.analyzeCustomerGrowth = async (req, res) => {
+exports.analyzeCustomerGrowth = async (req, res, next) => {
   try {
     const { startDate, endDate } = req.query;
 
@@ -26,15 +27,11 @@ exports.analyzeCustomerGrowth = async (req, res) => {
 
   } catch (error) {
     console.error("Error inside analyzeCustomerGrowth controller:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-      error: error.message
-    });
+    return next(new AppError("Internal Server Error", 500, null, { error: error.message }));
   }
 };
 
-exports.evaluateExpertPerformance = async (req, res) => {
+exports.evaluateExpertPerformance = async (req, res, next) => {
   try {
     const { startDate, endDate } = req.query;
 
@@ -55,10 +52,6 @@ exports.evaluateExpertPerformance = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in evaluateExpertPerformance controller:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-      error: error.message
-    });
+    return next(new AppError("Internal Server Error", 500, null, { error: error.message }));
   }
 };

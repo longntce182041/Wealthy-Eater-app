@@ -1,3 +1,4 @@
+const AppError = require('../utils/AppError');
 const likeService = require('../services/user.recipe.like.service');
 
 /**
@@ -13,7 +14,7 @@ const likeService = require('../services/user.recipe.like.service');
  * Toggle like on a recipe.
  * Returns the new isLiked state so the client can update UI without a second request.
  */
-async function toggleLike(req, res) {
+async function toggleLike(req, res, next) {
   try {
     const userId = req.user.sub;
     const recipeId = req.params.id;
@@ -31,13 +32,13 @@ async function toggleLike(req, res) {
     });
   } catch (err) {
     const status = err.statusCode || 500;
-    return res.status(status).json({ success: false, message: err.message || 'Failed to toggle like' });
+    return next(new AppError(err.message || 'Failed to toggle like', status));
   }
 }
 
 // ─── GET /api/recipes/:id/like/status ────────────────────────────────────────
 
-async function getLikeStatus(req, res) {
+async function getLikeStatus(req, res, next) {
   try {
     const userId = req.user.sub;
     const recipeId = req.params.id;
@@ -50,7 +51,7 @@ async function getLikeStatus(req, res) {
       data: { isLiked: liked, likeCount },
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || 'Failed to get like status' });
+    return next(new AppError(err.message || 'Failed to get like status', 500));
   }
 }
 
@@ -60,7 +61,7 @@ async function getLikeStatus(req, res) {
  * Get the current user's liked recipes (paginated).
  * Powers the "Liked" tab on the mobile Recipe navtab.
  */
-async function getLikedRecipes(req, res) {
+async function getLikedRecipes(req, res, next) {
   try {
     const userId = req.user.sub;
     const { page = 1, limit = 20 } = req.query;
@@ -76,19 +77,19 @@ async function getLikedRecipes(req, res) {
       meta: result.pagination,
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || 'Failed to load liked recipes' });
+    return next(new AppError(err.message || 'Failed to load liked recipes', 500));
   }
 }
 
 // ─── GET /api/recipes/liked/count ────────────────────────────────────────────
 
-async function getLikeCount(req, res) {
+async function getLikeCount(req, res, next) {
   try {
     const userId = req.user.sub;
     const count  = await likeService.getUserLikeCount(userId);
     return res.json({ success: true, data: { count } });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || 'Failed to get count' });
+    return next(new AppError(err.message || 'Failed to get count', 500));
   }
 }
 

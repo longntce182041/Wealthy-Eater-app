@@ -1,3 +1,4 @@
+const AppError = require('../utils/AppError');
 const reviewService = require('../services/user.recipe.review.service');
 
 /**
@@ -13,7 +14,7 @@ const reviewService = require('../services/user.recipe.review.service');
  * Add or update the authenticated user's review for a recipe.
  * Idempotent: calling again just updates the existing review.
  */
-async function upsertReview(req, res) {
+async function upsertReview(req, res, next) {
   try {
     const userId = req.user.sub;
     const recipeId = req.params.id;
@@ -21,7 +22,7 @@ async function upsertReview(req, res) {
 
     // Controller-level guard — service also validates, but catch early for clear errors
     if (rating === undefined || rating === null) {
-      return res.status(400).json({ success: false, message: 'rating is required' });
+      return next(new AppError('rating is required', 400));
     }
 
     const review = await reviewService.upsertReview(userId, recipeId, rating, comment);
@@ -39,7 +40,7 @@ async function upsertReview(req, res) {
     });
   } catch (err) {
     const status = err.statusCode || 500;
-    return res.status(status).json({ success: false, message: err.message || 'Failed to save review' });
+    return next(new AppError(err.message || 'Failed to save review', status));
   }
 }
 
@@ -50,7 +51,7 @@ async function upsertReview(req, res) {
  * Includes aggregate stats: avgRating, totalReviews, distribution.
  * Powers the "Reviews" tab on the Recipe Detail screen.
  */
-async function getRecipeReviews(req, res) {
+async function getRecipeReviews(req, res, next) {
   try {
     const { id: recipeId } = req.params;
     const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
@@ -71,7 +72,7 @@ async function getRecipeReviews(req, res) {
       meta: result.pagination,
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || 'Failed to load reviews' });
+    return next(new AppError(err.message || 'Failed to load reviews', 500));
   }
 }
 
@@ -81,7 +82,7 @@ async function getRecipeReviews(req, res) {
  * Get the current user's review for a specific recipe (null if none).
  * Used by the mobile to pre-fill the review form.
  */
-async function getMyReview(req, res) {
+async function getMyReview(req, res, next) {
   try {
     const userId = req.user.sub;
     const recipeId = req.params.id;
@@ -103,7 +104,7 @@ async function getMyReview(req, res) {
       },
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || 'Failed to load your review' });
+    return next(new AppError(err.message || 'Failed to load your review', 500));
   }
 }
 
@@ -113,7 +114,7 @@ async function getMyReview(req, res) {
  * Get all reviews the current user has written across all recipes.
  * Powers the "Reviews" sub-tab in the user's profile / account page.
  */
-async function getAllMyReviews(req, res) {
+async function getAllMyReviews(req, res, next) {
   try {
     const userId = req.user.sub;
     const { page = 1, limit = 10, sortOrder = 'desc' } = req.query;
@@ -130,7 +131,7 @@ async function getAllMyReviews(req, res) {
       meta:    result.pagination,
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || 'Failed to load reviews' });
+    return next(new AppError(err.message || 'Failed to load reviews', 500));
   }
 }
 
@@ -139,7 +140,7 @@ async function getAllMyReviews(req, res) {
 /**
  * Delete a review. Only the review owner may perform this.
  */
-async function deleteReview(req, res) {
+async function deleteReview(req, res, next) {
   try {
     const userId = req.user.sub;
     const { reviewId } = req.params;
@@ -149,7 +150,7 @@ async function deleteReview(req, res) {
     return res.json({ success: true, message: 'Review deleted' });
   } catch (err) {
     const status = err.statusCode || 500;
-    return res.status(status).json({ success: false, message: err.message || 'Failed to delete review' });
+    return next(new AppError(err.message || 'Failed to delete review', status));
   }
 }
 

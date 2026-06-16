@@ -7,6 +7,7 @@
  * Routes mounted at: /api/chat
  */
 
+const AppError = require('../utils/AppError');
 const chatService = require('../services/chat.service');
 
 class ChatController {

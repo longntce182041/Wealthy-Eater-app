@@ -1,3 +1,4 @@
+const AppError = require('../utils/AppError');
 const mongoose = require('mongoose');
 const shoppingListService = require('../services/shopping_list.service');
 
@@ -19,28 +20,20 @@ const shoppingListService = require('../services/shopping_list.service');
  *
  * Body: { recipeId: string, servings?: number }
  */
-async function addFromRecipe(req, res) {
+async function addFromRecipe(req, res, next) {
   try {
     const userId   = req.user.sub;
     const { recipeId, servings } = req.body;
 
     if (!recipeId || typeof recipeId !== 'string' || !recipeId.trim()) {
-      return res.status(400).json({
-        success: false,
-        data:    null,
-        error:   { code: 'VALIDATION_ERROR', message: 'recipeId is required' },
-      });
+      return next(new AppError('recipeId is required', 400, 'VALIDATION_ERROR'));
     }
 
     let parsedServings;
     if (servings !== undefined) {
       parsedServings = Number(servings);
       if (isNaN(parsedServings) || parsedServings < 1 || parsedServings > 100) {
-        return res.status(400).json({
-          success: false,
-          data:    null,
-          error:   { code: 'VALIDATION_ERROR', message: 'Servings must be a number between 1 and 100' },
-        });
+        return next(new AppError('Servings must be a number between 1 and 100', 400, 'VALIDATION_ERROR'));
       }
     }
 
@@ -57,14 +50,7 @@ async function addFromRecipe(req, res) {
     });
   } catch (err) {
     const status = err.statusCode || 500;
-    return res.status(status).json({
-      success: false,
-      data:    null,
-      error:   {
-        code:    err.code || 'INTERNAL_ERROR',
-        message: err.message || 'Failed to add ingredients to shopping list',
-      },
-    });
+    return next(new AppError(err.message || 'Failed to add ingredients to shopping list', status, err.code || 'INTERNAL_ERROR'));
   }
 }
 
@@ -74,7 +60,7 @@ async function addFromRecipe(req, res) {
  * Return the current user's full shopping list, grouped by ingredient category.
  * Query params: page (default 1), limit (default 200)
  */
-async function getList(req, res) {
+async function getList(req, res, next) {
   try {
     const userId = req.user.sub;
     const { page = 1, limit = 200 } = req.query;
@@ -94,11 +80,7 @@ async function getList(req, res) {
       error:   null,
     });
   } catch (err) {
-    return res.status(500).json({
-      success: false,
-      data:    null,
-      error:   { code: 'INTERNAL_ERROR', message: err.message || 'Failed to load shopping list' },
-    });
+    return next(new AppError(err.message || 'Failed to load shopping list', 500, 'INTERNAL_ERROR'));
   }
 }
 
@@ -108,17 +90,13 @@ async function getList(req, res) {
  * Toggle the purchased status of a single item.
  * Flips is_purchase; sets/clears purchase_at timestamp accordingly.
  */
-async function togglePurchased(req, res) {
+async function togglePurchased(req, res, next) {
   try {
     const userId = req.user.sub;
     const { itemId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(itemId)) {
-      return res.status(400).json({
-        success: false,
-        data:    null,
-        error:   { code: 'INVALID_ID', message: 'Invalid Item ID format' },
-      });
+      return next(new AppError('Invalid Item ID format', 400, 'INVALID_ID'));
     }
 
     const item = await shoppingListService.togglePurchased(itemId, userId);
@@ -130,11 +108,7 @@ async function togglePurchased(req, res) {
     });
   } catch (err) {
     const status = err.statusCode || 500;
-    return res.status(status).json({
-      success: false,
-      data:    null,
-      error:   { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Failed to toggle item' },
-    });
+    return next(new AppError(err.message || 'Failed to toggle item', status, err.code || 'INTERNAL_ERROR'));
   }
 }
 
@@ -143,17 +117,13 @@ async function togglePurchased(req, res) {
 /**
  * Permanently delete a single shopping list item.
  */
-async function removeItem(req, res) {
+async function removeItem(req, res, next) {
   try {
     const userId = req.user.sub;
     const { itemId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(itemId)) {
-      return res.status(400).json({
-        success: false,
-        data:    null,
-        error:   { code: 'INVALID_ID', message: 'Invalid Item ID format' },
-      });
+      return next(new AppError('Invalid Item ID format', 400, 'INVALID_ID'));
     }
 
     const deleted = await shoppingListService.removeItem(itemId, userId);
@@ -165,11 +135,7 @@ async function removeItem(req, res) {
     });
   } catch (err) {
     const status = err.statusCode || 500;
-    return res.status(status).json({
-      success: false,
-      data:    null,
-      error:   { code: err.code || 'INTERNAL_ERROR', message: err.message || 'Failed to remove item' },
-    });
+    return next(new AppError(err.message || 'Failed to remove item', status, err.code || 'INTERNAL_ERROR'));
   }
 }
 
@@ -178,7 +144,7 @@ async function removeItem(req, res) {
 /**
  * Remove all items the user has marked as purchased.
  */
-async function clearPurchased(req, res) {
+async function clearPurchased(req, res, next) {
   try {
     const userId = req.user.sub;
     const result = await shoppingListService.clearPurchased(userId);
@@ -189,11 +155,7 @@ async function clearPurchased(req, res) {
       error:   null,
     });
   } catch (err) {
-    return res.status(500).json({
-      success: false,
-      data:    null,
-      error:   { code: 'INTERNAL_ERROR', message: err.message || 'Failed to clear purchased items' },
-    });
+    return next(new AppError(err.message || 'Failed to clear purchased items', 500, 'INTERNAL_ERROR'));
   }
 }
 
@@ -202,7 +164,7 @@ async function clearPurchased(req, res) {
 /**
  * Remove every item in the user's shopping list.
  */
-async function clearAll(req, res) {
+async function clearAll(req, res, next) {
   try {
     const userId = req.user.sub;
     const result = await shoppingListService.clearAll(userId);
@@ -213,11 +175,7 @@ async function clearAll(req, res) {
       error:   null,
     });
   } catch (err) {
-    return res.status(500).json({
-      success: false,
-      data:    null,
-      error:   { code: 'INTERNAL_ERROR', message: err.message || 'Failed to clear all items' },
-    });
+    return next(new AppError(err.message || 'Failed to clear all items', 500, 'INTERNAL_ERROR'));
   }
 }
 
@@ -226,7 +184,7 @@ async function clearAll(req, res) {
 /**
  * Return completion statistics: total, purchased, pending, percentage.
  */
-async function getStats(req, res) {
+async function getStats(req, res, next) {
   try {
     const userId = req.user.sub;
     const stats  = await shoppingListService.getStats(userId);
@@ -237,11 +195,7 @@ async function getStats(req, res) {
       error:   null,
     });
   } catch (err) {
-    return res.status(500).json({
-      success: false,
-      data:    null,
-      error:   { code: 'INTERNAL_ERROR', message: err.message || 'Failed to fetch stats' },
-    });
+    return next(new AppError(err.message || 'Failed to fetch stats', 500, 'INTERNAL_ERROR'));
   }
 }
 

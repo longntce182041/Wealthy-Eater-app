@@ -5,6 +5,7 @@
  *   { success: boolean, data: object|null, error: { code, message }|null }
  */
 
+const AppError = require('../utils/AppError');
 const consultationService = require('../services/user.consultation.service');
 
 class UserConsultationController {
@@ -33,18 +34,7 @@ class UserConsultationController {
     } catch (error) {
       console.error('UserConsultationController.hireNutritionist Error:', error.message);
       const statusCode = error.statusCode || error.status || 500;
-      return res.status(statusCode).json({
-        success: false,
-        data: null,
-        error: {
-          code: statusCode === 409 ? 'DUPLICATE_CONTRACT' :
-                statusCode === 404 ? 'NUTRITIONIST_NOT_FOUND' :
-                statusCode === 400 ? 'VALIDATION_ERROR' :
-                statusCode === 502 ? 'PAYMENT_GATEWAY_ERROR' :
-                'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to create hire checkout.'
-        }
-      });
+      return next(new AppError(error.message || 'Failed to create hire checkout.', statusCode, statusCode === 409 ? 'DUPLICATE_CONTRACT' :                statusCode === 404 ? 'NUTRITIONIST_NOT_FOUND' :                statusCode === 400 ? 'VALIDATION_ERROR' :                statusCode === 502 ? 'PAYMENT_GATEWAY_ERROR' :                'INTERNAL_SERVER_ERROR'));
     }
   }
 
@@ -68,14 +58,7 @@ class UserConsultationController {
     } catch (error) {
       console.error('UserConsultationController.getTransactionDetail Error:', error.message);
       const statusCode = error.statusCode || error.status || 500;
-      return res.status(statusCode).json({
-        success: false,
-        data: null,
-        error: {
-          code: statusCode === 404 ? 'TRANSACTION_NOT_FOUND' : 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to fetch transaction detail.'
-        }
-      });
+      return next(new AppError(error.message || 'Failed to fetch transaction detail.', statusCode, statusCode === 404 ? 'TRANSACTION_NOT_FOUND' : 'INTERNAL_SERVER_ERROR'));
     }
   }
 
@@ -96,14 +79,7 @@ class UserConsultationController {
       });
     } catch (error) {
       console.error('UserConsultationController.getActiveContract Error:', error.message);
-      return res.status(500).json({
-        success: false,
-        data: null,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch active contract.'
-        }
-      });
+      return next(new AppError('Failed to fetch active contract.', 500)); // TODO: pass errorCode INTERNAL_SERVER_ERROR
     }
   }
 
@@ -131,14 +107,7 @@ class UserConsultationController {
       });
     } catch (error) {
       console.error('UserConsultationController.getPayOSUrls Error:', error.message);
-      return res.status(500).json({
-        success: false,
-        data: null,
-        error: {
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to fetch PayOS URLs.'
-        }
-      });
+      return next(new AppError(error.message || 'Failed to fetch PayOS URLs.', 500, 'INTERNAL_SERVER_ERROR'));
     }
   }
 
@@ -169,14 +138,7 @@ class UserConsultationController {
 
       // Still return 200 for known orders to prevent PayOS retries on non-retryable errors
       const statusCode = error.statusCode || 500;
-      return res.status(statusCode >= 500 ? 500 : statusCode).json({
-        success: false,
-        data: null,
-        error: {
-          code: 'WEBHOOK_PROCESSING_ERROR',
-          message: error.message || 'Webhook processing failed.'
-        }
-      });
+      return next(new AppError(error.message || 'Webhook processing failed.', statusCode >= 500 ? 500 : statusCode, 'WEBHOOK_PROCESSING_ERROR'));
     }
   }
 
@@ -218,14 +180,7 @@ class UserConsultationController {
       });
     } catch (error) {
       console.error('UserConsultationController.verifyPayment Error:', error.message);
-      return res.status(400).json({
-        success: false,
-        data: null,
-        error: {
-          code: 'VERIFICATION_ERROR',
-          message: error.message || 'Failed to verify payment manually.'
-        }
-      });
+      return next(new AppError(error.message || 'Failed to verify payment manually.', 400, 'VERIFICATION_ERROR'));
     }
   }
 }
