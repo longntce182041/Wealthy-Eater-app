@@ -117,8 +117,9 @@ class _AuthInterceptor extends Interceptor {
       if (refreshToken != null && refreshToken.isNotEmpty) {
         _isRefreshing = true;
         try {
-          // Attempt to refresh the token directly via Dio
-          final refreshRes = await _dio.post('/api/auth/refresh', data: {
+          // Use a separate Dio instance to avoid interceptor recursion
+          final refreshDio = Dio(BaseOptions(baseUrl: _dio.options.baseUrl));
+          final refreshRes = await refreshDio.post('/api/auth/refresh', data: {
             'refreshToken': refreshToken,
           });
 
@@ -133,13 +134,24 @@ class _AuthInterceptor extends Interceptor {
             final retryRes = await _dio.fetch(options);
             _isRefreshing = false;
             return handler.resolve(retryRes);
+          } else {
+             // If success is false but didn't throw, still clear tokens
+             await _clearTokens();
           }
         } catch (_) {
-          // Refresh failed, fall through to error
+          // Refresh failed (e.g. 401 expired refresh token), clear tokens to prevent infinite loops
+          await _clearTokens();
+        } finally {
+          _isRefreshing = false;
         }
-        _isRefreshing = false;
       }
     }
     return handler.next(err);
+  }
+
+  Future<void> _clearTokens() async {
+    await _storage.delete(key: 'accessToken');
+    await _storage.delete(key: 'refreshToken');
+    await _storage.delete(key: 'user');
   }
 }

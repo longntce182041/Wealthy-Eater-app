@@ -20,8 +20,6 @@ const AppError             = require('../utils/AppError');
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DEFAULT_PAGE_SIZE = 30;
 const MAX_PAGE_SIZE     = 100;
-// Base URL from which uploaded images are served as static files
-const STATIC_BASE_URL   = process.env.APP_BASE_URL || 'http://localhost:5000';
 
 // ── Service Class ─────────────────────────────────────────────────────────────
 
@@ -156,12 +154,12 @@ class ChatService {
   /**
    * Handle a meal image upload.
    *  1. Validate the sender's access.
-   *  2. Build a public URL for the uploaded file (already on disk via multer).
+   *  2. Use the Cloudinary secure URL provided by multer-storage-cloudinary.
    *  3. Persist an image ConsultationMessage.
    *
    * @param {string}  contractId
    * @param {string}  senderId
-   * @param {Express.Multer.File} file — The uploaded file object from multer
+   * @param {Express.Multer.File} file — The uploaded file object from multer (Cloudinary)
    * @returns {Object} The saved image message as a plain object
    */
   async uploadImageAndSaveMessage(contractId, senderId, file) {
@@ -172,9 +170,8 @@ class ChatService {
     try {
       await this.assertContractAccess(contractId, senderId);
 
-      // Build the publicly accessible URL for the stored file
-      const relativePath = path.posix.join('uploads', 'chat', file.filename);
-      const imageUrl     = `${STATIC_BASE_URL}/${relativePath}`;
+      // With Cloudinary, file.path contains the secure URL
+      const imageUrl = file.path;
 
       const message = await ConsultationMessage.create({
         contract_id:    contractId,
@@ -186,10 +183,13 @@ class ChatService {
 
       return message.toObject();
     } catch (error) {
-      // Prevent orphan files: delete file from disk if DB fails or access denied
-      const fs = require('fs');
-      if (file.path && fs.existsSync(file.path)) {
-        fs.unlinkSync(file.path);
+      // Prevent orphan files: delete file from Cloudinary if DB fails or access denied
+      // multer-storage-cloudinary sets file.filename to the public_id
+      if (file.filename) {
+        const { cloudinary } = require('../config/upload.config');
+        cloudinary.uploader.destroy(file.filename).catch(cleanupError => {
+          console.error('Failed to cleanup Cloudinary asset (async):', cleanupError);
+        });
       }
       throw error;
     }

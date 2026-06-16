@@ -11,7 +11,8 @@ const RecipeIngredient = require('../models/RecipeIngredient');
 const RecipeStep = require('../models/RecipeStep');
 const RecipeReview = require('../models/RecipeReview');
 const Ingredient = require('../models/Ingredient');
-
+const { cloudinary, extractCloudinaryPublicId } = require('../config/upload.config');
+const AppError = require('../utils/AppError');
 /**
  * Escapa caracteres especiais para regex seguro
  */
@@ -143,7 +144,7 @@ function mapRecipeForAdmin(recipe, nutrition, reviewStats, ingredientsCount, ste
  * UC-71: GET /api/admin/recipes
  * Lista todas as receitas do sistema com paginação e filtros
  */
-async function getRecipesList(req, res) {
+async function getRecipesList(req, res, next) {
   try {
     const filter = buildAdminFilter(req.query || {});
 
@@ -303,11 +304,7 @@ async function getRecipesList(req, res) {
     });
   } catch (err) {
     console.error('❌ Error fetching recipes:', err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Failed to load recipes',
-      error: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    });
+    return next(new AppError(err.message || 'Failed to load recipes', 500));
   }
 }
 
@@ -315,7 +312,7 @@ async function getRecipesList(req, res) {
  * UC-71: GET /api/admin/recipes/stats
  * Obtém estatísticas gerais sobre receitas
  */
-async function getRecipesStats(req, res) {
+async function getRecipesStats(req, res, next) {
   try {
     const [
       totalRecipes,
@@ -376,10 +373,7 @@ async function getRecipesStats(req, res) {
     });
   } catch (err) {
     console.error('❌ Error fetching stats:', err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Failed to load stats',
-    });
+    return next(new AppError(err.message || 'Failed to load stats', 500));
   }
 }
 
@@ -387,15 +381,12 @@ async function getRecipesStats(req, res) {
  * GET /api/admin/recipes/:id
  * Obtém detalhes completos de uma receita específica
  */
-async function getRecipeDetail(req, res) {
+async function getRecipeDetail(req, res, next) {
   try {
     const recipe = await Recipe.findById(req.params.id).lean();
 
     if (!recipe) {
-      return res.status(404).json({
-        success: false,
-        message: 'Recipe not found',
-      });
+      return next(new AppError('Recipe not found', 404));
     }
 
     const [nutrition, reviewStats] = await Promise.all([
@@ -423,10 +414,7 @@ async function getRecipeDetail(req, res) {
     });
   } catch (err) {
     console.error('❌ Error fetching recipe detail:', err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Failed to load recipe',
-    });
+    return next(new AppError(err.message || 'Failed to load recipe', 500));
   }
 }
 
@@ -434,15 +422,19 @@ async function getRecipeDetail(req, res) {
  * UC-73: POST /api/admin/recipes
  * Tạo công thức nấu ăn mới và tự động tính toán tổng dinh dưỡng
  */
-async function addRecipe(req, res) {
+async function addRecipe(req, res, next) {
+  let uploadedPublicId = req.file ? req.file.filename : null; // Multer-Cloudinary stores public_id in filename
   try {
     const {
-      name, description, image_url, cooking_time, base_servings, status, level_cooking,
+      name, description, cooking_time, base_servings, status, level_cooking,
       ingredients, steps
     } = req.body;
 
+    // Ưu tiên lấy URL từ file upload, nếu không có thì lấy từ body (chuỗi URL cũ)
+    const image_url = req.file ? req.file.path : req.body.image_url;
+
     if (!name) {
-      return res.status(400).json({ success: false, message: 'Tên công thức là bắt buộc.' });
+      return next(new AppError('Tên công thức là bắt buộc.', 400));
     }
 
     // 1. Tạo mới công thức
@@ -491,10 +483,13 @@ async function addRecipe(req, res) {
     });
   } catch (err) {
     console.error('❌ Error adding recipe:', err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Tạo công thức thất bại.',
-    });
+    // Cleanup: Xóa file ảnh trên Cloudinary nếu lưu DB thất bại để tránh orphaned files
+    if (uploadedPublicId) {
+      cloudinary.uploader.destroy(uploadedPublicId).catch(cleanupErr => {
+        console.error('❌ Failed to clean up orphaned image (async):', cleanupErr);
+      });
+    }
+    return next(new AppError(err.message || 'Tạo công thức thất bại.', 500));
   }
 }
 
@@ -502,19 +497,24 @@ async function addRecipe(req, res) {
  * UC-74: PUT /api/admin/recipes/:id
  * Cập nhật công thức (Bao gồm thông tin cơ bản, cập nhật nguyên liệu, bước nấu và tự tính lại dinh dưỡng)
  */
-async function updateRecipe(req, res) {
+async function updateRecipe(req, res, next) {
+  let uploadedPublicId = req.file ? req.file.filename : null;
   try {
     const recipeId = req.params.id;
     const {
-      name, description, image_url, cooking_time, base_servings, status, level_cooking,
+      name, description, cooking_time, base_servings, status, level_cooking,
       ingredients, steps
     } = req.body;
+
+    const image_url = req.file ? req.file.path : req.body.image_url;
 
     // 1. Kiểm tra xem công thức có tồn tại không
     const recipe = await Recipe.findById(recipeId);
     if (!recipe) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy công thức để cập nhật.' });
+      return next(new AppError('Không tìm thấy công thức để cập nhật.', 404));
     }
+    
+    const oldImageUrl = recipe.image_url;
 
     // 2. Cập nhật thông tin cơ bản của Recipe
     if (name) recipe.name = name;
@@ -560,6 +560,16 @@ async function updateRecipe(req, res) {
       }
     }
 
+    // 5. Nếu cập nhật thành công và có ảnh mới, dọn dẹp ảnh cũ trên Cloudinary
+    if (req.file && oldImageUrl) {
+      const oldPublicId = extractCloudinaryPublicId(oldImageUrl);
+      if (oldPublicId) {
+        cloudinary.uploader.destroy(oldPublicId).catch(err => {
+          console.error('❌ Failed to clean up old recipe image (async):', err);
+        });
+      }
+    }
+
     return res.json({
       success: true,
       message: 'Cập nhật công thức thành công!',
@@ -567,10 +577,12 @@ async function updateRecipe(req, res) {
     });
   } catch (err) {
     console.error('❌ Error updating recipe:', err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Cập nhật công thức thất bại.',
-    });
+    if (uploadedPublicId) {
+      cloudinary.uploader.destroy(uploadedPublicId).catch(cleanupErr => {
+        console.error('❌ Failed to clean up orphaned image (async):', cleanupErr);
+      });
+    }
+    return next(new AppError(err.message || 'Cập nhật công thức thất bại.', 500));
   }
 }
 
@@ -578,13 +590,13 @@ async function updateRecipe(req, res) {
  * UC-74: DELETE /api/admin/recipes/:id
  * Xóa mềm công thức (Đổi trạng thái thành 'archived' để ẩn đi)
  */
-async function deleteRecipe(req, res) {
+async function deleteRecipe(req, res, next) {
   try {
     const recipeId = req.params.id;
 
     const recipe = await Recipe.findById(recipeId);
     if (!recipe) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy công thức.' });
+      return next(new AppError('Không tìm thấy công thức.', 404));
     }
 
     // Xóa mềm: Chuyển trạng thái sang 'archived' thay vì xóa vật lý (hard delete)
@@ -597,10 +609,7 @@ async function deleteRecipe(req, res) {
     });
   } catch (err) {
     console.error('❌ Error deleting recipe:', err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Xóa công thức thất bại.',
-    });
+    return next(new AppError(err.message || 'Xóa công thức thất bại.', 500));
   }
 }
 
@@ -608,7 +617,7 @@ async function deleteRecipe(req, res) {
  * UC-75: GET /api/recipes (hoặc /api/user/recipes)
  * Bộ lọc tìm kiếm nâng cao cho công thức món ăn công khai
  */
-async function searchAndFilterRecipes(req, res) {
+async function searchAndFilterRecipes(req, res, next) {
   try {
     const {
       search,
@@ -629,9 +638,10 @@ async function searchAndFilterRecipes(req, res) {
     const matchStage = { status: 'published' };
 
     if (search) {
+      const safeSearch = escapeRegex(search);
       matchStage.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { description: { $regex: safeSearch, $options: 'i' } }
       ];
     }
 
@@ -706,10 +716,7 @@ async function searchAndFilterRecipes(req, res) {
 
   } catch (err) {
     console.error('❌ Error in Search/Filter Recipes:', err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Xảy ra lỗi trong quá trình tìm kiếm công thức.'
-    });
+    return next(new AppError(err.message || 'Xảy ra lỗi trong quá trình tìm kiếm công thức.', 500));
   }
 }
 
@@ -717,10 +724,10 @@ async function searchAndFilterRecipes(req, res) {
  * UC-76: POST /api/admin/recipes/import-excel
  * Nhập hàng loạt công thức phức tạp từ file Excel, thực hiện validate lỗi logic và bulk insert hiệu năng cao
  */
-async function importRecipesExcel(req, res) {
+async function importRecipesExcel(req, res, next) {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'Vui lòng cung cấp tệp Excel (.xlsx hoặc .xls).' });
+      return next(new AppError('Vui lòng cung cấp tệp Excel (.xlsx hoặc .xls).', 400));
     }
 
     // 1. Đọc tệp excel từ bộ nhớ đệm Buffer
@@ -730,7 +737,7 @@ async function importRecipesExcel(req, res) {
     const rows = xlsx.utils.sheet_to_json(worksheet);
 
     if (rows.length === 0) {
-      return res.status(400).json({ success: false, message: 'Tệp Excel trống không có dữ liệu.' });
+      return next(new AppError('Tệp Excel trống không có dữ liệu.', 400));
     }
 
     // 2. Thu thập trước tất cả các ID nguyên liệu xuất hiện trong Excel để tìm kiếm hàng loạt (Tránh N+1)
@@ -853,7 +860,7 @@ async function importRecipesExcel(req, res) {
         success: false,
         message: 'Import thất bại do dữ liệu file Excel chứa lỗi logic.',
         errors: errorLog
-      });
+      }); // keep custom json since it returns array of logic errors
     }
 
     // 5. Thực thi TRUE BULK INSERT đồng loạt vào 4 bảng
@@ -881,10 +888,7 @@ async function importRecipesExcel(req, res) {
 
   } catch (err) {
     console.error('❌ Error Importing Excel Recipes:', err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Xảy ra lỗi hệ thống khi nhập dữ liệu tệp Excel.'
-    });
+    return next(new AppError(err.message || 'Xảy ra lỗi hệ thống khi nhập dữ liệu tệp Excel.', 500));
   }
 }
 

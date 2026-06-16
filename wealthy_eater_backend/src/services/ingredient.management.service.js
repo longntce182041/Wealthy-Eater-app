@@ -65,7 +65,7 @@ class IngredientManagementService {
 
         const newIngredient = new Ingredient({
             name: data.name,
-            ImageUrl: data.ImageUrl || "",
+            image_url: data.image_url || "",
             calories_per_unit: data.calories_per_unit,
             protein: data.protein || 0,
             carbs: data.carbs || 0,
@@ -101,7 +101,15 @@ class IngredientManagementService {
         }
 
         // Cập nhật dữ liệu
-        Object.assign(ingredient, data);
+        // Explicitly update fields instead of Object.assign to ensure Mongoose tracks changes properly
+        if (data.name !== undefined) ingredient.name = data.name;
+        if (data.calories_per_unit !== undefined) ingredient.calories_per_unit = data.calories_per_unit;
+        if (data.protein !== undefined) ingredient.protein = data.protein;
+        if (data.carbs !== undefined) ingredient.carbs = data.carbs;
+        if (data.fat !== undefined) ingredient.fat = data.fat;
+        if (data.description !== undefined) ingredient.description = data.description;
+        if (data.unit !== undefined) ingredient.unit = data.unit;
+        if (data.image_url !== undefined) ingredient.image_url = data.image_url;
 
         const updated = await ingredient.save();
 

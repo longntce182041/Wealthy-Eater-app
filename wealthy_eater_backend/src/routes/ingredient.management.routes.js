@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const ingredientController = require("../controllers/ingredient.management.controller");
 const { protect, authorize } = require("../middlewares/authMiddleware");
+const { ingredientUpload } = require("../config/upload.config");
 
 // Cấu hình multer lưu trữ tạm thời trong bộ nhớ (Memory Storage) để xử lý stream
 const storage = multer.memoryStorage();
@@ -22,11 +23,11 @@ const upload = multer({
 // UC-60 View List Ingredients
 router.get("/", protect, authorize('admin'), ingredientController.getIngredients);
 // UC-62 Create Ingredient
-router.post("/create", protect, authorize('admin'), ingredientController.createIngredient);
+router.post("/create", protect, authorize('admin'), ingredientUpload.single('image'), ingredientController.createIngredient);
 // UC-61 View Ingredient Detail
 router.get("/:id", protect, authorize('admin'), ingredientController.getIngredientDetail);
 // UC-63 Update Ingredient
-router.put("/update/:id", protect, authorize('admin'), ingredientController.updateIngredient);
+router.put("/update/:id", protect, authorize('admin'), ingredientUpload.single('image'), ingredientController.updateIngredient);
 // UC-63 Delete Ingredient
 router.delete("/delete/:id", protect, authorize('admin'), ingredientController.deleteIngredient);
 
