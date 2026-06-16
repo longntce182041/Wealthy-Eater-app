@@ -22,7 +22,7 @@ class ChatController {
    *  - limit  (number, default 30, max 100)
    *  - before (string, message _id — cursor for older messages)
    */
-  async getMessages(req, res) {
+  async getMessages(req, res, next) {
     try {
       const userId     = req.user.id;
       const contractId = req.params.contractId;
@@ -40,18 +40,7 @@ class ChatController {
         error:   null,
       });
     } catch (error) {
-      console.error('ChatController.getMessages Error:', error.message);
-      const statusCode = error.statusCode || error.status || 500;
-      return res.status(statusCode).json({
-        success: false,
-        data:    null,
-        error: {
-          code:    statusCode === 404 ? 'CONTRACT_NOT_FOUND'
-                 : statusCode === 403 ? 'FORBIDDEN'
-                 : 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to fetch message history.',
-        },
-      });
+      return next(error);
     }
   }
 
@@ -63,7 +52,7 @@ class ChatController {
    * Upload a meal image and persist it as an image message.
    * Expects multipart/form-data with field name `image`.
    */
-  async uploadImage(req, res) {
+  async uploadImage(req, res, next) {
     try {
       const userId     = req.user.id;
       const contractId = req.params.contractId;
@@ -83,19 +72,7 @@ class ChatController {
         error:   null,
       });
     } catch (error) {
-      console.error('ChatController.uploadImage Error:', error.message);
-      const statusCode = error.statusCode || error.status || 500;
-      return res.status(statusCode).json({
-        success: false,
-        data:    null,
-        error: {
-          code:    statusCode === 400 ? 'VALIDATION_ERROR'
-                 : statusCode === 403 ? 'FORBIDDEN'
-                 : statusCode === 404 ? 'CONTRACT_NOT_FOUND'
-                 : 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to upload image.',
-        },
-      });
+      return next(error);
     }
   }
 
@@ -107,7 +84,7 @@ class ChatController {
    * Mark all unread messages (sent by the other party) as read.
    * Broadcasts a `messages_read` event to the room.
    */
-  async markRead(req, res) {
+  async markRead(req, res, next) {
     try {
       const userId     = req.user.id;
       const contractId = req.params.contractId;
@@ -129,18 +106,7 @@ class ChatController {
         error:   null,
       });
     } catch (error) {
-      console.error('ChatController.markRead Error:', error.message);
-      const statusCode = error.statusCode || error.status || 500;
-      return res.status(statusCode).json({
-        success: false,
-        data:    null,
-        error: {
-          code:    statusCode === 403 ? 'FORBIDDEN'
-                 : statusCode === 404 ? 'CONTRACT_NOT_FOUND'
-                 : 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to mark messages as read.',
-        },
-      });
+      return next(error);
     }
   }
 
@@ -152,7 +118,7 @@ class ChatController {
    * Returns all active consultation contracts for the authenticated nutritionist.
    * Used to populate the Clients tab in the nutritionist mobile screen.
    */
-  async getNutritionistActiveContracts(req, res) {
+  async getNutritionistActiveContracts(req, res, next) {
     try {
       const userId    = req.user.id;
       const contracts = await chatService.getActiveContractsForNutritionist(userId);
@@ -163,17 +129,7 @@ class ChatController {
         error:   null,
       });
     } catch (error) {
-      console.error('ChatController.getNutritionistActiveContracts Error:', error.message);
-      const statusCode = error.statusCode || error.status || 500;
-      return res.status(statusCode).json({
-        success: false,
-        data:    null,
-        error: {
-          code:    statusCode === 404 ? 'NUTRITIONIST_NOT_FOUND'
-                 : 'INTERNAL_SERVER_ERROR',
-          message: error.message || 'Failed to fetch active contracts.',
-        },
-      });
+      return next(error);
     }
   }
 }

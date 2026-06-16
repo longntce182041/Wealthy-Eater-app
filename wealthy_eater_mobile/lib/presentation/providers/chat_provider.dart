@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/error/app_error.dart';
 import '../../data/models/chat_message_model.dart';
 import '../../data/services/chat_service.dart';
 
@@ -143,7 +144,7 @@ class ChatProvider extends ChangeNotifier {
     } catch (e) {
       if (isInitial) {
         _loadState = ChatLoadState.error;
-        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        _errorMessage = mapError(e).message;
       }
       debugPrint('[ChatProvider] Failed to load history: $e');
     }
@@ -173,7 +174,7 @@ class ChatProvider extends ChangeNotifier {
       await _service.sendTextMessage(_contractId!, content.trim());
       // The real message will arrive via the onNewMessage socket event.
     } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _errorMessage = mapError(e).message;
       debugPrint('[ChatProvider] sendTextMessage error: $e');
     } finally {
       _isSendingText = false;
@@ -200,7 +201,7 @@ class ChatProvider extends ChangeNotifier {
       await _service.uploadImage(_contractId!, imageFile);
       // The image message will arrive via the onNewMessage socket event
     } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _errorMessage = mapError(e).message;
       debugPrint('[ChatProvider] sendImageMessage error: $e');
       notifyListeners();
     } finally {

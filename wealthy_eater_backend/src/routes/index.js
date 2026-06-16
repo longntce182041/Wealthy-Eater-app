@@ -7,13 +7,13 @@ const router = express.Router();
 const adminRecipeRoute = require("./admin.recipe.routes");
 const adminUserRoute = require("./admin.user.routes");
 const authRoute = require("./auth.route");
-const chatRoute = require('./chat.routes');
+const chatRoute = require("./chat.routes");
 const consultationRoute = require("./user.consultation.routes");
 const ingredientRoute = require("./ingredient.management.routes");
 const micronutrientRoute = require("./micronutrient.management.routes");
 const notificationRoute = require("./user.notification.routes");
 const nutritionistRoute = require("./nutritionist.routes");
-const nutritionistChatRoute = require('./nutritionist.chat.routes');
+const nutritionistChatRoute = require("./nutritionist.chat.routes");
 const profileRoute = require("./profile.route");
 const shoppingListRoute = require("./shopping_list.route");
 const userRecipeRoute = require("./user.recipe.route");
@@ -37,7 +37,7 @@ router.use("/api/admin/analytics", analyticsRoute);
 
 // ─── NUTRITIONIST ROUTES ────────────────────────────────────────────────────
 router.use("/api/nutritionists", nutritionistRoute);
-router.use('/api/nutritionist', nutritionistChatRoute);
+router.use("/api/nutritionist", nutritionistChatRoute);
 router.use("/api/meal-plans", mealPlanRoutes);
 
 // ─── USER / CUSTOMER ROUTES ─────────────────────────────────────────────────
@@ -47,7 +47,7 @@ router.use("/api/user/recipes", userRecipeRoute);
 router.use("/api/user/shopping-list", shoppingListRoute);
 
 // ─── CHAT ROUTES (shared: user + nutritionist) ───────────────────────────────
-router.use('/api/chat', chatRoute);
+router.use("/api/chat", chatRoute);
 
 // ─── WEBHOOK ROUTES (unauthenticated, verified via signature) ───────────────
 router.use("/api/webhooks", webhookRoute);

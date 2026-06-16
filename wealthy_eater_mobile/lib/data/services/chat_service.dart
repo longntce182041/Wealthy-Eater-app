@@ -15,6 +15,7 @@ import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'dart:async';
 
 import '../../core/network/api_client.dart';
+import '../../core/error/app_error.dart';
 import '../models/chat_message_model.dart';
 
 /// Result of a paginated message history fetch.
@@ -49,7 +50,6 @@ class ChatService {
     int limit = 30,
     String? before,
   }) async {
-    try {
       final queryParams = <String, dynamic>{
         'page': page,
         'limit': limit,
@@ -74,16 +74,9 @@ class ChatService {
         );
       }
 
-      throw Exception(
+      throw AppError(
         response.data['error']?['message'] ?? 'Failed to fetch messages.',
       );
-    } on DioException catch (e) {
-      throw Exception(
-        e.response?.data?['error']?['message'] ??
-            e.message ??
-            'Failed to fetch messages.',
-      );
-    }
   }
 
   // ── HTTP: Upload Image ─────────────────────────────────────────────────────
@@ -94,7 +87,6 @@ class ChatService {
     String contractId,
     File imageFile,
   ) async {
-    try {
       final formData = FormData.fromMap({
         'image': await MultipartFile.fromFile(
           imageFile.path,
@@ -115,16 +107,9 @@ class ChatService {
         );
       }
 
-      throw Exception(
+      throw AppError(
         response.data?['error']?['message'] ?? 'Failed to upload image.',
       );
-    } on DioException catch (e) {
-      throw Exception(
-        e.response?.data?['error']?['message'] ??
-            e.message ??
-            'Failed to upload image.',
-      );
-    }
   }
 
 
@@ -145,7 +130,6 @@ class ChatService {
   /// Returns all active consultation contracts for the authenticated nutritionist,
   /// enriched with customer user info and unread message counts.
   Future<List<Map<String, dynamic>>> fetchActiveContracts() async {
-    try {
       final response =
           await _apiClient.get('/api/nutritionist/contracts/active');
 
@@ -154,16 +138,9 @@ class ChatService {
         return data.map((item) => Map<String, dynamic>.from(item as Map)).toList();
       }
 
-      throw Exception(
+      throw AppError(
         response.data['error']?['message'] ?? 'Failed to fetch clients.',
       );
-    } on DioException catch (e) {
-      throw Exception(
-        e.response?.data?['error']?['message'] ??
-            e.message ??
-            'Failed to fetch clients.',
-      );
-    }
   }
 
   // ── Socket.IO: Connection Lifecycle ───────────────────────────────────────
