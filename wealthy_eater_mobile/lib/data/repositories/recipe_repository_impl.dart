@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../core/error/app_error.dart';
 import '../../core/network/api_client.dart';
 import '../../domain/entities/recipe.dart';
 import '../../domain/repositories/recipe_repository.dart';
@@ -45,9 +46,9 @@ class RecipeRepositoryImpl implements RecipeRepository {
         return items.whereType<Map<String, dynamic>>().map(RecipeModel.fromJson).toList();
       }
 
-      throw Exception(response.data['message'] ?? 'Unable to load recipes');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? e.message ?? 'Unable to load recipes');
+      throw AppError(response.data['message'] ?? 'Unable to load recipes');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -63,9 +64,9 @@ class RecipeRepositoryImpl implements RecipeRepository {
         }
       }
 
-      throw Exception(response.data['message'] ?? 'Unable to load recipe detail');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? e.message ?? 'Unable to load recipe detail');
+      throw AppError(response.data['message'] ?? 'Unable to load recipe detail');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -87,9 +88,9 @@ class RecipeRepositoryImpl implements RecipeRepository {
         );
       }
 
-      throw Exception(response.data['message'] ?? 'Failed to toggle like');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? e.message ?? 'Failed to toggle like');
+      throw AppError(response.data['message'] ?? 'Failed to toggle like');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -108,9 +109,9 @@ class RecipeRepositoryImpl implements RecipeRepository {
         };
       }
 
-      throw Exception(response.data['message'] ?? 'Unable to load liked recipes');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? e.message ?? 'Unable to load liked recipes');
+      throw AppError(response.data['message'] ?? 'Unable to load liked recipes');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -155,9 +156,9 @@ class RecipeRepositoryImpl implements RecipeRepository {
         return RecipeReviewModel.fromJson(data);
       }
 
-      throw Exception(response.data['message'] ?? 'Failed to submit review');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? e.message ?? 'Failed to submit review');
+      throw AppError(response.data['message'] ?? 'Failed to submit review');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -187,9 +188,9 @@ class RecipeRepositoryImpl implements RecipeRepository {
         };
       }
 
-      throw Exception(response.data['message'] ?? 'Unable to load reviews');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? e.message ?? 'Unable to load reviews');
+      throw AppError(response.data['message'] ?? 'Unable to load reviews');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -217,8 +218,8 @@ class RecipeRepositoryImpl implements RecipeRepository {
   Future<void> deleteReview(String reviewId) async {
     try {
       await apiClient.delete('/api/user/recipes/reviews/$reviewId');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? e.message ?? 'Failed to delete review');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -239,9 +240,9 @@ class RecipeRepositoryImpl implements RecipeRepository {
         };
       }
 
-      throw Exception(response.data['message'] ?? 'Unable to load your reviews');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['message'] ?? e.message ?? 'Unable to load your reviews');
+      throw AppError(response.data['message'] ?? 'Unable to load your reviews');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 }

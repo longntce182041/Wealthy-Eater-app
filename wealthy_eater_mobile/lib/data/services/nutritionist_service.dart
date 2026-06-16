@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../core/error/app_error.dart';
 import '../../core/network/api_client.dart';
 import '../models/nutritionist_model.dart';
 
@@ -17,9 +18,9 @@ class NutritionistService {
         return items.whereType<Map<String, dynamic>>().map(NutritionistModel.fromJson).toList();
       }
 
-      throw Exception(response.data['error']?['message'] ?? 'Unable to load nutritionists');
-    } on DioException catch (e) {
-      throw Exception(e.response?.data?['error']?['message'] ?? e.message ?? 'Unable to load nutritionists');
+      throw AppError(response.data['error']?['message'] ?? 'Unable to load nutritionists');
+    } catch (e) {
+      throw mapError(e);
     }
   }
 }
