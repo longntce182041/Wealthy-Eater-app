@@ -32,3 +32,9 @@ venv/
 # Tránh quét các file tự sinh của flutter build local
 wealthy_eater_mobile/macos/
 wealthy_eater_mobile/windows/
+
+# Agent Skills
+.agent
+
+# Markdown files
+*.md

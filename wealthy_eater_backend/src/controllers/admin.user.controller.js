@@ -165,7 +165,7 @@ async function getUsersList(req, res) {
     });
 
     // 6. Gộp dữ liệu hoàn chỉnh từ 3 bảng thông qua hàm Helper
-    const data = users.map(user => 
+    const data = users.map(user =>
       mapUserForAdmin(
         user,
         profileMap[user._id] || null,

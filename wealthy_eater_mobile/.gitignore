@@ -54,3 +54,6 @@ node_modules/
 # Tránh quét các file tự sinh của flutter build local
 wealthy_eater_mobile/macos/
 wealthy_eater_mobile/windows/
+
+# Markdown files
+*.md

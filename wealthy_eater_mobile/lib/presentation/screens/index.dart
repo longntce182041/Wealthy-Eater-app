@@ -14,3 +14,4 @@ export 'nutritionists_tab.dart';
 export 'nutritionist_detail_screen.dart';
 export 'nutritionist_dashboard_screen.dart';
 export 'notification_history_screen.dart';
+export 'chat_screen.dart';

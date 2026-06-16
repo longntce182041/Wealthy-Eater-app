@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/models/active_contract_model.dart';
 import '../../core/theme/app_colors.dart';
+import 'chat_screen.dart';
 
 class MyNutritionistDashboard extends StatelessWidget {
   final ActiveContractModel contract;
@@ -234,8 +235,15 @@ class MyNutritionistDashboard extends StatelessWidget {
                     subtitle: 'Direct message',
                     color: const Color(0xFF1E88E5),
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Chat feature coming soon!')),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatScreen(
+                            contractId: contract.id,
+                            peerName: doc.fullName,
+                            peerInitials: doc.initials,
+                          ),
+                        ),
                       );
                     },
                   ),
