@@ -2,14 +2,16 @@ import React from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
 // ĐỒNG BỘ CHUẨN CẤU TRÚC THƯ MỤC THỰC TẾ CỦA BẠN:
-import DashboardPage from "../pages/Dashboard.jsx"; // File Dashboard.jsx nằm trực tiếp trong pages
+import DashboardPage from "../pages/Dashboard.jsx"; 
 import IngredientsPage from "../pages/ingredients/ingredients.jsx";
-import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx"; // Trỏ đúng vào file micronutrients.jsx chứ không phải index.jsx
+import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx"; 
 import RecipesPage from "../pages/recipes/recipes.jsx"; 
 import RecipeDetail from '../pages/recipes/recipe-detail';
+import AddRecipePage from "../pages/recipes/add-recipe";
+import EditRecipePage from "../pages/recipes/edit-recipes.jsx"; // Nhớ trỏ đúng đường dẫn đến file edit-recipes của ní
 import LoginPage from "../pages/Login.jsx"; // File Login.jsx nằm trực tiếp trong pages
 import AdminLayout from "../layouts/AdminLayout.jsx";
-
+import PlatformAnalyticsPage from "../pages/analytics/PlatformAnalytics.jsx";
 const PrivateRoute = () => {
   const token = localStorage.getItem("admin_session_jwt_token");
   if (!token) {
@@ -49,10 +51,19 @@ export function AppRoutes() {
 
           {/* Group Route bảo vệ nghiêm ngặt chỉ dành cho duy nhất Admin */}
           <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
+          <Route path="analytics" element={<PlatformAnalyticsPage />} />
             <Route path="ingredients" element={<IngredientsPage />} />
             <Route path="micronutrients" element={<MicronutrientsPage />} />
+            
+            {/* 1. Trang danh sách công thức */}
             <Route path="recipes" element={<RecipesPage />} /> 
+            
+            2. ✅ ĐƯA TRANG ADD LÊN TRÊN (Để tránh bị nhầm add là một cái id)
+            <Route path="recipes/add" element={<AddRecipePage />} />
+            <Route path="recipes/edit/:id" element={<EditRecipePage />} />
+            {/* 3. ĐƯA TRANG CHI TIẾT XUỐNG DƯỚI CÙNG */}
             <Route path="recipes/:id" element={<RecipeDetail />} />
+            
           </Route>
         </Route>
       </Route>

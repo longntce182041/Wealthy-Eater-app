@@ -26,7 +26,6 @@ function escapeRegex(value) {
 function buildAdminFilter(query) {
   const filter = {};
 
-  // Filtro por busca (nome, descrição, nível)
   if (query.search) {
     const searchTerm = escapeRegex(String(query.search).trim());
     filter.$or = [
@@ -36,17 +35,14 @@ function buildAdminFilter(query) {
     ];
   }
 
-  // Filtro por status
   if (query.status) {
     filter.status = { $regex: `^${escapeRegex(String(query.status).trim())}$`, $options: 'i' };
   }
 
-  // Filtro por nível de dificuldade
   if (query.level) {
     filter.level_cooking = { $regex: `^${escapeRegex(String(query.level).trim())}$`, $options: 'i' };
   }
 
-  // Filtro por tempo de preparo (minutos)
   if (query.minTime || query.maxTime) {
     filter.cooking_time = {};
     if (query.minTime) {
@@ -62,19 +58,18 @@ function buildAdminFilter(query) {
 
 /**
  * Helper: Lê e converte ingredientes para RecipeIngredientDocs, calculando a nutrição no processo.
- * Evita o problema N+1 ao buscar todos os ingredientes em uma única query ao banco de dados.
  */
 async function processRecipeIngredients(recipeId, ingredientsInput) {
   let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
   const recipeIngredientDocs = [];
 
-  // Extrair IDs para uma busca em lote
-  const ingredientIds = ingredientsInput.map(i => i.ingredient_id).filter(Boolean);
+  if (!ingredientsInput || !Array.isArray(ingredientsInput) || ingredientsInput.length === 0) {
+    return { recipeIngredientDocs, nutrition: { calories: 0, protein: 0, fat: 0, carbs: 0 } };
+  }
 
-  // Buscar todos os ingredientes de uma só vez (otimização O(1) query)
+  const ingredientIds = ingredientsInput.map(i => i.ingredient_id).filter(Boolean);
   const ingredientDataList = await Ingredient.find({ _id: { $in: ingredientIds } }).lean();
-  
-  // Mapear para busca rápida (lookup)
+
   const ingredientMap = {};
   for (const data of ingredientDataList) {
     ingredientMap[data._id.toString()] = data;
@@ -110,9 +105,9 @@ async function processRecipeIngredients(recipeId, ingredientsInput) {
 }
 
 /**
- * Mapeia dados da receita para o formato retornado
+ * Mapeia dados da receita para o formato retornado chuẩn Frontend
  */
-function mapRecipeForAdmin(recipe, nutrition, reviewStats, ingredientsCount, stepsCount) {
+function mapRecipeForAdmin(recipe, nutrition, reviewStats, ingredientsCount, stepsCount, ingredientsList = [], stepsList = []) {
   return {
     id: recipe._id,
     name: recipe.name,
@@ -137,144 +132,66 @@ function mapRecipeForAdmin(recipe, nutrition, reviewStats, ingredientsCount, ste
     },
     ingredientsCount: ingredientsCount || 0,
     stepsCount: stepsCount || 0,
+    ingredients: ingredientsList,
+    steps: stepsList
   };
 }
 
 /**
  * UC-71: GET /api/admin/recipes
- * Lista todas as receitas do sistema com paginação e filtros
  */
 async function getRecipesList(req, res, next) {
   try {
     const filter = buildAdminFilter(req.query || {});
 
-    // Filtro por calorias via RecipeNutrition
     if (req.query.minCalories || req.query.maxCalories) {
       const nutritionFilter = {};
-      
-      if (req.query.minCalories) {
-        nutritionFilter.calories = { $gte: Number(req.query.minCalories) };
-      }
+      if (req.query.minCalories) nutritionFilter.calories = { $gte: Number(req.query.minCalories) };
       if (req.query.maxCalories) {
-        if (nutritionFilter.calories) {
-          nutritionFilter.calories.$lte = Number(req.query.maxCalories);
-        } else {
-          nutritionFilter.calories = { $lte: Number(req.query.maxCalories) };
-        }
+        nutritionFilter.calories = { ...(nutritionFilter.calories || {}), $lte: Number(req.query.maxCalories) };
       }
-
-      const matchedNutritions = await RecipeNutrition.find(nutritionFilter)
-        .select('recipe_id')
-        .lean();
-      const validRecipeIds = matchedNutritions.map(n => n.recipe_id);
-
-      filter._id = { $in: validRecipeIds };
+      const matchedNutritions = await RecipeNutrition.find(nutritionFilter).select('recipe_id').lean();
+      filter._id = { $in: matchedNutritions.map(n => n.recipe_id) };
     }
 
-    // Configurar ordenação
-    let sortObj = { createdAt: -1 }; // Padrão: mais recentes primeiro
+    let sortObj = { createdAt: -1 };
     const sortBy = req.query.sortBy || 'newest';
-
     switch (sortBy) {
-      case 'name_asc':
-        sortObj = { name: 1 };
-        break;
-      case 'name_desc':
-        sortObj = { name: -1 };
-        break;
-      case 'time_asc':
-        sortObj = { cooking_time: 1 };
-        break;
-      case 'time_desc':
-        sortObj = { cooking_time: -1 };
-        break;
-      case 'oldest':
-        sortObj = { createdAt: 1 };
-        break;
-      case 'newest':
-      default:
-        sortObj = { createdAt: -1 };
-        break;
+      case 'name_asc': sortObj = { name: 1 }; break;
+      case 'name_desc': sortObj = { name: -1 }; break;
+      case 'time_asc': sortObj = { cooking_time: 1 }; break;
+      case 'time_desc': sortObj = { cooking_time: -1 }; break;
+      case 'oldest': sortObj = { createdAt: 1 }; break;
+      case 'newest': default: sortObj = { createdAt: -1 }; break;
     }
 
-    // Paginação
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
     const skip = (page - 1) * limit;
 
-    // Buscar receitas com paginação
     const [recipes, total] = await Promise.all([
-      Recipe.find(filter)
-        .sort(sortObj)
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      Recipe.find(filter).sort(sortObj).skip(skip).limit(limit).lean(),
       Recipe.countDocuments(filter),
     ]);
 
     if (recipes.length === 0) {
-      return res.json({
-        success: true,
-        message: 'No recipes found',
-        data: [],
-        meta: {
-          page,
-          limit,
-          total,
-          totalPages: 0,
-          hasNextPage: false,
-          hasPrevPage: false,
-        },
-      });
+      return res.json({ success: true, message: 'No recipes found', data: [], meta: { page, limit, total, totalPages: 0, hasNextPage: false, hasPrevPage: false } });
     }
 
     const recipeIds = recipes.map(r => r._id);
-
-    // Buscar dados relacionados em paralelo
     const [nutritions, reviewStats, ingredientCounts, stepCounts] = await Promise.all([
       RecipeNutrition.find({ recipe_id: { $in: recipeIds } }).lean(),
-      RecipeReview.aggregate([
-        { $match: { recipe_id: { $in: recipeIds } } },
-        {
-          $group: {
-            _id: '$recipe_id',
-            count: { $sum: 1 },
-            avgRating: { $avg: '$rating' },
-          },
-        },
-      ]),
-      RecipeIngredient.aggregate([
-        { $match: { recipe_id: { $in: recipeIds } } },
-        { $group: { _id: '$recipe_id', count: { $sum: 1 } } },
-      ]),
-      RecipeStep.aggregate([
-        { $match: { recipe_id: { $in: recipeIds } } },
-        { $group: { _id: '$recipe_id', count: { $sum: 1 } } },
-      ]),
+      RecipeReview.aggregate([{ $match: { recipe_id: { $in: recipeIds } } }, { $group: { _id: '$recipe_id', count: { $sum: 1 }, avgRating: { $avg: '$rating' } } }]),
+      RecipeIngredient.aggregate([{ $match: { recipe_id: { $in: recipeIds } } }, { $group: { _id: '$recipe_id', count: { $sum: 1 } } }]),
+      RecipeStep.aggregate([{ $match: { recipe_id: { $in: recipeIds } } }, { $group: { _id: '$recipe_id', count: { $sum: 1 } } }]),
     ]);
 
-    // Mapear dados relacionados por ID
-    const nutritionMap = {};
-    nutritions.forEach(n => {
-      nutritionMap[n.recipe_id] = n;
-    });
+    const nutritionMap = {}, reviewMap = {}, ingredientMap = {}, stepMap = {};
+    nutritions.forEach(n => { nutritionMap[n.recipe_id] = n; });
+    reviewStats.forEach(r => { reviewMap[r._id] = r; });
+    ingredientCounts.forEach(i => { ingredientMap[i._id] = i.count; });
+    stepCounts.forEach(s => { stepMap[s._id] = s.count; });
 
-    const reviewMap = {};
-    reviewStats.forEach(r => {
-      reviewMap[r._id] = r;
-    });
-
-    const ingredientMap = {};
-    ingredientCounts.forEach(i => {
-      ingredientMap[i._id] = i.count;
-    });
-
-    const stepMap = {};
-    stepCounts.forEach(s => {
-      stepMap[s._id] = s.count;
-    });
-
-    // Mapear receitas com dados relacionados
     const data = recipes.map(recipe =>
       mapRecipeForAdmin(
         recipe,
@@ -286,22 +203,7 @@ async function getRecipesList(req, res, next) {
     );
 
     const totalPages = Math.ceil(total / limit);
-    const hasNextPage = page < totalPages;
-    const hasPrevPage = page > 1;
-
-    return res.json({
-      success: true,
-      message: 'Recipes loaded successfully',
-      data,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages,
-        hasNextPage,
-        hasPrevPage,
-      },
-    });
+    return res.json({ success: true, message: 'Recipes loaded successfully', data, meta: { page, limit, total, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 } });
   } catch (err) {
     console.error('❌ Error fetching recipes:', err);
     return next(new AppError(err.message || 'Failed to load recipes', 500, null, process.env.NODE_ENV === 'development' ? err.stack : undefined));
@@ -310,67 +212,24 @@ async function getRecipesList(req, res, next) {
 
 /**
  * UC-71: GET /api/admin/recipes/stats
- * Obtém estatísticas gerais sobre receitas
  */
 async function getRecipesStats(req, res, next) {
   try {
-    const [
-      totalRecipes,
-      publishedRecipes,
-      draftRecipes,
-      totalReviews,
-      avgRating,
-      topRecipeByRating,
-    ] = await Promise.all([
+    const [totalRecipes, publishedRecipes, draftRecipes, totalReviews, avgRating, topRecipeByRating] = await Promise.all([
       Recipe.countDocuments({}),
       Recipe.countDocuments({ status: 'published' }),
       Recipe.countDocuments({ status: 'draft' }),
       RecipeReview.countDocuments({}),
-      RecipeReview.aggregate([
-        { $group: { _id: null, avgRating: { $avg: '$rating' } } },
-      ]),
-      RecipeReview.aggregate([
-        {
-          $group: {
-            _id: '$recipe_id',
-            avgRating: { $avg: '$rating' },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { avgRating: -1 } },
-        { $limit: 1 },
-        {
-          $lookup: {
-            from: 'recipes',
-            localField: '_id',
-            foreignField: '_id',
-            as: 'recipe',
-          },
-        },
-      ]),
+      RecipeReview.aggregate([{ $group: { _id: null, avgRating: { $avg: '$rating' } } }]),
+      RecipeReview.aggregate([{ $group: { _id: '$recipe_id', avgRating: { $avg: '$rating' }, count: { $sum: 1 } } }, { $sort: { avgRating: -1 } }, { $limit: 1 }, { $lookup: { from: 'recipes', localField: '_id', foreignField: '_id', as: 'recipe' } }]),
     ]);
 
     const stats = {
-      totalRecipes,
-      publishedRecipes,
-      draftRecipes,
-      totalReviews,
+      totalRecipes, publishedRecipes, draftRecipes, totalReviews,
       averageRating: avgRating[0]?.avgRating ? Number(avgRating[0].avgRating.toFixed(1)) : 0,
-      topRecipe: topRecipeByRating[0]
-        ? {
-            id: topRecipeByRating[0]._id,
-            name: topRecipeByRating[0].recipe[0]?.name || 'Unknown',
-            rating: Number((topRecipeByRating[0].avgRating || 0).toFixed(1)),
-            reviewCount: topRecipeByRating[0].count,
-          }
-        : null,
+      topRecipe: topRecipeByRating[0] ? { id: topRecipeByRating[0]._id, name: topRecipeByRating[0].recipe[0]?.name || 'Unknown', rating: Number((topRecipeByRating[0].avgRating || 0).toFixed(1)), reviewCount: topRecipeByRating[0].count } : null,
     };
-
-    return res.json({
-      success: true,
-      message: 'Stats loaded successfully',
-      data: stats,
-    });
+    return res.json({ success: true, message: 'Stats loaded successfully', data: stats });
   } catch (err) {
     console.error('❌ Error fetching stats:', err);
     return next(new AppError(err.message || 'Failed to load stats', 500));
@@ -378,40 +237,50 @@ async function getRecipesStats(req, res, next) {
 }
 
 /**
- * GET /api/admin/recipes/:id
- * Obtém detalhes completos de uma receita específica
+ * GET /api/admin/recipes/:id 
  */
 async function getRecipeDetail(req, res, next) {
   try {
     const recipe = await Recipe.findById(req.params.id).lean();
-
     if (!recipe) {
       return next(new AppError('Recipe not found', 404));
     }
 
-    const [nutrition, reviewStats] = await Promise.all([
+    const [nutrition, reviewStats, dbIngredients, dbSteps] = await Promise.all([
       RecipeNutrition.findOne({ recipe_id: recipe._id }).lean(),
-      RecipeReview.aggregate([
-        { $match: { recipe_id: recipe._id } },
-        { $group: { _id: null, count: { $sum: 1 }, avgRating: { $avg: '$rating' } } },
-      ]),
+      RecipeReview.aggregate([{ $match: { recipe_id: recipe._id } }, { $group: { _id: null, count: { $sum: 1 }, avgRating: { $avg: '$rating' } } }]),
+      RecipeIngredient.find({ recipe_id: recipe._id }).lean(),
+      RecipeStep.find({ recipe_id: recipe._id }).sort({ step_number: 1 }).lean()
     ]);
 
+    let enrichedIngredients = [];
+    if (dbIngredients.length > 0) {
+      const ingIds = dbIngredients.map(i => i.ingredient_id);
+      const ingsData = await Ingredient.find({ _id: { $in: ingIds } }).lean();
+      const ingMap = {};
+      ingsData.forEach(d => { ingMap[d._id.toString()] = d; });
+
+      enrichedIngredients = dbIngredients.map(item => ({
+        ...item,
+        name: ingMap[item.ingredient_id]?.name || "Nguyên liệu ẩn",
+        unit: item.unit || ingMap[item.ingredient_id]?.unit || "g"
+      }));
+    }
+
+    const stepsList = dbSteps.map(s => s.instruction);
     const revStats = reviewStats[0] || { count: 0, avgRating: 0 };
 
     const data = mapRecipeForAdmin(
       recipe,
       nutrition,
       revStats,
-      0,
-      0
+      enrichedIngredients.length,
+      stepsList.length,
+      enrichedIngredients,
+      stepsList
     );
 
-    return res.json({
-      success: true,
-      message: 'Recipe loaded successfully',
-      data,
-    });
+    return res.json({ success: true, message: 'Recipe loaded successfully', data });
   } catch (err) {
     console.error('❌ Error fetching recipe detail:', err);
     return next(new AppError(err.message || 'Failed to load recipe', 500));
@@ -420,63 +289,52 @@ async function getRecipeDetail(req, res, next) {
 
 /**
  * UC-73: POST /api/admin/recipes
- * Tạo công thức nấu ăn mới và tự động tính toán tổng dinh dưỡng
  */
 async function addRecipe(req, res, next) {
   try {
-    const {
-      name, description, image_url, cooking_time, base_servings, status, level_cooking,
-      ingredients, steps
-    } = req.body;
+    const { name, description, image_url, cooking_time, base_servings, status, level_cooking, ingredients, steps } = req.body;
 
     if (!name) {
       return next(new AppError('Tên công thức là bắt buộc.', 400));
     }
 
-    // 1. Tạo mới công thức
     const recipe = new Recipe({
-      name,
-      description,
-      image_url,
+      name, description, image_url,
       cooking_time: Number(cooking_time) || 0,
       base_servings: Number(base_servings) || 1,
       status: status || 'draft',
       level_cooking: level_cooking || 'medium',
     });
-
     await recipe.save();
 
-    // 2. Thêm nguyên liệu & tính tổng dinh dưỡng
+    let savedNutrition = { calories: 0, protein: 0, fat: 0, carbs: 0 };
+
     if (ingredients && Array.isArray(ingredients) && ingredients.length > 0) {
       const processed = await processRecipeIngredients(recipe._id, ingredients);
-      
       if (processed.recipeIngredientDocs.length > 0) {
         await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
+        const nutritionDoc = await RecipeNutrition.create({ recipe_id: recipe._id, ...processed.nutrition });
+        savedNutrition = nutritionDoc.toObject();
       }
-
-      // Lưu tổng dinh dưỡng
-      await RecipeNutrition.create({
-        recipe_id: recipe._id,
-        ...processed.nutrition
-      });
+    } else {
+      await RecipeNutrition.create({ recipe_id: recipe._id, calories: 0, protein: 0, fat: 0, carbs: 0 });
     }
 
-    // 3. Thêm các bước nấu
+    let stepsList = [];
     if (steps && Array.isArray(steps) && steps.length > 0) {
       const recipeStepDocs = steps.map((stepContent, index) => ({
         recipe_id: recipe._id,
-        step_number: typeof stepContent === 'object' ? stepContent.step_number : index + 1,
+        step_number: index + 1,
         instruction: typeof stepContent === 'object' ? stepContent.instruction : stepContent,
       }));
-
       await RecipeStep.insertMany(recipeStepDocs);
+      stepsList = recipeStepDocs.map(s => s.instruction);
     }
 
-    return res.status(201).json({
-      success: true,
-      message: 'Tạo công thức thành công!',
-      data: recipe,
-    });
+    // 🌟 ĐỒNG BỘ: Trả về cấu trúc map chuẩn giống hàm detail để Frontend không lỗi
+    const responseData = mapRecipeForAdmin(recipe.toObject(), savedNutrition, null, ingredients?.length || 0, stepsList.length, [], stepsList);
+
+    return res.status(201).json({ success: true, message: 'Tạo công thức thành công!', data: responseData });
   } catch (err) {
     console.error('❌ Error adding recipe:', err);
     return next(new AppError(err.message || 'Tạo công thức thất bại.', 500));
@@ -485,23 +343,17 @@ async function addRecipe(req, res, next) {
 
 /**
  * UC-74: PUT /api/admin/recipes/:id
- * Cập nhật công thức (Bao gồm thông tin cơ bản, cập nhật nguyên liệu, bước nấu và tự tính lại dinh dưỡng)
  */
 async function updateRecipe(req, res, next) {
   try {
     const recipeId = req.params.id;
-    const {
-      name, description, image_url, cooking_time, base_servings, status, level_cooking,
-      ingredients, steps
-    } = req.body;
+    const { name, description, image_url, cooking_time, base_servings, status, level_cooking, ingredients, steps } = req.body;
 
-    // 1. Kiểm tra xem công thức có tồn tại không
     const recipe = await Recipe.findById(recipeId);
     if (!recipe) {
       return next(new AppError('Không tìm thấy công thức để cập nhật.', 404));
     }
 
-    // 2. Cập nhật thông tin cơ bản của Recipe
     if (name) recipe.name = name;
     if (description !== undefined) recipe.description = description;
     if (image_url !== undefined) recipe.image_url = image_url;
@@ -509,47 +361,38 @@ async function updateRecipe(req, res, next) {
     if (base_servings !== undefined) recipe.base_servings = Number(base_servings);
     if (status) recipe.status = status;
     if (level_cooking) recipe.level_cooking = level_cooking;
-
     await recipe.save();
 
-    // 3. Cập nhật Nguyên liệu & Tính lại Dinh dưỡng (Chỉ thực thi nếu client có gửi mảng ingredients)
+    let savedNutrition = { calories: 0, protein: 0, fat: 0, carbs: 0 };
+
     if (ingredients && Array.isArray(ingredients)) {
-      const processed = await processRecipeIngredients(recipeId, ingredients);
-
-      // Chiến lược thay thế: Xóa nguyên liệu cũ -> Thêm nguyên liệu mới
       await RecipeIngredient.deleteMany({ recipe_id: recipeId });
-      if (processed.recipeIngredientDocs.length > 0) {
-        await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
+      if (ingredients.length > 0) {
+        const processed = await processRecipeIngredients(recipeId, ingredients);
+        if (processed.recipeIngredientDocs.length > 0) {
+          await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
+          const nutDoc = await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { ...processed.nutrition }, { upsert: true, new: true });
+          if (nutDoc) savedNutrition = nutDoc;
+        }
+      } else {
+        await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { calories: 0, protein: 0, fat: 0, carbs: 0 }, { upsert: true });
       }
-
-      // Cập nhật lại chỉ số dinh dưỡng (dùng findOneAndUpdate để nếu chưa có thì upsert tạo mới)
-      await RecipeNutrition.findOneAndUpdate(
-        { recipe_id: recipeId },
-        { ...processed.nutrition },
-        { upsert: true, returnDocument: 'after' }
-      );
     }
 
-    // 4. Cập nhật các bước nấu ăn (Chỉ thực thi nếu client gửi mảng steps)
+    let stepsList = [];
     if (steps && Array.isArray(steps)) {
-      const recipeStepDocs = steps.map((stepContent, index) => ({
-        recipe_id: recipeId,
-        step_number: typeof stepContent === 'object' ? stepContent.step_number : index + 1,
-        instruction: typeof stepContent === 'object' ? stepContent.instruction : stepContent,
-      }));
-
-      // Chiến lược thay thế: Xóa bước cũ -> Thêm bước mới
       await RecipeStep.deleteMany({ recipe_id: recipeId });
-      if (recipeStepDocs.length > 0) {
+      if (steps.length > 0) {
+        const recipeStepDocs = steps.map((stepContent, index) => ({ recipe_id: recipeId, step_number: index + 1, instruction: typeof stepContent === 'object' ? stepContent.instruction : stepContent }));
         await RecipeStep.insertMany(recipeStepDocs);
+        stepsList = recipeStepDocs.map(s => s.instruction);
       }
     }
 
-    return res.json({
-      success: true,
-      message: 'Cập nhật công thức thành công!',
-      data: recipe,
-    });
+    // 🌟 ĐỒNG BỘ: Trả về cấu trúc map chuẩn giống hàm detail
+    const responseData = mapRecipeForAdmin(recipe.toObject(), savedNutrition, null, ingredients?.length || 0, stepsList.length, [], stepsList);
+
+    return res.json({ success: true, message: 'Cập nhật công thức thành công!', data: responseData });
   } catch (err) {
     console.error('❌ Error updating recipe:', err);
     return next(new AppError(err.message || 'Cập nhật công thức thất bại.', 500));
@@ -558,7 +401,6 @@ async function updateRecipe(req, res, next) {
 
 /**
  * UC-74: DELETE /api/admin/recipes/:id
- * Xóa mềm công thức (Đổi trạng thái thành 'archived' để ẩn đi)
  */
 async function deleteRecipe(req, res, next) {
   try {
@@ -572,11 +414,7 @@ async function deleteRecipe(req, res, next) {
     // Xóa mềm: Chuyển trạng thái sang 'archived' thay vì xóa vật lý (hard delete)
     recipe.status = 'archived';
     await recipe.save();
-
-    return res.json({
-      success: true,
-      message: 'Đã xóa mềm công thức thành công (đã ẩn khỏi danh sách hiển thị).',
-    });
+    return res.json({ success: true, message: 'Đã xóa mềm công thức thành công.' });
   } catch (err) {
     console.error('❌ Error deleting recipe:', err);
     return next(new AppError(err.message || 'Xóa công thức thất bại.', 500));
@@ -584,105 +422,38 @@ async function deleteRecipe(req, res, next) {
 }
 
 /**
- * UC-75: GET /api/recipes (hoặc /api/user/recipes)
- * Bộ lọc tìm kiếm nâng cao cho công thức món ăn công khai
+ * UC-75: GET /api/recipes (User search)
  */
 async function searchAndFilterRecipes(req, res, next) {
   try {
-    const {
-      search,
-      diet_trend,
-      minTime,
-      maxTime,
-      minCalories,
-      maxCalories,
-      page = 1,
-      limit = 10
-    } = req.query;
+    const { search, diet_trend, minTime, maxTime, minCalories, maxCalories, page = 1, limit = 10 } = req.query;
+    const pageNum = Number(page) || 1, limitNum = Number(limit) || 10, skipNum = (pageNum - 1) * limitNum;
 
-    const pageNum = Number(page) || 1;
-    const limitNum = Number(limit) || 10;
-    const skipNum = (pageNum - 1) * limitNum;
-
-    const pipeline = [];
-    const matchStage = { status: 'published' };
-
-    if (search) {
-      matchStage.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
-      ];
-    }
-
+    const pipeline = [], matchStage = { status: 'published' };
+    if (search) matchStage.$or = [{ name: { $regex: search, $options: 'i' } }, { description: { $regex: search, $options: 'i' } }];
     if (minTime || maxTime) {
       matchStage.cooking_time = {};
       if (minTime) matchStage.cooking_time.$gte = Number(minTime);
       if (maxTime) matchStage.cooking_time.$lte = Number(maxTime);
     }
-
-    if (diet_trend) {
-      matchStage.diet_trends = { $regex: diet_trend, $options: 'i' };
-    }
+    if (diet_trend) matchStage.diet_trends = { $regex: diet_trend, $options: 'i' };
 
     pipeline.push({ $match: matchStage });
-
-    pipeline.push({
-      $lookup: {
-        from: 'recipenutritions',
-        localField: '_id',
-        foreignField: 'recipe_id',
-        as: 'nutrition_info'
-      }
-    });
-
-    pipeline.push({
-      $unwind: {
-        path: '$nutrition_info',
-        preserveNullAndEmptyArrays: true
-      }
-    });
+    pipeline.push({ $lookup: { from: 'recipenutritions', localField: '_id', foreignField: 'recipe_id', as: 'nutrition_info' } });
+    pipeline.push({ $unwind: { path: '$nutrition_info', preserveNullAndEmptyArrays: true } });
 
     if (minCalories || maxCalories) {
       const calorieMatch = {};
       if (minCalories) calorieMatch['nutrition_info.calories'] = { $gte: Number(minCalories) };
-      if (maxCalories) {
-        calorieMatch['nutrition_info.calories'] = {
-          ...(calorieMatch['nutrition_info.calories'] || {}),
-          $lte: Number(maxCalories)
-        };
-      }
+      if (maxCalories) calorieMatch['nutrition_info.calories'] = { ...(calorieMatch['nutrition_info.calories'] || {}), $lte: Number(maxCalories) };
       pipeline.push({ $match: calorieMatch });
     }
 
-    pipeline.push({
-      $facet: {
-        metadata: [{ $count: 'total' }],
-        data: [
-          { $sort: { createdAt: -1 } },
-          { $skip: skipNum },
-          { $limit: limitNum }
-        ]
-      }
-    });
-
+    pipeline.push({ $facet: { metadata: [{ $count: 'total' }], data: [{ $sort: { createdAt: -1 } }, { $skip: skipNum }, { $limit: limitNum }] } });
     const result = await Recipe.aggregate(pipeline);
 
-    const recipesList = result[0]?.data || [];
-    const totalRecords = result[0]?.metadata[0]?.total || 0;
-    const totalPages = Math.ceil(totalRecords / limitNum);
-
-    return res.json({
-      success: true,
-      message: 'Tìm kiếm và lọc công thức nấu ăn thành công!',
-      pagination: {
-        totalItems: totalRecords,
-        totalPages: totalPages,
-        currentPage: pageNum,
-        pageSize: limitNum
-      },
-      data: recipesList
-    });
-
+    const recipesList = result[0]?.data || [], totalRecords = result[0]?.metadata[0]?.total || 0;
+    return res.json({ success: true, message: 'Tìm kiếm thành công!', pagination: { totalItems: totalRecords, totalPages: Math.ceil(totalRecords / limitNum), currentPage: pageNum, pageSize: limitNum }, data: recipesList });
   } catch (err) {
     console.error('❌ Error in Search/Filter Recipes:', err);
     return next(new AppError(err.message || 'Xảy ra lỗi trong quá trình tìm kiếm công thức.', 500));
@@ -691,7 +462,6 @@ async function searchAndFilterRecipes(req, res, next) {
 
 /**
  * UC-76: POST /api/admin/recipes/import-excel
- * Nhập hàng loạt công thức phức tạp từ file Excel, thực hiện validate lỗi logic và bulk insert hiệu năng cao
  */
 async function importRecipesExcel(req, res, next) {
   try {
@@ -699,7 +469,6 @@ async function importRecipesExcel(req, res, next) {
       return next(new AppError('Vui lòng cung cấp tệp Excel (.xlsx hoặc .xls).', 400));
     }
 
-    // 1. Đọc tệp excel từ bộ nhớ đệm Buffer
     const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
@@ -713,114 +482,53 @@ async function importRecipesExcel(req, res, next) {
     const uniqueIngredientIds = new Set();
     rows.forEach(row => {
       const rawIngs = row.Ingredients || row.ingredients;
-      if (rawIngs) {
-        String(rawIngs).split('|').forEach(item => {
-          const parts = item.split(':');
-          if (parts[0]) uniqueIngredientIds.add(parts[0].trim());
-        });
-      }
+      if (rawIngs) String(rawIngs).split('|').forEach(item => { const parts = item.split(':'); if (parts[0]) uniqueIngredientIds.add(parts[0].trim()); });
     });
 
-    // Truy vấn hàng loạt dữ liệu nguyên liệu hệ thống trong 1 câu lệnh đơn
     const ingredientList = await Ingredient.find({ _id: { $in: Array.from(uniqueIngredientIds) } }).lean();
     const ingredientMap = {};
-    ingredientList.forEach(ing => {
-      ingredientMap[ing._id.toString()] = ing;
-    });
+    ingredientList.forEach(ing => { ingredientMap[ing._id.toString()] = ing; });
 
-    const errorLog = [];
-    const recipesToInsert = [];
-    const ingredientsToInsert = [];
-    const stepsToInsert = [];
-    const nutritionsToInsert = [];
+    const errorLog = [], recipesToInsert = [], ingredientsToInsert = [], stepsToInsert = [], nutritionsToInsert = [];
 
-    // 3. Vòng lặp Validate dữ liệu từng hàng một
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNumber = i + 2; // Dòng đầu là tiêu đề cột
+      const row = rows[i], rowNumber = i + 2, name = row.Name || row.name;
+      if (!name) { errorLog.push(`Dòng ${rowNumber}: Thiếu trường Name.`); continue; }
 
-      const name = row.Name || row.name;
-      const cookingTime = row.CookingTime || row.cooking_time || row.cookingTime;
-      const baseServings = row.BaseServings || row.base_servings || row.baseServings;
+      // 🌟 SỬA LỖI TẠI ĐÂY: Tạo ObjectId thuần, không dùng .toString() để né lỗi ép kiểu string trong MongoDB
+      const recipeId = new mongoose.Types.ObjectId();
 
-      if (!name) {
-        errorLog.push(`Dòng ${rowNumber}: Thiếu trường tên công thức bắt buộc (Name).`);
-        continue;
-      }
-
-      // Khởi sinh ID String thủ công để liên kết dữ liệu quan hệ nhúng trước khi insertMany
-      const recipeId = new mongoose.Types.ObjectId().toString();
-
-      // Bóc tách dữ liệu mảng nhúng nguyên liệu (Format: ID:Quantity:Unit)
       const rawIngsStr = row.Ingredients || row.ingredients || '';
       const rawIngredients = rawIngsStr ? String(rawIngsStr).split('|') : [];
-      
-      let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0;
-      let hasIngredientError = false;
+
+      let totalCalories = 0, totalProtein = 0, totalFat = 0, totalCarbs = 0, hasIngredientError = false;
       const rowIngredientDocs = [];
 
       for (const item of rawIngredients) {
-        const parts = item.split(':');
-        const ingredientId = parts[0]?.trim();
+        const parts = item.split(':'), ingredientId = parts[0]?.trim();
         if (!ingredientId) continue;
 
-        const quantity = Number(parts[1]) || 0;
-        const unit = parts[2]?.trim() || '';
-
+        const quantity = Number(parts[1]) || 0, unit = parts[2]?.trim() || '';
         const ingredientData = ingredientMap[ingredientId];
-        if (!ingredientData) {
-          errorLog.push(`Dòng ${rowNumber}: Không tìm thấy nguyên liệu mã ID '${ingredientId}' trong hệ thống.`);
-          hasIngredientError = true;
-          break;
-        }
+        if (!ingredientData) { errorLog.push(`Dòng ${rowNumber}: Không tìm thấy ID '${ingredientId}'.`); hasIngredientError = true; break; }
 
-        // Tính toán dồn tổng chỉ số dinh dưỡng cho công thức tự động
         totalCalories += (ingredientData.calories_per_unit || 0) * quantity;
         totalProtein += (ingredientData.protein || 0) * quantity;
         totalFat += (ingredientData.fat || 0) * quantity;
         totalCarbs += (ingredientData.carbs || 0) * quantity;
 
-        rowIngredientDocs.push({
-          recipe_id: recipeId,
-          ingredient_id: ingredientId,
-          base_quantity: quantity,
-          unit: unit || ingredientData.unit || 'g'
-        });
+        rowIngredientDocs.push({ recipe_id: recipeId, ingredient_id: ingredientId, base_quantity: quantity, unit: unit || ingredientData.unit || 'g' });
       }
 
       if (hasIngredientError) continue;
 
-      // Bóc tách dữ liệu mảng các bước thực hiện nấu ăn (Format: Bước 1|Bước 2|Bước 3)
       const rawStepsStr = row.Steps || row.steps || '';
-      const rawSteps = rawStepsStr ? String(rawStepsStr).split('|') : [];
-      const rowStepDocs = rawSteps.map((instruction, index) => ({
-        recipe_id: recipeId,
-        step_number: index + 1,
-        instruction: instruction.trim()
-      })).filter(s => s.instruction);
+      const rowStepDocs = (rawStepsStr ? String(rawStepsStr).split('|') : []).map((instruction, index) => ({ recipe_id: recipeId, step_number: index + 1, instruction: instruction.trim() })).filter(s => s.instruction);
 
-      // Đẩy vào danh sách hàng đợi chờ thực thi Bulk Insert
-      recipesToInsert.push({
-        _id: recipeId,
-        name: String(name).trim(),
-        description: row.Description || row.description || '',
-        image_url: row.ImageUrl || row.image_url || row.imageUrl || '',
-        cooking_time: Number(cookingTime) || 0,
-        base_servings: Number(baseServings) || 1,
-        status: row.Status || row.status || 'published',
-        level_cooking: row.Level || row.level_cooking || row.level || 'medium'
-      });
-
+      recipesToInsert.push({ _id: recipeId, name: String(name).trim(), description: row.Description || row.description || '', image_url: row.ImageUrl || row.image_url || '', cooking_time: Number(row.CookingTime || row.cooking_time) || 0, base_servings: Number(row.BaseServings || row.base_servings) || 1, status: row.Status || row.status || 'published', level_cooking: row.Level || row.level_cooking || 'medium' });
       ingredientsToInsert.push(...rowIngredientDocs);
       stepsToInsert.push(...rowStepDocs);
-
-      nutritionsToInsert.push({
-        recipe_id: recipeId,
-        calories: Math.round(totalCalories * 10) / 10,
-        protein: Math.round(totalProtein * 10) / 10,
-        fat: Math.round(totalFat * 10) / 10,
-        carbs: Math.round(totalCarbs * 10) / 10
-      });
+      nutritionsToInsert.push({ recipe_id: recipeId, calories: Math.round(totalCalories * 10) / 10, protein: Math.round(totalProtein * 10) / 10, fat: Math.round(totalFat * 10) / 10, carbs: Math.round(totalCarbs * 10) / 10 });
     }
 
     // 4. Trả về toàn bộ log lỗi phát hiện được, không thực hiện lưu bất kỳ bản ghi nào (All-or-Nothing)
@@ -842,15 +550,7 @@ async function importRecipesExcel(req, res, next) {
       await RecipeNutrition.insertMany(nutritionsToInsert);
     }
 
-    return res.status(201).json({
-      success: true,
-      message: 'Import thành công dữ liệu hàng loạt từ Excel!',
-      data: {
-        totalProcessed: rows.length,
-        totalImported: recipesToInsert.length
-      }
-    });
-
+    return res.status(201).json({ success: true, message: 'Import thành công!', data: { totalProcessed: rows.length, totalImported: recipesToInsert.length } });
   } catch (err) {
     console.error('❌ Error Importing Excel Recipes:', err);
     return next(new AppError(err.message || 'Xảy ra lỗi hệ thống khi nhập dữ liệu tệp Excel.', 500));
@@ -858,12 +558,5 @@ async function importRecipesExcel(req, res, next) {
 }
 
 module.exports = {
-  getRecipesList,
-  getRecipesStats,
-  getRecipeDetail,
-  addRecipe,
-  updateRecipe,
-  deleteRecipe,
-  searchAndFilterRecipes,
-  importRecipesExcel
+  getRecipesList, getRecipesStats, getRecipeDetail, addRecipe, updateRecipe, deleteRecipe, searchAndFilterRecipes, importRecipesExcel
 };

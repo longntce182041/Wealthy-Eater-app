@@ -1,14 +1,76 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const NutritionistSchema = new mongoose.Schema({
-  _id: { type: String, default: () => new mongoose.Types.ObjectId().toString() }, 
-  user_id: { type: String, ref: 'User', required: true },
-  full_name: { type: String, required: true },
-  specialization: { type: String },
-  service_fee: { type: Number, required: true },
-  certification_url: { type: String },
-  approval_status: { type: String, enum: ['pending', 'approval', 'reject'], default: 'pending' },
-  average_rating: { type: Number, default: 0.0 }
-});
+const APPROVAL_STATUSES = [
+  "pending",
+  "approval",
+  "reject",
+  "PENDING",
+  "APPROVED",
+  "REJECTED",
+];
 
-module.exports = mongoose.model('Nutritionist', NutritionistSchema);
+const NutritionistSchema = new mongoose.Schema(
+  {
+    _id: {
+      type: String,
+      default: () => new mongoose.Types.ObjectId().toString(),
+    },
+    user_id: {
+      type: String,
+      ref: "User",
+      required: true,
+      index: true,
+      alias: "userId",
+    },
+
+    // Legacy/public profile fields used by existing consultation flows
+    full_name: { type: String, trim: true, default: "" },
+    specialization: { type: String, trim: true },
+
+    // UC-45 expert registration fields
+    professional_title: {
+      type: String,
+      trim: true,
+      alias: "professionalTitle",
+    },
+    license_number: { type: String, trim: true, alias: "licenseNumber" },
+    certification_url: { type: String, trim: true, alias: "certificateUrl" },
+    certificate_public_id: {
+      type: String,
+      trim: true,
+      alias: "certificatePublicId",
+    },
+
+    service_fee: { type: Number, required: true, min: 0, alias: "serviceFee" },
+    approval_status: {
+      type: String,
+      enum: APPROVAL_STATUSES,
+      default: "PENDING",
+      alias: "approvalStatus",
+      index: true,
+    },
+    average_rating: {
+      type: Number,
+      default: 5.0,
+      min: 0,
+      max: 5,
+      alias: "averageRating",
+    },
+  },
+  {
+    timestamps: true,
+    versionKey: false,
+  },
+);
+
+NutritionistSchema.index(
+  { license_number: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { license_number: { $exists: true, $ne: "" } },
+  },
+);
+
+NutritionistSchema.index({ user_id: 1, approval_status: 1 });
+
+module.exports = mongoose.model("Nutritionist", NutritionistSchema);
