@@ -1,111 +1,70 @@
-:root {
-  --text: #4b5563;
-  --text-h: #111827;
-  --bg: #f9fafb;
-  --border: #e5e7eb;
-  --code-bg: #f3f4f6;
-  --accent: #6366f1;
-  --accent-bg: rgba(99, 102, 241, 0.1);
-  --accent-border: rgba(99, 102, 241, 0.5);
-  --social-bg: rgba(243, 244, 246, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.05) 0 10px 15px -3px, rgba(0, 0, 0, 0.02) 0 4px 6px -2px;
+@import "tailwindcss";
 
-  --sans: 'Plus Jakarta Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: 'Plus Jakarta Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 16px/145% var(--sans);
-  letter-spacing: 0.1px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 15px;
-  }
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  
+  --color-background: var(--bg);
+  --color-foreground: var(--text-h);
+  
+  --color-card: var(--card-bg);
+  --color-card-foreground: var(--text-h);
+  
+  --color-primary: var(--primary);
+  --color-primary-foreground: #ffffff;
+  --color-primary-hover: var(--primary-hover);
+  
+  --color-muted: var(--bg-muted);
+  --color-muted-foreground: var(--text-muted);
+  
+  --color-border: var(--border);
+  
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: #ffffff;
 }
 
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #0b0c10;
-    --border: #1f2937;
-    --code-bg: #111827;
-    --accent: #818cf8;
-    --accent-bg: rgba(129, 140, 248, 0.15);
-    --accent-border: rgba(129, 140, 248, 0.5);
-    --social-bg: rgba(31, 41, 55, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.3) 0 10px 15px -3px, rgba(0, 0, 0, 0.15) 0 4px 6px -2px;
+    /* Synchronized with Mobile App Theme */
+    --bg: #F7FAF5; /* AppColors.background */
+    --card-bg: #FFFCF7; /* AppColors.surface */
+    
+    --text-h: #141F1A; /* AppColors.textPrimary */
+    --text-main: #5A6B62; /* AppColors.textSecondary */
+    --text-muted: #90A499; /* AppColors.textTertiary */
+    
+    --border: #E2EBE5; /* AppColors.border */
+    --bg-muted: #EDF2EE; /* AppColors.divider */
+    
+    --primary: #4A9F71; /* AppColors.primary */
+    --primary-hover: #2E4E41; /* AppColors.primaryDark */
+    
+    --destructive: #D32F2F; /* AppColors.error */
+    
+    --radius: 0.75rem;
   }
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+  /* Force light mode variables even if OS is dark, ensuring a consistent dashboard */
+  /* Remove automatic dark mode to prevent mismatched Tailwind vs Custom variables */
+
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    color: var(--text-main);
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-foreground font-semibold tracking-tight;
   }
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-}
-
-#root {
-  width: 100%;
-  max-width: 100%;
-  margin: 0;
-  text-align: left;
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-4 py-2 font-medium transition-colors rounded-lg bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:pointer-events-none;
   }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-4 py-2 font-medium transition-colors rounded-lg bg-muted text-foreground border border-border hover:bg-muted/80 disabled:opacity-50 disabled:pointer-events-none;
   }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
 }

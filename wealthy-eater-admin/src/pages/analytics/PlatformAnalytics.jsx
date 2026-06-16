@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import apiClient from '../../services/api';
@@ -10,10 +10,10 @@ export default function PlatformAnalytics() {
   const [error, setError] = useState('');
   
   // Thiết lập bộ lọc thời gian mặc định (30 ngày gần nhất)
-  const [startDate, setStartDate] = useState(
+  const [startDate, setStartDate] = useState(() => 
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   // State lưu trữ dữ liệu trả về từ API UC-57
   const [analyticsData, setAnalyticsData] = useState({
@@ -22,22 +22,7 @@ export default function PlatformAnalytics() {
     healthGoalAchievement: []
   });
 
-  useEffect(() => {
-    // Kiểm tra thông tin phiên làm việc của quản trị viên
-    const rawUser = localStorage.getItem('admin_user');
-    const token = localStorage.getItem('admin_session_jwt_token');
-
-    if (!rawUser || !token) {
-      localStorage.removeItem('admin_user');
-      localStorage.removeItem('admin_session_jwt_token');
-      navigate('/login');
-      return;
-    }
-
-    fetchAnalytics();
-  }, [startDate, endDate, navigate]);
-
-  async function fetchAnalytics() {
+  const fetchAnalytics = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -64,7 +49,26 @@ export default function PlatformAnalytics() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [startDate, endDate, navigate]);
+
+  useEffect(() => {
+    // Kiểm tra thông tin phiên làm việc của quản trị viên
+    const rawUser = localStorage.getItem('admin_user');
+    const token = localStorage.getItem('admin_session_jwt_token');
+
+    if (!rawUser || !token) {
+      localStorage.removeItem('admin_user');
+      localStorage.removeItem('admin_session_jwt_token');
+      navigate('/login');
+      return;
+    }
+
+    // Sử dụng setTimeout để hoãn việc gọi hàm chứa setState đồng bộ (tránh lỗi cascading renders của React Compiler)
+    const timeoutId = setTimeout(() => {
+      fetchAnalytics();
+    }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [fetchAnalytics, navigate]);
 
   // Khớp nối dữ liệu từ 3 mảng độc lập thành cấu trúc chuỗi thời gian thống nhất cho biểu đồ
   const mergedData = (analyticsData.newCustomers || []).map((item) => {
@@ -118,8 +122,8 @@ export default function PlatformAnalytics() {
           <div>Aggregating platform growth data...</div>
         </div>
       ) : mergedData.length === 0 ? (
-        <div className="empty-state" style={{ padding: '60px', background: '#111827', borderRadius: '12px', border: '1px solid #1f293d' }}>
-          <p style={{ color: '#94a3b8' }}>No analytical metrics recorded within the selected period.</p>
+        <div className="empty-state" style={{ padding: '60px', background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+          <p style={{ color: 'var(--text-main)' }}>No analytical metrics recorded within the selected period.</p>
         </div>
       ) : (
         <div className="charts-grid">
@@ -129,13 +133,13 @@ export default function PlatformAnalytics() {
             <div className="chart-wrapper">
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={mergedData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
-                  <YAxis stroke="#94a3b8" fontSize={12} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#fff' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="date" stroke="var(--text-main)" fontSize={12} />
+                  <YAxis stroke="var(--text-main)" fontSize={12} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border)', color: 'var(--text-h)' }} />
                   <Legend />
-                  <Bar dataKey="New Customers" fill="#38bdf8" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Daily Active Users (DAU)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="New Customers" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Daily Active Users (DAU)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -147,12 +151,12 @@ export default function PlatformAnalytics() {
             <div className="chart-wrapper">
               <ResponsiveContainer width="100%" height={350}>
                 <LineChart data={mergedData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
-                  <YAxis stroke="#94a3b8" fontSize={12} unit="%" />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#fff' }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="date" stroke="var(--text-main)" fontSize={12} />
+                  <YAxis stroke="var(--text-main)" fontSize={12} unit="%" />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border)', color: 'var(--text-h)' }} />
                   <Legend />
-                  <Line type="monotone" dataKey="Health Goal Rate (%)" stroke="#ef4444" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="Health Goal Rate (%)" stroke="var(--destructive)" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

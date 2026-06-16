@@ -1,7 +1,12 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useCallback, useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, Search, ChevronLeft, ChevronRight, X, Database } from 'lucide-react';
 import apiClient from '../../services/api'; 
 import { toast } from 'react-toastify';
+import { DataTable, DataTableRow, DataTableCell } from '../../components/ui/DataTable';
+import { AdminButton } from '../../components/ui/AdminButton';
+import { LoadingState } from '../../components/ui/LoadingState';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { Badge } from '../../components/ui/Badge';
 
 // ==========================================
 // COMPONENT SUB-FORM (ĐÃ SỬA LỖI MÀU CHỮ Ô UNIT)
@@ -11,11 +16,14 @@ const MicronutrientForm = ({ initialData, unitOptions = [], onSubmit, onCancel, 
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (initialData) {
-            setFormData(initialData);
-        } else {
-            setFormData({ name: '', unit: 'mg', description: '' });
-        }
+        const timer = setTimeout(() => {
+            if (initialData) {
+                setFormData(initialData);
+            } else {
+                setFormData({ name: '', unit: 'mg', description: '' });
+            }
+        }, 0);
+        return () => clearTimeout(timer);
     }, [initialData]);
 
     const normalizedUnitOptions = Array.from(
@@ -40,74 +48,72 @@ const MicronutrientForm = ({ initialData, unitOptions = [], onSubmit, onCancel, 
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-            <div style={{ background: 'white', padding: '30px', borderRadius: '8px', width: '500px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-                <button onClick={onCancel} style={{ position: 'absolute', top: '15px', right: '15px', border: 'none', background: 'none', cursor: 'pointer' }} disabled={loading}>
-                    <X size={20} style={{ color: '#666' }} />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[1000] p-4">
+            <div className="bg-[var(--card-bg)] p-6 rounded-2xl w-[500px] max-h-[90vh] overflow-y-auto relative shadow-xl border border-[var(--border)]">
+                <button onClick={onCancel} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer" disabled={loading}>
+                    <X className="w-5 h-5" />
                 </button>
                 
-                <h3 style={{ marginTop: 0, color: '#30a5ff', fontSize: '18px', fontWeight: 'bold' }}>
+                <h3 className="mt-0 mb-6 text-xl font-bold text-[var(--text-h)]">
                     {isEditing ? 'Edit Micronutrient' : 'Add New Micronutrient'}
                 </h3>
                 
-                <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
-                    <div style={{ marginBottom: '15px' }}>
-                        <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#333', fontWeight: '500' }}>Micronutrient Name *</label>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Micronutrient Name *</label>
                         <input 
                             type="text" 
                             value={formData.name} 
                             onChange={e => setFormData({ ...formData, name: e.target.value })} 
-                            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} 
+                            className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" 
                             placeholder="e.g., Vitamin C, Iron"
                             required 
                             disabled={loading}
                         />
                     </div>
                     
-                    <div style={{ marginBottom: '15px' }}>
-                        <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#333', fontWeight: '500' }}>Unit *</label>
-                        {/* 🎯 Fix ép màu chữ sang đen #333 để không bị trắng tươi */}
+                    <div>
+                        <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Unit *</label>
                         <select 
                             value={formData.unit} 
                             onChange={e => setFormData({ ...formData, unit: e.target.value })} 
-                            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', background: 'white', color: '#333' }}
+                            className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] cursor-pointer"
                             disabled={loading}
                         >
-                            <option value="" style={{ color: '#333' }}>Select unit</option>
+                            <option value="">Select unit</option>
                             {normalizedUnitOptions.map((unit) => (
-                                <option key={unit} value={unit} style={{ color: '#333' }}>{unit}</option>
+                                <option key={unit} value={unit}>{unit}</option>
                             ))}
                         </select>
                     </div>
 
-                    <div style={{ marginBottom: '25px' }}>
-                        <label style={{ display: 'block', fontSize: '13px', marginBottom: '5px', color: '#333', fontWeight: '500' }}>Description</label>
+                    <div>
+                        <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Description</label>
                         <textarea 
                             rows="3" 
                             value={formData.description} 
                             onChange={e => setFormData({ ...formData, description: e.target.value })} 
-                            style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', fontFamily: 'inherit', color: '#333', background: 'white' }}
+                            className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-y"
                             placeholder="Enter description (optional)"
                             disabled={loading}
                         ></textarea>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                        <button 
+                    <div className="flex gap-3 justify-end pt-4 mt-6 border-t border-[var(--border)]">
+                        <AdminButton 
                             type="button" 
+                            variant="ghost"
                             onClick={onCancel} 
-                            style={{ background: '#f1f1f1', color: '#333', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
                             disabled={loading}
                         >
                             Cancel
-                        </button>
-                        <button 
+                        </AdminButton>
+                        <AdminButton 
                             type="submit" 
-                            style={{ background: '#30a5ff', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }} 
                             disabled={loading}
                         >
                             {loading ? 'Saving...' : (isEditing ? 'Update' : 'Add')}
-                        </button>
+                        </AdminButton>
                     </div>
                 </form>
             </div>
@@ -168,7 +174,10 @@ const MicronutrientList = () => {
     }, [fetchMicronutrients]);
 
     useEffect(() => {
-        setCurrentPage(1);
+        const timer = setTimeout(() => {
+            setCurrentPage(1);
+        }, 0);
+        return () => clearTimeout(timer);
     }, [filters]);
 
     const handlePrevPage = () => { if (currentPage > 1) setCurrentPage(prev => prev - 1); };
@@ -224,28 +233,25 @@ const MicronutrientList = () => {
     };
 
     return (
-        <div>
-            <h2 style={{ color: '#30a5ff', marginBottom: '20px' }}>Micronutrients Management</h2>
-
+        <div className="space-y-6">
             {/* --- TOOLBAR --- */}
-            <div style={{ background: 'white', padding: '15px', borderRadius: '5px', marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                    <Search size={18} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
-                    <input
-                        type="text" 
-                        placeholder="Search micronutrients..."
-                        value={filters.keyword} 
-                        onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
-                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', boxSizing: 'border-box', color: '#333', background: 'white' }}
-                    />
-                </div>
-                
-                <div style={{ position: 'relative', width: '170px' }}>
-                    <Filter size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
+            <div className="bg-[var(--card-bg)] p-4 rounded-xl shadow-sm border border-[var(--border)] flex flex-wrap gap-4 items-center justify-between">
+                <div className="flex items-center gap-4 flex-1">
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                        <input
+                            type="text" 
+                            placeholder="Search micronutrients..."
+                            value={filters.keyword} 
+                            onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
+                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] transition-shadow"
+                        />
+                    </div>
+                    
                     <select
                         value={filters.unit} 
                         onChange={(e) => setFilters({ ...filters, unit: e.target.value })}
-                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer', background: 'white', color: '#333' }}
+                        className="px-4 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] cursor-pointer"
                     >
                         <option value="">All Units</option>
                         {availableUnits.map(u => (
@@ -254,62 +260,70 @@ const MicronutrientList = () => {
                     </select>
                 </div>
 
-                <button onClick={handleOpenCreate} style={{ background: '#30a5ff', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', display: 'flex', gap: '5px', fontWeight: 'bold', alignItems: 'center' }}>
-                    <Plus size={18} /> Add Micronutrient
-                </button>
+                <AdminButton onClick={handleOpenCreate}>
+                    <Plus className="w-4 h-4" /> Add Micronutrient
+                </AdminButton>
             </div>
 
-            {/* --- LIST CARDS --- */}
-            {loading ? <p style={{ textAlign: 'center', color: '#666' }}>Loading data...</p> : (
-                <>
-                    {micronutrients.length === 0 ? (
-                        <p style={{ textAlign: 'center', color: '#999', margin: '40px 0' }}>No micronutrients found.</p>
-                    ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-                            {micronutrients.map((item) => (
-                                <div key={item._id} style={{ background: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 2px 5px rgba(0,0,0,0.1)', border: '1px solid #eee', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                    <div style={{ padding: '15px' }}>
-                                        <h3 onClick={() => handleOpenEdit(item)} style={{ margin: '0 0 5px 0', color: '#333', cursor: 'pointer' }} title="Click to edit">
-                                            {item.name}
-                                        </h3>
-                                        <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '14px' }}>
-                                            Unit: <strong style={{ color: '#30a5ff' }}>{item.unit}</strong>
-                                        </p>
-                                        <p style={{ margin: '0', color: '#888', fontSize: '13px', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                            {item.description || 'No description available.'}
-                                        </p>
-                                    </div>
-                                    
-                                    <div style={{ padding: '0 15px 15px 15px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', borderTop: '1px solid #f5f5f5', paddingTop: '12px' }}>
-                                            <button onClick={() => handleOpenEdit(item)} style={{ color: '#30a5ff', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Edit"><Edit2 size={20} /></button>
-                                            <button onClick={() => handleDelete(item._id)} style={{ color: '#f9243f', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Delete"><Trash2 size={20} /></button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+            {/* --- LIST DATATABLE --- */}
+            <DataTable 
+                headers={["Micronutrient", "Unit", "Description", "Actions"]}
+                emptyState={
+                    <tr>
+                        <td colSpan="4" className="p-0">
+                            {loading ? (
+                                <LoadingState text="Loading micronutrients..." />
+                            ) : (
+                                <EmptyState icon={Database} title="No micronutrients found" description="Try adjusting your search filters or add a new micronutrient." />
+                            )}
+                        </td>
+                    </tr>
+                }
+            >
+                {!loading && micronutrients.map((item) => (
+                    <DataTableRow key={item._id}>
+                        <DataTableCell>
+                            <span className="font-semibold text-[var(--text-h)] cursor-pointer hover:text-[var(--primary)] transition-colors" onClick={() => handleOpenEdit(item)} title="Click to edit">
+                                {item.name}
+                            </span>
+                        </DataTableCell>
+                        <DataTableCell>
+                            <Badge variant="outline" className="text-[var(--primary)] bg-[var(--primary)]/10 border-[var(--primary)]/20">{item.unit}</Badge>
+                        </DataTableCell>
+                        <DataTableCell>
+                            <div className="text-sm text-[var(--text-muted)] max-w-md truncate" title={item.description}>
+                                {item.description || <span className="italic opacity-70">No description</span>}
+                            </div>
+                        </DataTableCell>
+                        <DataTableCell>
+                            <div className="flex items-center gap-2">
+                                <AdminButton variant="ghost" size="icon" onClick={() => handleOpenEdit(item)} className="text-[var(--primary)]" title="Edit">
+                                    <Edit2 className="w-4 h-4" />
+                                </AdminButton>
+                                <AdminButton variant="ghost" size="icon" onClick={() => handleDelete(item._id)} className="text-[var(--destructive)] hover:bg-red-50 dark:hover:bg-red-950" title="Delete">
+                                    <Trash2 className="w-4 h-4" />
+                                </AdminButton>
+                            </div>
+                        </DataTableCell>
+                    </DataTableRow>
+                ))}
+            </DataTable>
 
-                    {/* --- PAGINATION --- */}
-                    {micronutrients.length > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginTop: '30px', paddingBottom: '20px' }}>
-                            <button
-                                onClick={handlePrevPage} disabled={currentPage === 1}
-                                style={{ background: currentPage === 1 ? '#eee' : 'white', border: '1px solid #ddd', padding: '8px 15px', borderRadius: '5px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '5px', color: currentPage === 1 ? '#999' : '#333' }}
-                            >
-                                <ChevronLeft size={18} /> Previous
-                            </button>
-                            <span style={{ fontWeight: 'bold', color: '#5f6468' }}>Page {currentPage} of {totalPages}</span>
-                            <button
-                                onClick={handleNextPage} disabled={currentPage === totalPages}
-                                style={{ background: currentPage === totalPages ? '#eee' : 'white', border: '1px solid #ddd', padding: '8px 15px', borderRadius: '5px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '5px', color: currentPage === totalPages ? '#999' : '#333' }}
-                            >
-                                Next <ChevronRight size={18} />
-                            </button>
-                        </div>
-                    )}
-                </>
+            {/* --- PAGINATION --- */}
+            {!loading && micronutrients.length > 0 && (
+                <div className="flex items-center justify-between px-2 pb-6">
+                    <span className="text-sm font-medium text-[var(--text-muted)]">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                        <AdminButton variant="outline" size="sm" onClick={handlePrevPage} disabled={currentPage === 1}>
+                            <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+                        </AdminButton>
+                        <AdminButton variant="outline" size="sm" onClick={handleNextPage} disabled={currentPage === totalPages}>
+                            Next <ChevronRight className="w-4 h-4 ml-1" />
+                        </AdminButton>
+                    </div>
+                </div>
             )}
 
             {/* MODAL FORM */}

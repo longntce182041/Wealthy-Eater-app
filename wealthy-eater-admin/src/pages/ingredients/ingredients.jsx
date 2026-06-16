@@ -1,7 +1,11 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import apiClient from '../../services/api';
-import { Trash2, Edit, Plus, X, Image as ImageIcon, Search, Filter, ChevronLeft, ChevronRight, FileUp } from 'lucide-react';
+import { Trash2, Edit, Plus, X, Image as ImageIcon, Search, ChevronLeft, ChevronRight, FileUp, PackageSearch } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { DataTable, DataTableRow, DataTableCell } from '../../components/ui/DataTable';
+import { AdminButton } from '../../components/ui/AdminButton';
+import { LoadingState } from '../../components/ui/LoadingState';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 const IngredientPage = () => {
     const [ingredients, setIngredients] = useState([]);
@@ -75,7 +79,10 @@ const IngredientPage = () => {
     }, [fetchIngredients]);
 
     useEffect(() => {
-        setCurrentPage(1);
+        const timer = setTimeout(() => {
+            setCurrentPage(1);
+        }, 0);
+        return () => clearTimeout(timer);
     }, [filters]);
 
     useEffect(() => {
@@ -213,24 +220,21 @@ const IngredientPage = () => {
     };
 
     return (
-        <div>
-            <h2 style={{ color: '#30a5ff', marginBottom: '20px' }}>Ingredients Management</h2>
-
+        <div className="space-y-6">
             {/* --- TOOLBAR --- */}
-            <div style={{ background: 'white', padding: '15px', borderRadius: '5px', marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'center', boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                    <Search size={18} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
-                    <input
-                        type="text" placeholder="Search ingredients..."
-                        value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
-                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', color: '#333', background: 'white' }}
-                    />
-                </div>
-                <div style={{ position: 'relative', width: '170px' }}>
-                    <Filter size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#999' }} />
+            <div className="bg-[var(--card-bg)] p-4 rounded-xl shadow-sm border border-[var(--border)] flex flex-wrap gap-4 items-center justify-between">
+                <div className="flex items-center gap-4 flex-1">
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+                        <input
+                            type="text" placeholder="Search ingredients..."
+                            value={filters.keyword} onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
+                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] transition-shadow"
+                        />
+                    </div>
                     <select
                         value={filters.unit} onChange={(e) => setFilters({ ...filters, unit: e.target.value })}
-                        style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '4px', border: '1px solid #ddd', cursor: 'pointer', color: '#333', background: 'white' }}
+                        className="px-4 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] cursor-pointer"
                     >
                         <option value="">All Units</option>
                         <option value="gram">gram</option>
@@ -240,92 +244,139 @@ const IngredientPage = () => {
                     </select>
                 </div>
 
-                <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleImportExcel} 
-                    accept=".xlsx, .xls" 
-                    style={{ display: 'none' }} 
-                />
-                <button 
-                    onClick={() => fileInputRef.current.click()} 
-                    style={{ background: '#28a745', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', display: 'flex', gap: '6px', fontWeight: 'bold', alignItems: 'center' }}
-                    title="Import ingredients from Excel template file"
-                >
-                    <FileUp size={18} /> Import Excel
-                </button>
+                <div className="flex items-center gap-3">
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleImportExcel} 
+                        accept=".xlsx, .xls" 
+                        className="hidden" 
+                    />
+                    <AdminButton 
+                        variant="secondary" 
+                        onClick={() => fileInputRef.current.click()} 
+                        title="Import ingredients from Excel template file"
+                    >
+                        <FileUp className="w-4 h-4" /> Import Excel
+                    </AdminButton>
 
-                <button onClick={handleOpenCreate} style={{ background: '#30a5ff', color: 'white', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', display: 'flex', gap: '5px', fontWeight: 'bold', alignItems: 'center' }}>
-                    <Plus size={18} /> Add Ingredient
-                </button>
+                    <AdminButton onClick={handleOpenCreate}>
+                        <Plus className="w-4 h-4" /> Add Ingredient
+                    </AdminButton>
+                </div>
             </div>
 
-            {/* --- LIST CARDS --- */}
-            {loading ? <p style={{ textAlign: 'center', color: '#666' }}>Loading data...</p> : (
-                <>
-                    {ingredients.length === 0 ? (
-                        <p style={{ textAlign: 'center', color: '#999', margin: '40px 0' }}>No ingredients found.</p>
-                    ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-                            {ingredients.map((item) => (
-                                <div key={item._id} style={{ background: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 2px 5px rgba(0,0,0,0.1)', border: '1px solid #eee' }}>
-                                    <div style={{ height: '160px', background: '#f8f9fa' }}>
-                                        {item.ImageUrl ? <img src={item.ImageUrl} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#ccc' }}><ImageIcon size={40} /></div>}
-                                    </div>
-                                    <div style={{ padding: '15px' }}>
-                                        <h3 style={{ margin: '0 0 5px 0', color: '#333' }}>{item.name}</h3>
-                                        <p style={{ margin: '0', color: '#666', fontSize: '14px' }}>Calories: <strong style={{ color: '#30a5ff' }}>{item.calories_per_unit}</strong> / {item.unit}</p>
-                                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '15px', gap: '15px' }}>
-                                            <button onClick={() => handleView(item._id)} style={{ color: '#555', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '500' }}>View</button>
-                                            <button onClick={() => handleOpenEdit(item)} style={{ color: '#30a5ff', background: 'none', border: 'none', cursor: 'pointer' }}><Edit size={20} /></button>
-                                            <button onClick={() => handleDelete(item._id)} style={{ color: '#f9243f', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={20} /></button>
-                                        </div>
-                                    </div>
+            {/* --- LIST DATATABLE --- */}
+            <DataTable 
+                headers={["Ingredient", "Calories / Unit", "Macros (g)", "Actions"]}
+                emptyState={
+                    <tr>
+                        <td colSpan="4" className="p-0">
+                            {loading ? (
+                                <LoadingState text="Loading ingredients..." />
+                            ) : (
+                                <EmptyState icon={PackageSearch} title="No ingredients found" description="Try adjusting your search filters or add a new ingredient." />
+                            )}
+                        </td>
+                    </tr>
+                }
+            >
+                {!loading && ingredients.map((item) => (
+                    <DataTableRow key={item._id}>
+                        <DataTableCell>
+                            <div className="flex items-center gap-4">
+                                <div className="h-12 w-12 rounded-xl overflow-hidden bg-[var(--bg-muted)] border border-[var(--border)] shrink-0 flex items-center justify-center">
+                                    {item.ImageUrl ? (
+                                        <img src={item.ImageUrl} alt={item.name} className="h-full w-full object-cover" />
+                                    ) : (
+                                        <ImageIcon className="w-5 h-5 text-[var(--text-muted)]" />
+                                    )}
                                 </div>
-                            ))}
-                        </div>
-                    )}
+                                <div className="flex flex-col">
+                                    <span className="font-semibold text-[var(--text-h)]">{item.name}</span>
+                                    <span className="text-xs text-[var(--text-muted)] truncate max-w-[200px]" title={item.description}>{item.description || 'No description'}</span>
+                                </div>
+                            </div>
+                        </DataTableCell>
+                        <DataTableCell>
+                            <div className="flex flex-col">
+                                <span className="font-bold text-[var(--primary)]">{item.calories_per_unit} kcal</span>
+                                <span className="text-xs text-[var(--text-muted)]">per {item.unit}</span>
+                            </div>
+                        </DataTableCell>
+                        <DataTableCell>
+                            <div className="flex gap-3 text-sm">
+                                <div className="flex flex-col items-center">
+                                    <span className="text-xs text-[var(--text-muted)] font-medium">Protein</span>
+                                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">{item.protein}g</span>
+                                </div>
+                                <div className="flex flex-col items-center border-l border-r border-[var(--border)] px-3">
+                                    <span className="text-xs text-[var(--text-muted)] font-medium">Carbs</span>
+                                    <span className="font-semibold text-amber-600 dark:text-amber-400">{item.carbs}g</span>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <span className="text-xs text-[var(--text-muted)] font-medium">Fats</span>
+                                    <span className="font-semibold text-red-500 dark:text-red-400">{item.fats}g</span>
+                                </div>
+                            </div>
+                        </DataTableCell>
+                        <DataTableCell>
+                            <div className="flex items-center gap-2">
+                                <AdminButton variant="ghost" size="sm" onClick={() => handleView(item._id)}>
+                                    View
+                                </AdminButton>
+                                <AdminButton variant="ghost" size="icon" onClick={() => handleOpenEdit(item)} className="text-[var(--primary)]">
+                                    <Edit className="w-4 h-4" />
+                                </AdminButton>
+                                <AdminButton variant="ghost" size="icon" onClick={() => handleDelete(item._id)} className="text-[var(--destructive)] hover:bg-red-50 dark:hover:bg-red-950">
+                                    <Trash2 className="w-4 h-4" />
+                                </AdminButton>
+                            </div>
+                        </DataTableCell>
+                    </DataTableRow>
+                ))}
+            </DataTable>
 
-                    {/* --- PAGINATION CONTROLS --- */}
-                    {ingredients.length > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginTop: '30px', paddingBottom: '20px' }}>
-                            <button
-                                onClick={handlePrevPage} disabled={currentPage === 1}
-                                style={{ background: currentPage === 1 ? '#eee' : 'white', border: '1px solid #ddd', padding: '8px 15px', borderRadius: '5px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '5px', color: currentPage === 1 ? '#999' : '#333' }}
-                            >
-                                <ChevronLeft size={18} /> Previous
-                            </button>
-                            <span style={{ fontWeight: 'bold', color: '#5f6468' }}>Page {currentPage} of {totalPages}</span>
-                            <button
-                                onClick={handleNextPage} disabled={currentPage === totalPages}
-                                style={{ background: currentPage === totalPages ? '#eee' : 'white', border: '1px solid #ddd', padding: '8px 15px', borderRadius: '5px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '5px', color: currentPage === totalPages ? '#999' : '#333' }}
-                            >
-                                Next <ChevronRight size={18} />
-                            </button>
-                        </div>
-                    )}
-                </>
+            {/* --- PAGINATION CONTROLS --- */}
+            {!loading && ingredients.length > 0 && (
+                <div className="flex items-center justify-between px-2 pb-6">
+                    <span className="text-sm font-medium text-[var(--text-muted)]">
+                        Page {currentPage} of {totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                        <AdminButton variant="outline" size="sm" onClick={handlePrevPage} disabled={currentPage === 1}>
+                            <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+                        </AdminButton>
+                        <AdminButton variant="outline" size="sm" onClick={handleNextPage} disabled={currentPage === totalPages}>
+                            Next <ChevronRight className="w-4 h-4 ml-1" />
+                        </AdminButton>
+                    </div>
+                </div>
             )}
 
             {/* --- MODAL CREATE / EDIT --- */}
             {showModal && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-                    <div style={{ background: 'white', padding: '30px', borderRadius: '8px', width: '500px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-                        <button onClick={() => setShowModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} style={{ color: '#666' }} /></button>
-                        <h3 style={{ marginTop: 0, color: '#30a5ff', fontWeight: 'bold' }}>{isEditing ? 'Edit Ingredient' : 'Add New Ingredient'}</h3>
-                        <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Ingredient Name</label>
-                                <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[1000] p-4">
+                    <div className="bg-[var(--card-bg)] p-6 rounded-2xl w-[500px] max-h-[90vh] overflow-y-auto relative shadow-xl border border-[var(--border)]">
+                        <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer">
+                            <X className="w-5 h-5" />
+                        </button>
+                        <h3 className="mt-0 mb-6 text-xl font-bold text-[var(--text-h)]">{isEditing ? 'Edit Ingredient' : 'Add New Ingredient'}</h3>
+                        
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Ingredient Name</label>
+                                <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                            
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Calories / Unit</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.calories_per_unit} onChange={e => handleNumberChange('calories_per_unit', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
+                                    <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Calories / Unit</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.calories_per_unit} onChange={e => handleNumberChange('calories_per_unit', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Unit</label>
-                                    <select value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }}>
+                                    <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Unit</label>
+                                    <select value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
                                         <option value="gram">gram</option>
                                         <option value="ml">ml</option>
                                         <option value="piece">piece</option>
@@ -333,81 +384,81 @@ const IngredientPage = () => {
                                     </select>
                                 </div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                            
+                            <div className="grid grid-cols-3 gap-4">
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: '#333' }}>Protein (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.protein} onChange={e => handleNumberChange('protein', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
+                                    <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Protein (g)</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.protein} onChange={e => handleNumberChange('protein', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: '#333' }}>Carbs (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.carbs} onChange={e => handleNumberChange('carbs', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
+                                    <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Carbs (g)</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.carbs} onChange={e => handleNumberChange('carbs', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: '#333' }}>Fats (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.fats} onChange={e => handleNumberChange('fats', e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} required />
+                                    <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Fats (g)</label>
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.fats} onChange={e => handleNumberChange('fats', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                             </div>
-                            <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Image URL</label>
-                                <input type="text" value={formData.ImageUrl} onChange={e => setFormData({ ...formData, ImageUrl: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white' }} placeholder="https://..." />
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Image URL</label>
+                                <input type="text" value={formData.ImageUrl} onChange={e => setFormData({ ...formData, ImageUrl: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" placeholder="https://..." />
                             </div>
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '4px', color: '#333' }}>Description</label>
-                                <textarea rows="2" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box', color: '#333', background: 'white', fontFamily: 'inherit' }}></textarea>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Description</label>
+                                <textarea rows="2" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-y"></textarea>
                             </div>
 
                             {/* MICRONUTRIENTS SECTION */}
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', marginBottom: '6px', color: '#333', fontWeight: '500' }}>Micronutrients (optional)</label>
-                                {selectedMicros.map((m, idx) => (
-                                    <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                                        <select
-                                            value={m.micronutrientId || ''}
-                                            onChange={e => {
-                                                const copy = [...selectedMicros];
-                                                copy[idx].micronutrientId = e.target.value;
-                                                setSelectedMicros(copy);
-                                            }}
-                                            style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px', color: '#333', background: 'white' }}
-                                        >
-                                            <option value="">Select micronutrient</option>
-                                            {availableMicros
-                                                .filter(a => {
-                                                    const id = a._id || a.id;
-                                                    const already = selectedMicros.some((s, si) => s.micronutrientId === id && si !== idx);
-                                                    return !already || (m.micronutrientId && (m.micronutrientId === id));
-                                                })
-                                                .map(a => <option key={a._id || a.id} value={a._id || a.id} style={{ color: '#333' }}>{a.name}</option>)}
-                                        </select>
-                                        <input type="number" min="0" onKeyDown={blockInvalidChar} value={m.amount}
-                                            onChange={e => {
-                                                const copy = [...selectedMicros];
-                                                copy[idx].amount = e.target.value;
-                                                setSelectedMicros(copy);
-                                            }}
-                                            placeholder="amount" style={{ width: '110px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', color: '#333', background: 'white' }} />
-                                        <button type="button" onClick={() => { const copy = selectedMicros.filter((_, i) => i !== idx); setSelectedMicros(copy); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#f9243f' }}><Trash2 size={16} /></button>
-                                    </div>
-                                ))}
-                                <div>
-                                    <button type="button" onClick={() => setSelectedMicros([...selectedMicros, { micronutrientId: '', amount: '' }])} style={{ background: '#eef6ff', border: '1px dashed #30a5ff', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', color: '#30a5ff', fontWeight: '500' }}>
-                                        + Add micronutrient
-                                    </button>
+                            <div className="pt-2 border-t border-[var(--border)]">
+                                <label className="block text-sm font-medium text-[var(--text-h)] mb-3">Micronutrients (optional)</label>
+                                <div className="space-y-2 mb-3">
+                                    {selectedMicros.map((m, idx) => (
+                                        <div key={idx} className="flex gap-2 items-center">
+                                            <select
+                                                value={m.micronutrientId || ''}
+                                                onChange={e => {
+                                                    const copy = [...selectedMicros];
+                                                    copy[idx].micronutrientId = e.target.value;
+                                                    setSelectedMicros(copy);
+                                                }}
+                                                className="flex-1 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                                            >
+                                                <option value="">Select micronutrient</option>
+                                                {availableMicros
+                                                    .filter(a => {
+                                                        const id = a._id || a.id;
+                                                        const already = selectedMicros.some((s, si) => s.micronutrientId === id && si !== idx);
+                                                        return !already || (m.micronutrientId && (m.micronutrientId === id));
+                                                    })
+                                                    .map(a => <option key={a._id || a.id} value={a._id || a.id}>{a.name}</option>)}
+                                            </select>
+                                            <input type="number" min="0" onKeyDown={blockInvalidChar} value={m.amount}
+                                                onChange={e => {
+                                                    const copy = [...selectedMicros];
+                                                    copy[idx].amount = e.target.value;
+                                                    setSelectedMicros(copy);
+                                                }}
+                                                placeholder="amount" className="w-24 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
+                                            <button type="button" onClick={() => { const copy = selectedMicros.filter((_, i) => i !== idx); setSelectedMicros(copy); }} className="p-2 text-[var(--destructive)] hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition-colors cursor-pointer">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
+                                <AdminButton type="button" variant="outline" size="sm" onClick={() => setSelectedMicros([...selectedMicros, { micronutrientId: '', amount: '' }])} className="w-full border-dashed">
+                                    <Plus className="w-4 h-4 mr-1" /> Add Micronutrient
+                                </AdminButton>
                             </div>
 
-                            {/* 🎯 Đã cập nhật hàng nút điều hướng: Thêm nút Cancel đồng bộ đẹp mắt */}
-                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                                <button 
-                                    type="button" 
-                                    onClick={() => setShowModal(false)} 
-                                    style={{ background: '#f1f1f1', color: '#333', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
-                                >
+                            <div className="flex gap-3 justify-end pt-4 mt-6 border-t border-[var(--border)]">
+                                <AdminButton type="button" variant="ghost" onClick={() => setShowModal(false)}>
                                     Cancel
-                                </button>
-                                <button type="submit" style={{ padding: '10px 20px', background: '#30a5ff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>
-                                    {isEditing ? 'Update' : 'Add'}
-                                </button>
+                                </AdminButton>
+                                <AdminButton type="submit">
+                                    {isEditing ? 'Save Changes' : 'Create Ingredient'}
+                                </AdminButton>
                             </div>
                         </form>
                     </div>
@@ -416,51 +467,81 @@ const IngredientPage = () => {
 
             {/* --- DETAIL MODAL --- */}
             {showDetail && detailData && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
-                    <div style={{ background: 'white', padding: '24px', borderRadius: '8px', width: '520px', maxHeight: '80vh', overflowY: 'auto', position: 'relative' }}>
-                        <button onClick={() => { setShowDetail(false); setDetailData(null); }} style={{ position: 'absolute', top: '15px', right: '15px', border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} style={{ color: '#666' }} /></button>
-                        <h3 style={{ marginTop: 0, color: '#30a5ff', fontWeight: 'bold', fontSize: '18px' }}>{detailData.name}</h3>
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[1100] p-4">
+                    <div className="bg-[var(--card-bg)] p-6 rounded-2xl w-[520px] max-h-[90vh] overflow-y-auto relative shadow-xl border border-[var(--border)]">
+                        <button onClick={() => { setShowDetail(false); setDetailData(null); }} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer">
+                            <X className="w-5 h-5" />
+                        </button>
                         
-                        <div style={{ marginTop: '15px', color: '#333', lineHeight: '1.6' }}>
-                            <p><strong>Unit:</strong> {detailData.unit} &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Calories/Unit:</strong> {detailData.calories_per_unit}</p>
-                            <p><strong>Protein:</strong> {detailData.protein}g &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Carbs:</strong> {detailData.carbs}g &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Fats:</strong> {detailData.fats}g</p>
-                            <p style={{ whiteSpace: 'pre-wrap', color: '#555', background: '#f9f9f9', padding: '10px', borderRadius: '4px', marginTop: '10px' }}>
-                                <strong>Description:</strong><br/>{detailData.description || 'No description available.'}
-                            </p>
+                        <h3 className="mt-0 mb-4 text-xl font-bold text-[var(--text-h)]">{detailData.name}</h3>
+                        
+                        <div className="space-y-4 text-sm text-[var(--text-main)]">
+                            <div className="flex gap-4">
+                                <div className="bg-[var(--bg-muted)] px-3 py-2 rounded-lg flex-1">
+                                    <span className="block text-xs text-[var(--text-muted)] mb-1">Unit</span>
+                                    <span className="font-semibold">{detailData.unit}</span>
+                                </div>
+                                <div className="bg-[var(--bg-muted)] px-3 py-2 rounded-lg flex-1">
+                                    <span className="block text-xs text-[var(--text-muted)] mb-1">Calories / Unit</span>
+                                    <span className="font-semibold text-[var(--primary)]">{detailData.calories_per_unit} kcal</span>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <div className="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-3 py-2 rounded-lg flex-1">
+                                    <span className="block text-xs opacity-70 mb-1">Protein</span>
+                                    <span className="font-bold">{detailData.protein}g</span>
+                                </div>
+                                <div className="bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 px-3 py-2 rounded-lg flex-1">
+                                    <span className="block text-xs opacity-70 mb-1">Carbs</span>
+                                    <span className="font-bold">{detailData.carbs}g</span>
+                                </div>
+                                <div className="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg flex-1">
+                                    <span className="block text-xs opacity-70 mb-1">Fats</span>
+                                    <span className="font-bold">{detailData.fats}g</span>
+                                </div>
+                            </div>
+                            
+                            {detailData.description && (
+                                <div className="bg-[var(--bg-muted)] p-3 rounded-lg border border-[var(--border)]">
+                                    <strong className="block text-xs text-[var(--text-muted)] mb-1">Description</strong>
+                                    <p className="whitespace-pre-wrap">{detailData.description}</p>
+                                </div>
+                            )}
                         </div>
 
-                        <h4 style={{ marginTop: '20px', marginBottom: '8px', color: '#333', borderBottom: '2px solid #30a5ff', paddingBottom: '4px', display: 'inline-block', fontWeight: 'bold' }}>Micronutrients Linkage</h4>
-                        {detailData.micronutrients && detailData.micronutrients.length ? (
-                            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '8px' }}>
-                                <thead>
-                                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #eee', background: '#f8f9fa' }}>
-                                        <th style={{ padding: '8px', color: '#333' }}>Name</th>
-                                        <th style={{ padding: '8px', color: '#333' }}>Amount</th>
-                                        <th style={{ padding: '8px', color: '#333' }}>Unit</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {detailData.micronutrients.map((m, i) => (
-                                        <tr key={i} style={{ borderBottom: '1px solid #fafafa' }}>
-                                            <td style={{ padding: '8px', fontWeight: '500', color: '#333' }}>{m.micronutrientId?.name || m.name || m.micronutrientId}</td>
-                                            <td style={{ padding: '8px', color: '#30a5ff', fontWeight: 'bold' }}>{m.amount}</td>
-                                            <td style={{ padding: '8px', color: '#666' }}>{m.micronutrientId?.unit || m.unit || '-'}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        ) : (
-                            <p style={{ color: '#666', fontSize: '14px', fontStyle: 'italic', marginTop: '5px' }}>No micronutrients linked to this ingredient.</p>
-                        )}
+                        <div className="mt-6">
+                            <h4 className="text-sm font-bold text-[var(--text-h)] border-b border-[var(--border)] pb-2 mb-3">Micronutrients Profile</h4>
+                            {detailData.micronutrients && detailData.micronutrients.length ? (
+                                <div className="border border-[var(--border)] rounded-lg overflow-hidden">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-[var(--bg-muted)]">
+                                            <tr>
+                                                <th className="px-4 py-2 font-semibold text-[var(--text-muted)]">Name</th>
+                                                <th className="px-4 py-2 font-semibold text-[var(--text-muted)]">Amount</th>
+                                                <th className="px-4 py-2 font-semibold text-[var(--text-muted)]">Unit</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-[var(--border)]">
+                                            {detailData.micronutrients.map((m, i) => (
+                                                <tr key={i} className="bg-[var(--card-bg)] hover:bg-[var(--bg-muted)]/50 transition-colors">
+                                                    <td className="px-4 py-2 font-medium">{m.micronutrientId?.name || m.name || m.micronutrientId}</td>
+                                                    <td className="px-4 py-2 font-bold text-[var(--primary)]">{m.amount}</td>
+                                                    <td className="px-4 py-2 text-[var(--text-muted)]">{m.micronutrientId?.unit || m.unit || '-'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-[var(--text-muted)] italic bg-[var(--bg-muted)] p-3 rounded-lg text-center">No micronutrients linked.</p>
+                            )}
+                        </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-                            <button 
-                                type="button" 
-                                onClick={() => { setShowDetail(false); setDetailData(null); }} 
-                                style={{ background: '#f1f1f1', color: '#333', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
-                            >
+                        <div className="flex justify-end mt-6 pt-4 border-t border-[var(--border)]">
+                            <AdminButton variant="secondary" onClick={() => { setShowDetail(false); setDetailData(null); }}>
                                 Close
-                            </button>
+                            </AdminButton>
                         </div>
                     </div>
                 </div>

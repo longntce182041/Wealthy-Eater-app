@@ -1,6 +1,5 @@
 import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast'; // Thêm dòng này
-import './App.css';
 import { AppRoutes } from './routes/AppRoute';
 
 export default function App() {
@@ -17,9 +16,9 @@ export default function App() {
         toastOptions={{
           duration: 5000,
           style: {
-            background: '#1e293b', // Màu nền tối đồng bộ với admin dashboard của bạn
-            color: '#fff',
-            border: '1px solid #334155'
+            background: 'var(--card-bg)', // Đồng bộ nền sáng
+            color: 'var(--text-h)',
+            border: '1px solid var(--border)'
           }
         }} 
       />
