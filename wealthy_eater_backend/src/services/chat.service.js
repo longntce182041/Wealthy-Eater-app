@@ -186,7 +186,7 @@ class ChatService {
       // Prevent orphan files: delete file from Cloudinary if DB fails or access denied
       // multer-storage-cloudinary sets file.filename to the public_id
       if (file.filename) {
-        const { cloudinary } = require('../config/upload.config');
+        const { cloudinary } = require('../config/cloudinary.config');
         cloudinary.uploader.destroy(file.filename).catch(cleanupError => {
           console.error('Failed to cleanup Cloudinary asset (async):', cleanupError);
         });

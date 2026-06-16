@@ -1,5 +1,5 @@
 /**
- * upload.config.js — Multer configuration for image uploads using Cloudinary.
+ * cloudinary.config.js — Multer configuration for image uploads using Cloudinary.
  *
  * Configures Cloudinary storage engines for different upload contexts.
  * Currently supports 'chat' uploads stored in the 'WealthyEater/chat' folder.
@@ -12,14 +12,22 @@
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const { Readable } = require('stream');
 const AppError = require('../utils/AppError');
 
 // ── Cloudinary Configuration ──────────────────────────────────────────────────
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+const cloudName = process.env.CLOUDINARY_CLOUD_NAME || process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
+const apiKey = process.env.CLOUDINARY_API_KEY || process.env.EXPO_PUBLIC_CLOUDINARY_API_KEY;
+const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+if (cloudName && apiKey && apiSecret) {
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+    secure: true,
+  });
+}
 
 // ── Allowed MIME-Type validation ──────────────────────────────────────────────
 const ALLOWED_MIME_TYPES = new Set([
@@ -91,12 +99,12 @@ const extractCloudinaryPublicId = (url) => {
     const parts = url.split('/upload/');
     if (parts.length < 2) return null;
     let path = parts[1];
-    
+
     // Loại bỏ version (ex: v1234567890/)
     if (path.match(/^v\d+\//)) {
       path = path.replace(/^v\d+\//, '');
     }
-    
+
     // Loại bỏ transformation (ex: f_auto,q_auto/)
     if (path.includes('/')) {
       const firstSegment = path.substring(0, path.indexOf('/'));
@@ -108,7 +116,7 @@ const extractCloudinaryPublicId = (url) => {
         }
       }
     }
-    
+
     // Loại bỏ extension
     const dotIndex = path.lastIndexOf('.');
     if (dotIndex !== -1) {
@@ -121,9 +129,60 @@ const extractCloudinaryPublicId = (url) => {
   }
 };
 
-module.exports = { 
-  cloudinary, 
+/**
+ * Tải lên chứng chỉ chuyên gia dinh dưỡng (hỗ trợ buffer stream)
+ * @param {Express.Multer.File} file 
+ * @param {string} certificateUrl 
+ */
+function uploadNutritionistCertificate(file, certificateUrl) {
+  if (certificateUrl) {
+    if (typeof certificateUrl !== "string" || !certificateUrl.trim()) {
+      throw new AppError("Invalid certificate URL", 400);
+    }
+    return Promise.resolve({
+      url: certificateUrl,
+      publicId: null,
+      uploadMethod: "url",
+    });
+  }
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new AppError("Cloudinary configuration is missing", 500);
+  }
+
+  if (!file?.buffer) {
+    throw new AppError("Certificate file or URL is required", 400);
+  }
+
+  const resourceType = file.mimetype === "application/pdf" ? "raw" : "image";
+
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "WealthyEater/nutritionists/certificates",
+        resource_type: resourceType,
+      },
+      (error, result) => {
+        if (error || !result) {
+          return reject(new AppError("Failed to upload certificate file", 502));
+        }
+
+        return resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+          uploadMethod: "file",
+        });
+      },
+    );
+
+    Readable.from(file.buffer).pipe(uploadStream);
+  });
+}
+
+module.exports = {
+  cloudinary,
   chatUpload,
   avatarUpload,
-  extractCloudinaryPublicId
+  extractCloudinaryPublicId,
+  uploadNutritionistCertificate
 };
