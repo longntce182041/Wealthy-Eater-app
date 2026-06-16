@@ -8,20 +8,22 @@
  *  4. Return detailed transaction/invoice information.
  */
 
-const payOS = require('../config/payos.config');
-const ConsultationContract = require('../models/ConsultationContract');
-const Transaction = require('../models/Transaction');
-const Nutritionist = require('../models/Nutritionist');
-const Notification = require('../models/Notification');
-const AuditLog = require('../models/AuditLog');
-const AppError = require('../utils/AppError');
-const mongoose = require('mongoose');
+const payOS = require("../config/payos.config");
+const ConsultationContract = require("../models/ConsultationContract");
+const Transaction = require("../models/Transaction");
+const Nutritionist = require("../models/Nutritionist");
+const Notification = require("../models/Notification");
+const AuditLog = require("../models/AuditLog");
+const AppError = require("../utils/AppError");
+const mongoose = require("mongoose");
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PLATFORM_FEE_RATE = Number(process.env.PLATFORM_FEE_RATE || 0); // e.g. 0.1 = 10%
-const PAYOS_RETURN_URL = process.env.PAYOS_RETURN_URL || 'https://wealthy-eater.app/payment/success';
-const PAYOS_CANCEL_URL = process.env.PAYOS_CANCEL_URL || 'https://wealthy-eater.app/payment/cancel';
+const PAYOS_RETURN_URL =
+  process.env.PAYOS_RETURN_URL || "https://wealthy-eater.app/payment/success";
+const PAYOS_CANCEL_URL =
+  process.env.PAYOS_CANCEL_URL || "https://wealthy-eater.app/payment/cancel";
 
 // ── Helper Functions ──────────────────────────────────────────────────────────
 
@@ -41,7 +43,7 @@ function buildOrderCode() {
  * Normalize webhook payload — PayOS may wrap data in different structures.
  */
 function normalizeWebhookData(payload) {
-  if (payload && typeof payload === 'object' && payload.data) {
+  if (payload && typeof payload === "object" && payload.data) {
     return payload.data;
   }
   return payload || {};
@@ -54,16 +56,20 @@ function normalizeWebhookData(payload) {
 function isPaymentSuccessful(data) {
   if (!data) return false;
 
-  const code = String(data.code ?? '').trim().toUpperCase();
-  const desc = String(data.desc ?? '').trim().toUpperCase();
+  const code = String(data.code ?? "")
+    .trim()
+    .toUpperCase();
+  const desc = String(data.desc ?? "")
+    .trim()
+    .toUpperCase();
 
   // PayOS success indicators
   return (
-    code === '00' ||
-    code === '0' ||
-    desc === 'THÀNH CÔNG' ||
-    desc === 'SUCCESS' ||
-    desc === 'THANH CONG'
+    code === "00" ||
+    code === "0" ||
+    desc === "THÀNH CÔNG" ||
+    desc === "SUCCESS" ||
+    desc === "THANH CONG"
   );
 }
 
@@ -77,10 +83,10 @@ class UserConsultationService {
   _calculatePackagePrice(baseFee, packageType) {
     let multiplier = 1;
     let discount = 0;
-    if (packageType === '3_months') {
+    if (packageType === "3_months") {
       multiplier = 3;
       discount = 0.11;
-    } else if (packageType === '6_months') {
+    } else if (packageType === "6_months") {
       multiplier = 6;
       discount = 0.16;
     }
@@ -103,112 +109,134 @@ class UserConsultationService {
    * @param {string} nutritionistId - Target nutritionist's _id.
    * @returns {Object} Checkout data including payment link, QR code, order code.
    */
-  async createHireCheckout(userId, nutritionistId, packageType = '1_month') {
+  async createHireCheckout(userId, nutritionistId, packageType = "1_month") {
     // ── Step 1: Validate nutritionist ────────────────────────────────────────
     if (!nutritionistId) {
-      throw new AppError('nutritionist_id is required.', 400);
+      throw new AppError("nutritionist_id is required.", 400);
     }
 
     const nutritionist = await Nutritionist.findById(nutritionistId);
     if (!nutritionist) {
-      throw new AppError('Nutritionist not found.', 404);
+      throw new AppError("Nutritionist not found.", 404);
     }
-    if (nutritionist.approval_status !== 'approval') {
-      throw new AppError('This nutritionist has not been approved yet.', 400);
+    if (!["approval", "APPROVED"].includes(nutritionist.approval_status)) {
+      throw new AppError("This nutritionist has not been approved yet.", 400);
     }
     if (!nutritionist.service_fee || nutritionist.service_fee <= 0) {
-      throw new AppError('Nutritionist has no valid service fee configured.', 400);
+      throw new AppError(
+        "Nutritionist has no valid service fee configured.",
+        400,
+      );
     }
 
     // ── Step 2: Prevent duplicate active contracts (Globally 1:1) ───────────
     const existingContract = await ConsultationContract.findOne({
       user_id: userId,
-      status: { $in: ['pending_payment', 'active'] }
+      status: { $in: ["pending_payment", "active"] },
     });
 
     if (existingContract) {
-      if (existingContract.status === 'active') {
+      if (existingContract.status === "active") {
         throw new AppError(
-          'You already have an active consultation contract. You cannot hire another nutritionist.',
-          409
+          "You already have an active consultation contract. You cannot hire another nutritionist.",
+          409,
         );
       }
 
       // pending_payment — check if there's a still-valid (not expired) transaction
       const pendingTx = await Transaction.findOne({
         consultation_contracts_id_fk: existingContract._id,
-        status: 'PENDING'
+        status: "PENDING",
       });
 
       if (pendingTx && pendingTx.payos_payment_link) {
         if (pendingTx.package_type !== packageType) {
           // If the user selects a different package type, cancel the old pending transaction.
           try {
-            await payOS.cancelPaymentLink(pendingTx.payos_order_code, "User selected a different package type.");
+            await payOS.cancelPaymentLink(
+              pendingTx.payos_order_code,
+              "User selected a different package type.",
+            );
           } catch (e) {
             // Ignore if PayOS already cancelled it or order not found
           }
-          pendingTx.status = 'CANCELLED';
+          pendingTx.status = "CANCELLED";
           await pendingTx.save();
-          existingContract.status = 'cancelled';
+          existingContract.status = "cancelled";
           await existingContract.save();
-          
+
           // Let the code proceed to step 3 to create a new contract/transaction.
         } else {
           let isStillValid = true;
           try {
-          // Double check the real status with PayOS
-          const paymentInfo = await payOS.getPaymentLinkInformation(pendingTx.payos_order_code);
-          if (paymentInfo && (paymentInfo.status === 'CANCELLED' || paymentInfo.status === 'EXPIRED')) {
-            isStillValid = false;
-            // Sync status to DB
-            pendingTx.status = 'CANCELLED';
-            await pendingTx.save();
-            existingContract.status = 'cancelled';
-            await existingContract.save();
-          } else if (paymentInfo && paymentInfo.status === 'PAID') {
-            throw new AppError('You already have a paid consultation contract. Please wait for it to be activated.', 409);
-          }
-        } catch (e) {
-          // If PayOS throws (e.g., order not found or already cancelled), assume invalid
-          if (e instanceof AppError) throw e;
-          isStillValid = false;
-          pendingTx.status = 'CANCELLED';
-          await pendingTx.save();
-          existingContract.status = 'cancelled';
-          await existingContract.save();
-        }
-
-        if (isStillValid) {
-          // Return the existing payment link instead of creating a new one
-          return {
-            order_code: pendingTx.payos_order_code,
-            amount: pendingTx.amount_gross,
-            checkout_url: pendingTx.payos_payment_link,
-            qr_code: pendingTx.payos_qr_code,
-            contract_id: existingContract._id,
-            nutritionist: {
-              _id: nutritionist._id,
-              full_name: nutritionist.full_name,
-              specialization: nutritionist.specialization,
-              service_fee: nutritionist.service_fee
+            // Double check the real status with PayOS
+            const paymentInfo = await payOS.getPaymentLinkInformation(
+              pendingTx.payos_order_code,
+            );
+            if (
+              paymentInfo &&
+              (paymentInfo.status === "CANCELLED" ||
+                paymentInfo.status === "EXPIRED")
+            ) {
+              isStillValid = false;
+              // Sync status to DB
+              pendingTx.status = "CANCELLED";
+              await pendingTx.save();
+              existingContract.status = "cancelled";
+              await existingContract.save();
+            } else if (paymentInfo && paymentInfo.status === "PAID") {
+              throw new AppError(
+                "You already have a paid consultation contract. Please wait for it to be activated.",
+                409,
+              );
             }
-          };
+          } catch (e) {
+            // If PayOS throws (e.g., order not found or already cancelled), assume invalid
+            if (e instanceof AppError) throw e;
+            isStillValid = false;
+            pendingTx.status = "CANCELLED";
+            await pendingTx.save();
+            existingContract.status = "cancelled";
+            await existingContract.save();
+          }
+
+          if (isStillValid) {
+            // Return the existing payment link instead of creating a new one
+            return {
+              order_code: pendingTx.payos_order_code,
+              amount: pendingTx.amount_gross,
+              checkout_url: pendingTx.payos_payment_link,
+              qr_code: pendingTx.payos_qr_code,
+              contract_id: existingContract._id,
+              nutritionist: {
+                _id: nutritionist._id,
+                full_name: nutritionist.full_name,
+                specialization: nutritionist.specialization,
+                service_fee: nutritionist.service_fee,
+              },
+            };
+          }
         }
       }
     }
-  }
 
     // ── Step 3: Calculate amounts ────────────────────────────────────────────
-    const amountGross = this._calculatePackagePrice(nutritionist.service_fee, packageType);
-    
+    const amountGross = this._calculatePackagePrice(
+      nutritionist.service_fee,
+      packageType,
+    );
+
     const platformFee = Math.round(amountGross * PLATFORM_FEE_RATE);
     const expertPayout = amountGross - platformFee;
 
     // ── Step 4: Build PayOS order ────────────────────────────────────────────
     const orderCode = buildOrderCode();
     const shortCode = String(orderCode).slice(-6);
-    const description = `Thue CV ${nutritionist.full_name.substring(0, 10)} #${shortCode}`.slice(0, 25);
+    const description =
+      `Thue CV ${nutritionist.full_name.substring(0, 10)} #${shortCode}`.slice(
+        0,
+        25,
+      );
 
     const paymentData = {
       orderCode,
@@ -216,52 +244,68 @@ class UserConsultationService {
       description,
       returnUrl: PAYOS_RETURN_URL,
       cancelUrl: PAYOS_CANCEL_URL,
-      expiredAt: Math.floor(Date.now() / 1000) + 15 * 60 // 15-minute expiry
+      expiredAt: Math.floor(Date.now() / 1000) + 15 * 60, // 15-minute expiry
     };
 
     let paymentLinkData;
     try {
       paymentLinkData = await payOS.createPaymentLink(paymentData);
     } catch (error) {
-      console.error('[PayOS] createPaymentLink failed:', error.message);
-      throw new AppError('Failed to create payment link. Please try again later.', 502);
+      console.error("[PayOS] createPaymentLink failed:", error.message);
+      throw new AppError(
+        "Failed to create payment link. Please try again later.",
+        502,
+      );
     }
 
     // ── Step 5: Database Transaction (Atomic Creation) ────────────────────────
     let contract, transaction;
     const session = await mongoose.startSession();
     session.startTransaction();
-    
-    try {
-      [contract] = await ConsultationContract.create([{
-        user_id: userId,
-        nutritionist_id: nutritionistId,
-        status: 'pending_payment',
-        package_type: packageType
-      }], { session });
 
-      [transaction] = await Transaction.create([{
-        consultation_contracts_id_fk: contract._id,
-        user_id: userId,
-        payos_order_code: String(orderCode),
-        payos_payment_link: paymentLinkData.checkoutUrl,
-        payos_qr_code: paymentLinkData.qrCode || '',
-        amount_gross: amountGross,
-        platform_fee: platformFee,
-        expert_payout: expertPayout,
-        status: 'PENDING',
-        package_type: packageType,
-        description
-      }], { session });
+    try {
+      [contract] = await ConsultationContract.create(
+        [
+          {
+            user_id: userId,
+            nutritionist_id: nutritionistId,
+            status: "pending_payment",
+            package_type: packageType,
+          },
+        ],
+        { session },
+      );
+
+      [transaction] = await Transaction.create(
+        [
+          {
+            consultation_contracts_id_fk: contract._id,
+            user_id: userId,
+            payos_order_code: String(orderCode),
+            payos_payment_link: paymentLinkData.checkoutUrl,
+            payos_qr_code: paymentLinkData.qrCode || "",
+            amount_gross: amountGross,
+            platform_fee: platformFee,
+            expert_payout: expertPayout,
+            status: "PENDING",
+            package_type: packageType,
+            description,
+          },
+        ],
+        { session },
+      );
 
       await session.commitTransaction();
       session.endSession();
     } catch (dbError) {
       await session.abortTransaction();
       session.endSession();
-      console.error('[PayOS] Database transaction failed:', dbError.message);
+      console.error("[PayOS] Database transaction failed:", dbError.message);
       // We can optionally cancel the PayOS link here, but it will expire in 15m automatically.
-      throw new AppError('Failed to save payment record. Please try again.', 500);
+      throw new AppError(
+        "Failed to save payment record. Please try again.",
+        500,
+      );
     }
 
     // ── Step 6: Return checkout data ─────────────────────────────────────────
@@ -269,15 +313,15 @@ class UserConsultationService {
       order_code: transaction.payos_order_code,
       amount: amountGross,
       checkout_url: paymentLinkData.checkoutUrl,
-      qr_code: paymentLinkData.qrCode || '',
+      qr_code: paymentLinkData.qrCode || "",
       contract_id: contract._id,
       transaction_id: transaction._id,
       nutritionist: {
         _id: nutritionist._id,
         full_name: nutritionist.full_name,
         specialization: nutritionist.specialization,
-        service_fee: nutritionist.service_fee
-      }
+        service_fee: nutritionist.service_fee,
+      },
     };
   }
 
@@ -291,15 +335,22 @@ class UserConsultationService {
   async handlePayOSCancel(orderCode) {
     if (!orderCode) return;
     try {
-      const tx = await Transaction.findOne({ payos_order_code: String(orderCode) });
-      if (tx && tx.status === 'PENDING') {
-        tx.status = 'CANCELLED';
+      const tx = await Transaction.findOne({
+        payos_order_code: String(orderCode),
+      });
+      if (tx && tx.status === "PENDING") {
+        tx.status = "CANCELLED";
         await tx.save();
-        await ConsultationContract.findByIdAndUpdate(tx.consultation_contracts_id_fk, { status: 'cancelled' });
-        console.log(`[Webhook] Transaction ${orderCode} cancelled via webhook sync.`);
+        await ConsultationContract.findByIdAndUpdate(
+          tx.consultation_contracts_id_fk,
+          { status: "cancelled" },
+        );
+        console.log(
+          `[Webhook] Transaction ${orderCode} cancelled via webhook sync.`,
+        );
       }
     } catch (err) {
-      console.error('[Webhook] Failed to handle cancel sync:', err.message);
+      console.error("[Webhook] Failed to handle cancel sync:", err.message);
     }
   }
 
@@ -316,81 +367,96 @@ class UserConsultationService {
    * @returns {Object} Processing result.
    */
   async handlePayOSWebhook(webhookBody) {
-    console.log('[Webhook] PayOS webhook received.');
+    console.log("[Webhook] PayOS webhook received.");
 
     // ── Step 1: Verify signature ─────────────────────────────────────────────
     let verified;
     try {
       verified =
-        typeof payOS.verifyPaymentWebhookData === 'function'
+        typeof payOS.verifyPaymentWebhookData === "function"
           ? payOS.verifyPaymentWebhookData(webhookBody)
           : webhookBody;
     } catch (error) {
-      console.error('[Webhook] Signature verification failed:', error.message);
-      throw new AppError('Invalid webhook signature.', 400);
+      console.error("[Webhook] Signature verification failed:", error.message);
+      throw new AppError("Invalid webhook signature.", 400);
     }
 
     const data = normalizeWebhookData(verified);
     const orderCode = String(data.orderCode);
 
-    if (!orderCode || orderCode === 'undefined') {
-      console.error('[Webhook] Missing orderCode in payload.');
-      throw new AppError('Invalid orderCode in webhook payload.', 400);
+    if (!orderCode || orderCode === "undefined") {
+      console.error("[Webhook] Missing orderCode in payload.");
+      throw new AppError("Invalid orderCode in webhook payload.", 400);
     }
 
     console.log(`[Webhook] Processing orderCode: ${orderCode}`);
 
     // PayOS sends orderCode '123' to verify the webhook URL when saving in the dashboard.
     // We must return a successful response so the URL can be saved.
-    if (orderCode === '123') {
-      console.log('[Webhook] PayOS test webhook (orderCode: 123) successfully acknowledged.');
+    if (orderCode === "123") {
+      console.log(
+        "[Webhook] PayOS test webhook (orderCode: 123) successfully acknowledged.",
+      );
       return {
         processed: true,
         is_test: true,
-        order_code: orderCode
+        order_code: orderCode,
       };
     }
 
     // ── Step 2: Find matching transaction ────────────────────────────────────
-    const transaction = await Transaction.findOne({ payos_order_code: orderCode });
+    const transaction = await Transaction.findOne({
+      payos_order_code: orderCode,
+    });
     if (!transaction) {
-      console.error(`[Webhook] Transaction not found for orderCode: ${orderCode}`);
-      throw new AppError('Transaction not found.', 404);
+      console.error(
+        `[Webhook] Transaction not found for orderCode: ${orderCode}`,
+      );
+      throw new AppError("Transaction not found.", 404);
     }
 
     // ── Step 3: Idempotency & Amount verification ────────────────────────────
     if (transaction.payos_transaction_id) {
-      console.log(`[Webhook] Transaction already processed (idempotent). orderCode: ${orderCode}`);
+      console.log(
+        `[Webhook] Transaction already processed (idempotent). orderCode: ${orderCode}`,
+      );
       return {
         processed: true,
         already_handled: true,
-        order_code: orderCode
+        order_code: orderCode,
       };
     }
 
     const paidAmount = Number(data.amount) || 0;
     if (paidAmount < transaction.amount_gross) {
-      console.error(`[Webhook] Amount mismatch. Expected ${transaction.amount_gross}, received ${paidAmount}`);
-      transaction.status = 'FAILED';
-      transaction.payos_transaction_id = data.transactionId || data.reference || null;
+      console.error(
+        `[Webhook] Amount mismatch. Expected ${transaction.amount_gross}, received ${paidAmount}`,
+      );
+      transaction.status = "FAILED";
+      transaction.payos_transaction_id =
+        data.transactionId || data.reference || null;
       await transaction.save();
-      throw new AppError('Payment amount mismatch. Transaction failed.', 400);
+      throw new AppError("Payment amount mismatch. Transaction failed.", 400);
     }
 
     // ── Step 4: Check payment success ────────────────────────────────────────
     if (!isPaymentSuccessful(data)) {
-      console.log('[Webhook] Payment not successful. Data:', JSON.stringify(data));
+      console.log(
+        "[Webhook] Payment not successful. Data:",
+        JSON.stringify(data),
+      );
 
       // Mark transaction as failed if the payment was explicitly rejected
-      transaction.status = 'FAILED';
-      transaction.payos_transaction_id = data.transactionId || data.reference || null;
+      transaction.status = "FAILED";
+      transaction.payos_transaction_id =
+        data.transactionId || data.reference || null;
       await transaction.save();
 
       return {
         processed: true,
         payment_success: false,
         order_code: orderCode,
-        message: 'Payment was not successful.'
+        message: "Payment was not successful.",
       };
     }
 
@@ -402,22 +468,22 @@ class UserConsultationService {
     try {
       transaction.payos_transaction_id =
         data.transactionId || data.reference || data.paymentLinkId || null;
-      transaction.status = 'PAID';
+      transaction.status = "PAID";
       await transaction.save({ session });
 
       contract = await ConsultationContract.findById(
-        transaction.consultation_contracts_id_fk
+        transaction.consultation_contracts_id_fk,
       ).session(session);
 
-      if (contract && contract.status === 'pending_payment') {
-        contract.status = 'active';
+      if (contract && contract.status === "pending_payment") {
+        contract.status = "active";
 
         // Set expire_at based on package_type safely without mutating `now`
         const now = new Date();
         const expireAt = new Date(now.getTime());
-        if (contract.package_type === '6_months') {
+        if (contract.package_type === "6_months") {
           expireAt.setMonth(expireAt.getMonth() + 6);
-        } else if (contract.package_type === '3_months') {
+        } else if (contract.package_type === "3_months") {
           expireAt.setMonth(expireAt.getMonth() + 3);
         } else {
           expireAt.setMonth(expireAt.getMonth() + 1);
@@ -432,27 +498,31 @@ class UserConsultationService {
     } catch (dbError) {
       await session.abortTransaction();
       session.endSession();
-      console.error('[Webhook] DB Transaction failed:', dbError.message);
-      throw new AppError('Failed to process payment atomically.', 500);
+      console.error("[Webhook] DB Transaction failed:", dbError.message);
+      throw new AppError("Failed to process payment atomically.", 500);
     }
 
-    if (contract && contract.status === 'active') {
+    if (contract && contract.status === "active") {
       console.log(`[Webhook] Contract ${contract._id} activated.`);
-      
+
       // ── Step 7: Create notifications & Audit log (Concurrent) ────────────────
       try {
         await Promise.all([
           this._createPaymentNotifications(contract, transaction),
           AuditLog.create({
             user_id: contract.user_id,
-            action: 'PAYMENT',
-            description: `Payment confirmed for contract ${contract._id}. ` +
-              `OrderCode: ${orderCode}, Amount: ${transaction.amount_gross} VND.`
-          })
+            action: "PAYMENT",
+            description:
+              `Payment confirmed for contract ${contract._id}. ` +
+              `OrderCode: ${orderCode}, Amount: ${transaction.amount_gross} VND.`,
+          }),
         ]);
       } catch (backgroundError) {
         // Never block the webhook response for background task failures
-        console.error('[Webhook] Background tasks (Notification/AuditLog) failed:', backgroundError.message);
+        console.error(
+          "[Webhook] Background tasks (Notification/AuditLog) failed:",
+          backgroundError.message,
+        );
       }
     }
 
@@ -462,7 +532,7 @@ class UserConsultationService {
       processed: true,
       payment_success: true,
       order_code: orderCode,
-      contract_id: contract?._id
+      contract_id: contract?._id,
     };
   }
 
@@ -475,28 +545,44 @@ class UserConsultationService {
    */
   async verifyPaymentSync(orderCode) {
     console.log(`[VerifySync] Checking orderCode: ${orderCode}`);
-    const transaction = await Transaction.findOne({ payos_order_code: String(orderCode) });
-    if (!transaction) throw new AppError('Transaction not found', 404);
+    const transaction = await Transaction.findOne({
+      payos_order_code: String(orderCode),
+    });
+    if (!transaction) throw new AppError("Transaction not found", 404);
 
     // Already processed — nothing to do
-    if (transaction.status === 'PAID') {
-      const contract = await ConsultationContract.findById(transaction.consultation_contracts_id_fk);
-      console.log(`[VerifySync] Already PAID. Contract status: ${contract?.status}`);
-      return { success: true, already_paid: true, contract_status: contract?.status };
+    if (transaction.status === "PAID") {
+      const contract = await ConsultationContract.findById(
+        transaction.consultation_contracts_id_fk,
+      );
+      console.log(
+        `[VerifySync] Already PAID. Contract status: ${contract?.status}`,
+      );
+      return {
+        success: true,
+        already_paid: true,
+        contract_status: contract?.status,
+      };
     }
 
     // ── Ask PayOS directly (no signature needed — we initiated the call) ──────
     let paymentInfo;
     try {
       paymentInfo = await payOS.getPaymentLinkInformation(orderCode);
-      console.log(`[VerifySync] PayOS status for ${orderCode}: ${paymentInfo?.status}`);
+      console.log(
+        `[VerifySync] PayOS status for ${orderCode}: ${paymentInfo?.status}`,
+      );
     } catch (err) {
-      console.error('[VerifySync] Failed to query PayOS:', err.message);
-      throw new AppError('Unable to query PayOS for payment status.', 502);
+      console.error("[VerifySync] Failed to query PayOS:", err.message);
+      throw new AppError("Unable to query PayOS for payment status.", 502);
     }
 
-    if (!paymentInfo || paymentInfo.status !== 'PAID') {
-      return { success: false, message: 'Payment not confirmed by PayOS yet.', status: paymentInfo?.status };
+    if (!paymentInfo || paymentInfo.status !== "PAID") {
+      return {
+        success: false,
+        message: "Payment not confirmed by PayOS yet.",
+        status: paymentInfo?.status,
+      };
     }
 
     // ── Payment is PAID → update DB directly (no webhook needed) ─────────────
@@ -507,48 +593,62 @@ class UserConsultationService {
       const payosTransactionId =
         paymentInfo.transactions?.[0]?.reference ||
         paymentInfo.id ||
-        'SYNC_VERIFIED';
+        "SYNC_VERIFIED";
 
-      transaction.status = 'PAID';
+      transaction.status = "PAID";
       transaction.payos_transaction_id = payosTransactionId;
       await transaction.save({ session });
 
       const contract = await ConsultationContract.findById(
-        transaction.consultation_contracts_id_fk
+        transaction.consultation_contracts_id_fk,
       ).session(session);
 
-      if (contract && contract.status === 'pending_payment') {
-        contract.status = 'active';
+      if (contract && contract.status === "pending_payment") {
+        contract.status = "active";
         const expireAt = new Date();
-        if (contract.package_type === '6_months') expireAt.setMonth(expireAt.getMonth() + 6);
-        else if (contract.package_type === '3_months') expireAt.setMonth(expireAt.getMonth() + 3);
+        if (contract.package_type === "6_months")
+          expireAt.setMonth(expireAt.getMonth() + 6);
+        else if (contract.package_type === "3_months")
+          expireAt.setMonth(expireAt.getMonth() + 3);
         else expireAt.setMonth(expireAt.getMonth() + 1);
         contract.expire_at = expireAt;
         await contract.save({ session });
-        console.log(`[VerifySync] Contract ${contract._id} activated successfully.`);
+        console.log(
+          `[VerifySync] Contract ${contract._id} activated successfully.`,
+        );
       }
 
       await session.commitTransaction();
       session.endSession();
 
       // Fire notifications in background (non-blocking)
-      if (contract?.status === 'active') {
-        this._createPaymentNotifications(contract, transaction).catch(err =>
-          console.error('[VerifySync] Notification error (non-blocking):', err.message)
+      if (contract?.status === "active") {
+        this._createPaymentNotifications(contract, transaction).catch((err) =>
+          console.error(
+            "[VerifySync] Notification error (non-blocking):",
+            err.message,
+          ),
         );
         AuditLog.create({
           user_id: contract.user_id,
-          action: 'PAYMENT',
-          description: `[SYNC] Payment confirmed for contract ${contract._id}. OrderCode: ${orderCode}.`
+          action: "PAYMENT",
+          description: `[SYNC] Payment confirmed for contract ${contract._id}. OrderCode: ${orderCode}.`,
         }).catch(() => {});
       }
 
-      return { success: true, message: 'Payment verified and contract activated.', order_code: orderCode };
+      return {
+        success: true,
+        message: "Payment verified and contract activated.",
+        order_code: orderCode,
+      };
     } catch (dbErr) {
       await session.abortTransaction();
       session.endSession();
-      console.error('[VerifySync] DB error:', dbErr.message);
-      throw new AppError('Failed to activate contract after payment sync.', 500);
+      console.error("[VerifySync] DB error:", dbErr.message);
+      throw new AppError(
+        "Failed to activate contract after payment sync.",
+        500,
+      );
     }
   }
 
@@ -562,21 +662,22 @@ class UserConsultationService {
   async getTransactionDetail(userId, transactionId) {
     const transaction = await Transaction.findOne({
       _id: transactionId,
-      user_id: userId
+      user_id: userId,
     })
       .populate({
-        path: 'consultation_contracts_id_fk',
-        select: 'nutritionist_id status create_at',
+        path: "consultation_contracts_id_fk",
+        select: "nutritionist_id status create_at",
         populate: {
-          path: 'nutritionist_id',
-          model: 'Nutritionist',
-          select: 'full_name specialization service_fee certification_url average_rating'
-        }
+          path: "nutritionist_id",
+          model: "Nutritionist",
+          select:
+            "full_name specialization service_fee certification_url average_rating",
+        },
       })
       .lean();
 
     if (!transaction) {
-      throw new AppError('Transaction not found.', 404);
+      throw new AppError("Transaction not found.", 404);
     }
     return transaction;
   }
@@ -587,11 +688,14 @@ class UserConsultationService {
   async getActiveContract(userId) {
     const activeContract = await ConsultationContract.findOne({
       user_id: userId,
-      status: 'active'
-    }).populate({
-      path: 'nutritionist_id',
-      select: 'full_name email phone specialization experience_years profile_image service_fee rating'
-    }).lean();
+      status: "active",
+    })
+      .populate({
+        path: "nutritionist_id",
+        select:
+          "full_name email phone specialization experience_years profile_image service_fee rating",
+      })
+      .lean();
 
     return activeContract;
   }
@@ -605,11 +709,14 @@ class UserConsultationService {
    * after a successful payment. Errors are caught by the caller.
    */
   async _createPaymentNotifications(contract, transaction) {
-    const nutritionist = await Nutritionist.findById(contract.nutritionist_id)
-      .select('full_name user_id');
+    const nutritionist = await Nutritionist.findById(
+      contract.nutritionist_id,
+    ).select("full_name user_id");
 
-    const nutritionistName = nutritionist?.full_name || 'Nutritionist';
-    const formattedAmount = new Intl.NumberFormat('en-US').format(transaction.amount_gross);
+    const nutritionistName = nutritionist?.full_name || "Nutritionist";
+    const formattedAmount = new Intl.NumberFormat("en-US").format(
+      transaction.amount_gross,
+    );
 
     const notifications = [];
 
@@ -617,12 +724,13 @@ class UserConsultationService {
     notifications.push(
       Notification.create({
         user_id: contract.user_id,
-        title: 'Payment successful',
-        body: `You have successfully hired ${nutritionistName}. ` +
+        title: "Payment successful",
+        body:
+          `You have successfully hired ${nutritionistName}. ` +
           `Amount: ${formattedAmount} VND. The consultation contract is now active.`,
-        type: 'transaction',
-        metadata: { transaction_id: transaction._id.toString() }
-      })
+        type: "transaction",
+        metadata: { transaction_id: transaction._id.toString() },
+      }),
     );
 
     // Notification for the nutritionist
@@ -630,12 +738,13 @@ class UserConsultationService {
       notifications.push(
         Notification.create({
           user_id: nutritionist.user_id,
-          title: 'New Client',
-          body: `You have a new client who paid ${formattedAmount} VND. ` +
+          title: "New Client",
+          body:
+            `You have a new client who paid ${formattedAmount} VND. ` +
             `Consultation contract #${contract._id.toString().slice(-6)} is now active.`,
-          type: 'transaction',
-          metadata: { transaction_id: transaction._id.toString() }
-        })
+          type: "transaction",
+          metadata: { transaction_id: transaction._id.toString() },
+        }),
       );
     }
 
