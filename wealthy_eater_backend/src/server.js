@@ -9,10 +9,10 @@
  *  5. Start listening
  */
 
-const http            = require('http');
-const path            = require('path');
-const express         = require('express');
-const app             = require('./app');
+const http = require('http');
+const path = require('path');
+const express = require('express');
+const app = require('./app');
 const connectDatabase = require('./config/database');
 const { initSocketIO } = require('./config/socket.config');
 
@@ -36,9 +36,11 @@ async function bootstrap() {
 
   // 5. Start listening
   httpServer.listen(PORT, () => {
-    console.log(`✔ Server running on http://localhost:${PORT} [${process.env.NODE_ENV || 'development'}]`);
-    console.log(`✔ Socket.IO attached on same port`);
-    console.log(`✔ Static uploads served at /uploads`);
+    const env = process.env.NODE_ENV || 'development';
+    console.log(`\n\x1b[32m✔ Server started successfully\x1b[0m`);
+    console.log(`\x1b[36m  - URL:\x1b[0m      http://localhost:${PORT}`);
+    console.log(`\x1b[36m  - Env:\x1b[0m      ${env}`);
+    console.log(`\x1b[36m  - Socket:\x1b[0m   Port ${PORT}`);
   });
 
   // ── Graceful Shutdown ────────────────────────────────────────────────────────
@@ -57,7 +59,7 @@ async function bootstrap() {
   }
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT',  () => shutdown('SIGINT'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 
   process.on('unhandledRejection', (reason) => {
     console.error('[UnhandledRejection]', reason);
