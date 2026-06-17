@@ -6,7 +6,7 @@ const { signAccessToken, signRefreshToken } = require("../utils/jwt");
 const {
   validateNutritionistRegistration,
 } = require("../validators/nutritionist.validation");
-const { uploadNutritionistCertificate } = require("../utils/cloudinary");
+const { uploadNutritionistCertificate } = require("../config/cloudinary.config");
 
 const ACTIVE_REGISTRATION_STATUSES = [
   "pending",
@@ -163,6 +163,62 @@ class NutritionistService {
       console.error("Error updating nutritionist profile:", error);
       throw error;
     }
+  }
+
+  /**
+   * Get pending meal plan requests for a nutritionist.
+   */
+  async getMealPlanRequests(nutritionistUserId) {
+    const nutritionist = await Nutritionist.findOne({ user_id: nutritionistUserId })
+      .select("_id")
+      .lean();
+
+    if (!nutritionist) {
+      throw new AppError("Nutritionist profile not found for this account.", 404);
+    }
+
+    const MealPlanRequest = require("../models/MealPlanRequest");
+    const requests = await MealPlanRequest.find({
+      nutritionist_id: nutritionist._id,
+      status: "PENDING",
+    })
+      .populate("user_id", "email")
+      .sort({ created_at: -1 })
+      .lean();
+
+    return requests;
+  }
+
+  /**
+   * Respond to a meal plan request (Approve/Reject).
+   */
+  async respondToMealPlanRequest(nutritionistUserId, requestId, status) {
+    if (!["APPROVED", "REJECTED"].includes(status)) {
+      throw new AppError("Invalid status value. Must be APPROVED or REJECTED.", 400);
+    }
+
+    const nutritionist = await Nutritionist.findOne({ user_id: nutritionistUserId })
+      .select("_id")
+      .lean();
+
+    if (!nutritionist) {
+      throw new AppError("Nutritionist profile not found for this account.", 404);
+    }
+
+    const MealPlanRequest = require("../models/MealPlanRequest");
+    const request = await MealPlanRequest.findById(requestId);
+    if (!request) {
+      throw new AppError("Meal plan request not found.", 404);
+    }
+
+    if (request.nutritionist_id.toString() !== nutritionist._id.toString()) {
+      throw new AppError("You do not have permission to respond to this request.", 403);
+    }
+
+    request.status = status;
+    await request.save();
+
+    return request;
   }
 }
 

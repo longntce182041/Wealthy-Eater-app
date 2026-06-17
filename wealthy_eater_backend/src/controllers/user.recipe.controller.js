@@ -1,3 +1,4 @@
+const AppError = require('../utils/AppError');
 const Recipe = require('../models/Recipe');
 const RecipeIngredient = require('../models/RecipeIngredient');
 const RecipeStep = require('../models/RecipeStep');
@@ -79,7 +80,7 @@ function mapRecipe(recipe, extras = {}) {
 // ════════════════════════════════════════════════════════════
 // UC-71 - VIEW LIST RECIPES
 // ════════════════════════════════════════════════════════════
-async function list(req, res) {
+async function list(req, res, next) {
   try {
     const filter = buildFilter(req.query || {});
     
@@ -176,20 +177,20 @@ async function list(req, res) {
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || 'Failed to load recipes' });
+    return next(new AppError(err.message || 'Failed to load recipes', 500));
   }
 }
 
 // ════════════════════════════════════════════════════════════
 // UC-72 - VIEW DETAIL RECIPES (Sử dụng Populate liên kết dữ liệu)
 // ════════════════════════════════════════════════════════════
-async function detail(req, res) {
+async function detail(req, res, next) {
   try {
     const recipeId = req.params.id;
     const recipe = await Recipe.findById(recipeId).lean();
 
     if (!recipe) {
-      return res.status(404).json({ success: false, message: 'Recipe not found' });
+      return next(new AppError('Recipe not found', 404));
     }
 
     // Thực hiện nạp song song dữ liệu từ các bảng liên quan để tối ưu Performance
@@ -242,7 +243,7 @@ async function detail(req, res) {
       }),
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || 'Failed to load recipe' });
+    return next(new AppError(err.message || 'Failed to load recipe', 500));
   }
 }
 

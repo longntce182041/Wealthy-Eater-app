@@ -31,4 +31,43 @@ class NutritionistProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // ── Meal Plan Requests for Nutritionist ────────────────────────────────────
+  List<Map<String, dynamic>> _mealPlanRequests = [];
+  bool _isLoadingRequests = false;
+  String? _requestsError;
+
+  List<Map<String, dynamic>> get mealPlanRequests => _mealPlanRequests;
+  bool get isLoadingRequests => _isLoadingRequests;
+  String? get requestsError => _requestsError;
+
+  Future<void> loadMealPlanRequests() async {
+    _isLoadingRequests = true;
+    _requestsError = null;
+    notifyListeners();
+
+    try {
+      _mealPlanRequests = await _service.fetchMealPlanRequests();
+    } catch (e) {
+      _requestsError = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      _isLoadingRequests = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> respondToRequest(String requestId, String status) async {
+    try {
+      final success = await _service.respondToMealPlanRequest(requestId, status);
+      if (success) {
+        // Remove from local list to refresh UI instantly
+        _mealPlanRequests.removeWhere((r) => r['_id'] == requestId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('Failed to respond to meal plan request: $e');
+      return false;
+    }
+  }
 }

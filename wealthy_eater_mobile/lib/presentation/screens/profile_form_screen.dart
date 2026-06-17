@@ -14,9 +14,10 @@ class ProfileFormScreen extends StatefulWidget {
 class _ProfileFormScreenState extends State<ProfileFormScreen> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
-  final int _totalSteps = 8; // Steps 0 to 7
+  final int _totalSteps = 11; // Steps 0 to 10
 
   // Setup state variables
+  final TextEditingController _fullNameCtrl = TextEditingController();
   String _gender = 'male';
   int _age = 26;
   int _height = 170;
@@ -24,7 +25,24 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
   String _healthGoal = 'maintain';
   String _activity = 'sedentary';
   final Set<String> _selectedDiets = {};
-  final Set<String> _selectedAllergies = {};
+  String _cookingSkill = 'beginner';
+  int _cookingTime = 30;
+  
+  // Dynamic metadata lists
+  List<dynamic> _dbIngredients = [];
+  List<dynamic> _dbMedicalConditions = [];
+  bool _isLoadingMetadata = true;
+
+  String? _selectedMedicalConditionId;
+  final Set<String> _selectedAllergyIds = {};
+  final Set<String> _selectedDislikeIds = {};
+
+  // Search controllers
+  final TextEditingController _allergySearchCtrl = TextEditingController();
+  final TextEditingController _dislikeSearchCtrl = TextEditingController();
+  String _allergyQuery = '';
+  String _dislikeQuery = '';
+  int _allergiesTab = 0; // 0: Allergies, 1: Dislikes
 
   late FixedExtentScrollController _ageScrollCtrl;
   late FixedExtentScrollController _heightScrollCtrl;
@@ -40,35 +58,73 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     'Dairy-free',
   ];
 
-  final List<String> _allergyOptions = [
-    'Peanuts',
-    'Seafood',
-    'Dairy',
-    'Eggs',
-    'Gluten',
-    'Soy',
-    'Shellfish',
-    'Tree Nuts',
-  ];
 
   @override
   void initState() {
     super.initState();
     _ageScrollCtrl = FixedExtentScrollController(initialItem: _age - 18);
     _heightScrollCtrl = FixedExtentScrollController(initialItem: _height - 120);
+    _allergySearchCtrl.addListener(() {
+      setState(() {
+        _allergyQuery = _allergySearchCtrl.text.trim().toLowerCase();
+      });
+    });
+    _dislikeSearchCtrl.addListener(() {
+      setState(() {
+        _dislikeQuery = _dislikeSearchCtrl.text.trim().toLowerCase();
+      });
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadMetadata();
+    });
   }
 
   @override
   void dispose() {
     _pageController.dispose();
     _weightCtrl.dispose();
+    _fullNameCtrl.dispose();
+    _allergySearchCtrl.dispose();
+    _dislikeSearchCtrl.dispose();
     _ageScrollCtrl.dispose();
     _heightScrollCtrl.dispose();
     super.dispose();
   }
 
+  Future<void> _loadMetadata() async {
+    try {
+      final auth = context.read<AuthProvider>();
+      final metadata = await auth.fetchSetupMetadata();
+      if (metadata != null) {
+        setState(() {
+          _dbIngredients = metadata['ingredients'] ?? [];
+          _dbMedicalConditions = metadata['medicalConditions'] ?? [];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading metadata: $e');
+    } finally {
+      setState(() {
+        _isLoadingMetadata = false;
+      });
+    }
+  }
+
   void _nextPage() {
-    if (_currentStep == 4) {
+    if (_currentStep == 1) {
+      // Validate full name page
+      final name = _fullNameCtrl.text.trim();
+      if (name.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter your full name'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+    }
+    if (_currentStep == 5) {
       // Validate weight page
       final weight = double.tryParse(_weightCtrl.text.trim());
       if (weight == null || weight < 30 || weight > 300) {
@@ -139,6 +195,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     final weightVal = double.tryParse(_weightCtrl.text.trim()) ?? 70.0;
 
     final data = {
+      'full_name': _fullNameCtrl.text.trim(),
       'age': _age,
       'gender': _gender,
       'height_cm': _height.toDouble(),
@@ -146,13 +203,17 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
       'activity_level': _activity,
       'health_goal': _healthGoal,
       'diet_preferences': _selectedDiets.toList(),
-      'allergies': _selectedAllergies.toList(),
+      'allergies': _selectedAllergyIds.toList(),
+      'dislike_ingredients': _selectedDislikeIds.toList(),
+      'medical_condition_id': _selectedMedicalConditionId,
+      'cooking_skill_level': _cookingSkill,
+      'available_cooking_time': _cookingTime,
     };
 
     try {
-      await auth.saveUserProfile(data);
+      final success = await auth.saveUserProfile(data);
       if (!mounted) return;
-      if (auth.state == AuthState.error) {
+      if (!success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(auth.errorMessage ?? 'Save failed'),
@@ -166,6 +227,9 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
             backgroundColor: Colors.green,
           ),
         );
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -192,7 +256,12 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
                 icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF2D2D2D)),
                 onPressed: _prevPage,
               )
-            : null,
+            : (Navigator.canPop(context)
+                ? IconButton(
+                    icon: const Icon(Icons.close, color: Color(0xFF2D2D2D)),
+                    onPressed: () => Navigator.pop(context),
+                  )
+                : null),
         title: _currentStep > 0
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(4),
@@ -223,12 +292,15 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
                   },
                   children: [
                     _buildStepIntro(primaryColor),
+                    _buildStepFullName(primaryColor),
                     _buildStepGender(primaryColor),
                     _buildStepAge(primaryColor),
                     _buildStepHeight(primaryColor),
                     _buildStepWeight(primaryColor),
                     _buildStepActivity(primaryColor),
-                    _buildStepDietAllergies(primaryColor),
+                    _buildStepDietMedical(primaryColor),
+                    _buildStepAllergiesDislikes(primaryColor),
+                    _buildStepCooking(primaryColor),
                     _buildStepSummary(primaryColor),
                   ],
                 ),
@@ -316,6 +388,67 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
                 'Get Started',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepFullName(Color primaryColor) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'What is your name?',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF2D2D2D)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Please enter your full name to personalize your profile.',
+            style: TextStyle(fontSize: 15, color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 36),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _fullNameCtrl,
+              textCapitalization: TextCapitalization.words,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+              decoration: const InputDecoration(
+                filled: true,
+                fillColor: Colors.transparent,
+                hintText: 'Enter your full name',
+                prefixIcon: Icon(Icons.person_outline, color: Colors.grey),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              ),
+            ),
+          ),
+          const Spacer(),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _nextPage,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('Continue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -709,19 +842,19 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     );
   }
 
-  Widget _buildStepDietAllergies(Color primaryColor) {
+  Widget _buildStepDietMedical(Color primaryColor) {
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Diet & Allergies',
+            'Diet & Medical Conditions',
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF2D2D2D)),
           ),
           const SizedBox(height: 8),
           Text(
-            'Choose your diet preference and specify any food allergies.',
+            'Specify your diet preferences and choose any medical conditions.',
             style: TextStyle(fontSize: 15, color: Colors.grey[700]),
           ),
           const SizedBox(height: 20),
@@ -765,43 +898,440 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
                     );
                   }).toList(),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 const Text(
-                  'Food Allergies',
+                  'Medical Conditions',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2D2D2D)),
                 ),
                 const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: _allergyOptions.map((allergy) {
-                    final isSelected = _selectedAllergies.contains(allergy);
-                    return FilterChip(
-                      selected: isSelected,
-                      label: Text(allergy),
-                      selectedColor: Colors.redAccent.withValues(alpha: 0.12),
-                      checkmarkColor: Colors.redAccent,
-                      labelStyle: TextStyle(
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Colors.redAccent : Colors.black87,
+                if (_isLoadingMetadata)
+                  const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator()))
+                else ...[
+                  _buildMedicalCard(null, 'No Medical Conditions', 'I do not have any chronic medical conditions.', primaryColor),
+                  const SizedBox(height: 10),
+                  ..._dbMedicalConditions.map((cond) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10.0),
+                      child: _buildMedicalCard(
+                        cond['_id'],
+                        cond['name'] ?? '',
+                        cond['description'] ?? '',
+                        primaryColor,
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: isSelected ? Colors.redAccent : Colors.black12,
+                    );
+                  }),
+                ],
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _nextPage,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('Continue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMedicalCard(String? id, String name, String desc, Color primaryColor) {
+    final isSelected = _selectedMedicalConditionId == id;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedMedicalConditionId = id;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryColor.withValues(alpha: 0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? primaryColor : Colors.black12,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                      color: const Color(0xFF2D2D2D),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    desc,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (isSelected)
+              Icon(Icons.check_circle, color: primaryColor, size: 24)
+            else
+              const Icon(Icons.circle_outlined, color: Colors.black12, size: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepAllergiesDislikes(Color primaryColor) {
+    final searchCtrl = _allergiesTab == 0 ? _allergySearchCtrl : _dislikeSearchCtrl;
+    final query = _allergiesTab == 0 ? _allergyQuery : _dislikeQuery;
+    final selectedSet = _allergiesTab == 0 ? _selectedAllergyIds : _selectedDislikeIds;
+
+    final filteredIngredients = _dbIngredients.where((ing) {
+      final name = (ing['name'] ?? '').toString().toLowerCase();
+      return name.contains(query);
+    }).toList();
+
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Allergies & Dislikes',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF2D2D2D)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Select ingredients you are allergic to or dislike.',
+            style: TextStyle(fontSize: 15, color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _allergiesTab = 0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _allergiesTab == 0 ? Colors.white : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: _allergiesTab == 0
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                )
+                              ]
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Allergies (${_selectedAllergyIds.length})',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: _allergiesTab == 0 ? primaryColor : Colors.grey[600],
                         ),
                       ),
-                      onSelected: (val) {
-                        setState(() {
-                          if (val) {
-                            _selectedAllergies.add(allergy);
-                          } else {
-                            _selectedAllergies.remove(allergy);
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _allergiesTab = 1),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _allergiesTab == 1 ? Colors.white : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: _allergiesTab == 1
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                )
+                              ]
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Disliked (${_selectedDislikeIds.length})',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: _allergiesTab == 1 ? primaryColor : Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: searchCtrl,
+              decoration: InputDecoration(
+                hintText: _allergiesTab == 0 ? 'Search allergic ingredients...' : 'Search disliked ingredients...',
+                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                suffixIcon: query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        onPressed: () {
+                          searchCtrl.clear();
+                        },
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (selectedSet.isNotEmpty) ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: selectedSet.map((id) {
+                final ing = _dbIngredients.firstWhere((i) => i['_id'] == id, orElse: () => null);
+                final name = ing != null ? ing['name'] ?? '' : '';
+                return Chip(
+                  label: Text(name),
+                  deleteIcon: const Icon(Icons.close, size: 16),
+                  backgroundColor: _allergiesTab == 0 ? Colors.redAccent.withValues(alpha: 0.1) : primaryColor.withValues(alpha: 0.1),
+                  labelStyle: TextStyle(
+                    color: _allergiesTab == 0 ? Colors.redAccent : primaryColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  onDeleted: () {
+                    setState(() {
+                      selectedSet.remove(id);
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+          ],
+          Expanded(
+            child: _isLoadingMetadata
+                ? const Center(child: CircularProgressIndicator())
+                : (filteredIngredients.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No ingredients found',
+                          style: TextStyle(color: Colors.grey[500]),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: filteredIngredients.length,
+                        itemBuilder: (context, index) {
+                          final ing = filteredIngredients[index];
+                          final id = ing['_id'] ?? '';
+                          final name = ing['name'] ?? '';
+                          final imgUrl = ing['image_url'] ?? '';
+                          final isAdded = selectedSet.contains(id);
+                          final isOtherSelected = _allergiesTab == 0
+                              ? _selectedDislikeIds.contains(id)
+                              : _selectedAllergyIds.contains(id);
+
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            leading: Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: imgUrl.isNotEmpty
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        imgUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) =>
+                                            const Icon(Icons.restaurant_menu, color: Colors.grey),
+                                      ),
+                                    )
+                                  : const Icon(Icons.restaurant_menu, color: Colors.grey),
+                            ),
+                            title: Text(
+                              name,
+                              style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2D2D2D)),
+                            ),
+                            trailing: isAdded
+                                ? Icon(Icons.check_circle, color: _allergiesTab == 0 ? Colors.redAccent : primaryColor)
+                                : IconButton(
+                                    icon: const Icon(Icons.add_circle_outline),
+                                    onPressed: isOtherSelected
+                                        ? () {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  _allergiesTab == 0
+                                                      ? 'Cannot add. Ingredient is already in dislikes.'
+                                                      : 'Cannot add. Ingredient is already in allergies.',
+                                                ),
+                                                backgroundColor: Colors.orangeAccent,
+                                              ),
+                                            );
+                                          }
+                                        : () {
+                                            setState(() {
+                                              selectedSet.add(id);
+                                            });
+                                          },
+                                  ),
+                          );
+                        },
+                      )),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _nextPage,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('Continue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepCooking(Color primaryColor) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Cooking Preferences',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF2D2D2D)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tell us about your cooking skills and available preparation time.',
+            style: TextStyle(fontSize: 15, color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 24),
+          Expanded(
+            child: ListView(
+              children: [
+                const Text(
+                  'Cooking Skill Level',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2D2D2D)),
+                ),
+                const SizedBox(height: 12),
+                _buildSkillCard('beginner', 'Beginner', 'Simple meals, basic preparation, minimal ingredients.', primaryColor),
+                const SizedBox(height: 12),
+                _buildSkillCard('intermediate', 'Intermediate', 'Standard home-cooked meals, moderate complexity.', primaryColor),
+                const SizedBox(height: 12),
+                _buildSkillCard('expert', 'Expert / Advanced', 'Complex recipes, custom techniques, advanced prep.', primaryColor),
+                const SizedBox(height: 28),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Available Cooking Time',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2D2D2D)),
+                    ),
+                    Text(
+                      '$_cookingTime mins',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryColor),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Maximum time you can dedicate to preparing a single meal.',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 12),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: primaryColor,
+                    inactiveTrackColor: Colors.black12,
+                    trackHeight: 6.0,
+                    thumbColor: primaryColor,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12.0),
+                    overlayColor: primaryColor.withValues(alpha: 0.12),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 24.0),
+                  ),
+                  child: Slider(
+                    value: _cookingTime.toDouble(),
+                    min: 10,
+                    max: 120,
+                    divisions: 22,
+                    onChanged: (val) {
+                      setState(() {
+                        _cookingTime = val.round();
+                      });
+                    },
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('10m', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text('45m', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text('90m', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text('120m', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 40),
               ],
@@ -821,6 +1351,67 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSkillCard(String value, String title, String desc, Color primaryColor) {
+    final isSelected = _cookingSkill == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _cookingSkill = value;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryColor.withValues(alpha: 0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? primaryColor : Colors.transparent,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                      color: const Color(0xFF2D2D2D),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    desc,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            if (isSelected)
+              Icon(Icons.check_circle, color: primaryColor, size: 24)
+            else
+              const Icon(Icons.circle_outlined, color: Colors.black12, size: 24),
+          ],
+        ),
       ),
     );
   }
@@ -869,19 +1460,44 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
                   primaryColor,
                 ),
                 const Divider(height: 32),
+                _buildSummaryInfoRow('Full Name', _fullNameCtrl.text.trim()),
                 _buildSummaryInfoRow('Gender', _gender.toUpperCase()),
                 _buildSummaryInfoRow('Age', '$_age years'),
                 _buildSummaryInfoRow('Height', '$_height cm'),
                 _buildSummaryInfoRow('Weight', '$weightVal kg'),
                 _buildSummaryInfoRow('Goal', _healthGoal.toUpperCase()),
                 _buildSummaryInfoRow('Activity', _activity.toUpperCase()),
+                _buildSummaryInfoRow('Cooking Skill', _cookingSkill.toUpperCase()),
+                _buildSummaryInfoRow('Cooking Time Limit', '$_cookingTime mins'),
                 _buildSummaryInfoRow(
                   'Diets',
                   _selectedDiets.isEmpty ? 'None' : _selectedDiets.join(', '),
                 ),
                 _buildSummaryInfoRow(
+                  'Medical Condition',
+                  _selectedMedicalConditionId == null
+                      ? 'None'
+                      : (_dbMedicalConditions.firstWhere(
+                          (c) => c['_id'] == _selectedMedicalConditionId,
+                          orElse: () => {'name': 'None'})['name'] ?? 'None'),
+                ),
+                _buildSummaryInfoRow(
                   'Allergies',
-                  _selectedAllergies.isEmpty ? 'None' : _selectedAllergies.join(', '),
+                  _selectedAllergyIds.isEmpty
+                      ? 'None'
+                      : _dbIngredients
+                          .where((i) => _selectedAllergyIds.contains(i['_id']))
+                          .map((i) => i['name'])
+                          .join(', '),
+                ),
+                _buildSummaryInfoRow(
+                  'Disliked Ingredients',
+                  _selectedDislikeIds.isEmpty
+                      ? 'None'
+                      : _dbIngredients
+                          .where((i) => _selectedDislikeIds.contains(i['_id']))
+                          .map((i) => i['name'])
+                          .join(', '),
                 ),
                 const SizedBox(height: 32),
               ],

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../../core/error/app_error.dart';
 import '../../core/network/api_client.dart';
 import '../models/active_contract_model.dart';
 import '../models/transaction_model.dart';
@@ -26,14 +27,11 @@ class ConsultationService {
         return CheckoutResult.fromJson(response.data['data']);
       }
 
-      throw Exception(
+      throw AppError(
         response.data['error']?['message'] ?? 'Unable to create payment link.',
       );
-    } on DioException catch (e) {
-      final message = e.response?.data?['error']?['message'] ??
-          e.message ??
-          'Unable to create payment link.';
-      throw Exception(message);
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -49,15 +47,11 @@ class ConsultationService {
         return TransactionModel.fromJson(response.data['data']);
       }
 
-      throw Exception(
+      throw AppError(
         response.data['error']?['message'] ?? 'Unable to load transaction.',
       );
-    } on DioException catch (e) {
-      throw Exception(
-        e.response?.data?['error']?['message'] ??
-            e.message ??
-            'Unable to load transaction.',
-      );
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -87,15 +81,11 @@ class ConsultationService {
         return PayOSUrlsModel.fromJson(response.data['data']);
       }
 
-      throw Exception(
+      throw AppError(
         response.data['error']?['message'] ?? 'Unable to fetch PayOS URLs.',
       );
-    } on DioException catch (e) {
-      throw Exception(
-        e.response?.data?['error']?['message'] ??
-            e.message ??
-            'Unable to fetch PayOS URLs.',
-      );
+    } catch (e) {
+      throw mapError(e);
     }
   }
 
@@ -110,15 +100,40 @@ class ConsultationService {
         return ActiveContractModel.fromJson(response.data['data']);
       }
 
-      throw Exception(
+      throw AppError(
         response.data['error']?['message'] ?? 'Unable to fetch active contract.',
       );
-    } on DioException catch (e) {
-      throw Exception(
-        e.response?.data?['error']?['message'] ??
-            e.message ??
-            'Unable to fetch active contract.',
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// POST /api/user/consultations/request-mealplan
+  /// Submits a request for a new weekly meal plan.
+  Future<bool> requestMealPlan() async {
+    try {
+      final response = await apiClient.post(
+        '/api/user/consultations/request-mealplan',
       );
+      return response.statusCode == 201 && response.data['success'] == true;
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// GET /api/user/consultations/request-mealplan/status
+  /// Fetches the current request status.
+  Future<String?> fetchMealPlanRequestStatus() async {
+    try {
+      final response = await apiClient.get(
+        '/api/user/consultations/request-mealplan/status',
+      );
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return response.data['data']?['status']?.toString();
+      }
+      return 'NONE';
+    } catch (e) {
+      throw mapError(e);
     }
   }
 }

@@ -11,11 +11,15 @@ class AppError extends Error {
   /**
    * @param {string}  message     - Human-readable error message (sent to client).
    * @param {number}  statusCode  - HTTP status code (4xx for client, 5xx for server).
+   * @param {any}     errors      - Detailed validation errors or additional data.
+   * @param {string}  errorCode   - Custom error code string.
    */
-  constructor(message, statusCode = 500) {
+  constructor(message, statusCode = 500, errorCode = null, errors = null) {
     super(message);
     this.statusCode = statusCode;
     this.status = statusCode;      // legacy alias — some code reads err.status
+    this.errorCode = errorCode;
+    this.errors = errors;
     this.isOperational = true;     // distinguishes expected errors from programming bugs
     Error.captureStackTrace(this, this.constructor);
   }

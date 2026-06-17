@@ -1,4 +1,5 @@
 // src/api/controllers/ingredient.management.controller.js
+const AppError = require('../utils/AppError');
 const ingredientService = require("../services/ingredient.management.service");
 const { validateIngredient } = require("../validators/ingredient.management.validators");
 
@@ -9,7 +10,7 @@ class IngredientManagementController {
             const result = await ingredientService.getAllIngredients(req.query);
             res.json({ success: true, data: result });
         } catch (error) {
-            res.status(500).json({ success: false, message: error.message });
+            return next(new AppError(error.message, 500));
         }
     }
 
@@ -19,7 +20,7 @@ class IngredientManagementController {
             const ingredient = await ingredientService.getIngredientById(req.params.id);
             res.json({ success: true, data: ingredient });
         } catch (error) {
-            res.status(404).json({ success: false, message: error.message });
+            return next(new AppError(error.message, 404));
         }
     }
 
@@ -28,13 +29,13 @@ class IngredientManagementController {
         try {
             // Validate input
             const { errors, isValid } = validateIngredient(req.body);
-            if (!isValid) return res.status(400).json({ success: false, errors });
+            if (!isValid) return next(new AppError('Validation Error', 400, errors));
 
             const newIngredient = await ingredientService.createIngredient(req.body);
             const message = getActionMessage('create', 'Ingredient');
             res.status(201).json({ success: true, message, data: newIngredient });
         } catch (error) {
-            res.status(400).json({ success: false, message: error.message });
+            return next(new AppError(error.message, 400));
         }
     }
 
@@ -46,7 +47,7 @@ class IngredientManagementController {
             const message = getActionMessage('update', 'Ingredient');
             res.json({ success: true, message, data: updatedIngredient });
         } catch (error) {
-            res.status(400).json({ success: false, message: error.message });
+            return next(new AppError(error.message, 400));
         }
     }
 
@@ -57,7 +58,7 @@ class IngredientManagementController {
             const message = getActionMessage('delete', 'Ingredient');
             res.json({ success: true, message });
         } catch (error) {
-            res.status(400).json({ success: false, message: error.message });
+            return next(new AppError(error.message, 400));
         }
     }
 
@@ -65,7 +66,7 @@ class IngredientManagementController {
     async importIngredients(req, res) {
         try {
             if (!req.file) {
-                return res.status(400).json({ success: false, message: "Please upload an Excel file" });
+                return next(new AppError("Please upload an Excel file", 400));
             }
 
             // Gọi service xử lý file bằng pipeline stream buffer
@@ -82,13 +83,9 @@ class IngredientManagementController {
         } catch (error) {
             // Trả về báo cáo lỗi chi tiết từng dòng cho Admin nếu có
             if (error.details) {
-                return res.status(400).json({
-                    success: false,
-                    message: error.message,
-                    errors: error.details
-                });
+                return next(new AppError(error.message, 400, null, error.details));
             }
-            res.status(500).json({ success: false, message: error.message });
+            return next(new AppError(error.message, 500));
         }
     }
 }

@@ -1,11 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../services/api';
-import './dashboard.css';
+import { StatCard } from '../components/ui/StatCard';
+import { DataTable, DataTableRow, DataTableCell } from '../components/ui/DataTable';
+import { Badge } from '../components/ui/Badge';
+import { AdminButton } from '../components/ui/AdminButton';
+import { LoadingState } from '../components/ui/LoadingState';
+import { EmptyState } from '../components/ui/EmptyState';
+import { 
+  ChefHat, 
+  CheckCircle2, 
+  FileEdit, 
+  Star, 
+  RefreshCw, 
+  Eye, 
+  Trash2, 
+  SearchX,
+  AlertCircle
+} from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
+  const [user] = useState(() => {
+    try {
+      const rawUser = localStorage.getItem('admin_user');
+      return rawUser ? JSON.parse(rawUser) : null;
+    } catch {
+      return null;
+    }
+  });
   const [stats, setStats] = useState({
     totalRecipes: 0,
     publishedRecipes: 0,
@@ -18,33 +41,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    // 1. Kiểm tra nghiêm ngặt CẢ Thông tin User và Token bảo mật
-    const rawUser = localStorage.getItem('admin_user');
-    const token = localStorage.getItem('admin_session_jwt_token');
-
-    // Nếu thiếu 1 trong 2, dọn sạch bộ nhớ và đá về trang Login ngay
-    if (!rawUser || !token) {
-      handleForceLogout();
-      return;
-    }
-
-    try {
-      setUser(JSON.parse(rawUser));
-      fetchData(); // Chỉ gọi API khi xác nhận có đủ cả user và token
-    } catch (e) {
-      handleForceLogout();
-    }
-  }, [navigate]);
-
   // Hàm dọn dẹp bộ nhớ khi không hợp lệ hoặc hết hạn
-  function handleForceLogout() {
+  const handleForceLogout = useCallback(() => {
     localStorage.removeItem('admin_user');
     localStorage.removeItem('admin_session_jwt_token');
     navigate('/login');
-  }
+  }, [navigate]);
 
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -73,7 +77,30 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [handleForceLogout]);
+
+  useEffect(() => {
+    // 1. Kiểm tra nghiêm ngặt CẢ Thông tin User và Token bảo mật
+    const rawUser = localStorage.getItem('admin_user');
+    const token = localStorage.getItem('admin_session_jwt_token');
+
+    // Nếu thiếu 1 trong 2, dọn sạch bộ nhớ và đá về trang Login ngay
+    if (!rawUser || !token) {
+      handleForceLogout();
+      return;
+    }
+
+    try {
+      JSON.parse(rawUser); // validate
+      // Defer execution to avoid "synchronous setState in effect" strict linter warning
+      const timeoutId = setTimeout(() => {
+        fetchData(); // Chỉ gọi API khi xác nhận có đủ cả user và token
+      }, 0);
+      return () => clearTimeout(timeoutId);
+    } catch {
+      handleForceLogout();
+    }
+  }, [handleForceLogout, fetchData]);
 
   async function handleDelete(recipeId) {
     if (!window.confirm('Are you sure you want to archive/delete this recipe?')) return;
@@ -95,191 +122,167 @@ export default function Dashboard() {
   if (!user) return null;
 
   return (
-    <>
+    <main className="flex-1 w-full max-w-7xl mx-auto p-6 lg:p-8 space-y-8">
+      {/* Header Section */}
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-[var(--text-h)] m-0">Dashboard</h1>
+          <p className="text-[var(--text-muted)] mt-1">Overview of your platform's recipes and metrics.</p>
+        </div>
+        <AdminButton onClick={fetchData} variant="outline" className="shrink-0">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh Data
+        </AdminButton>
+      </header>
+
+      {/* Error Banner */}
       {error && (
-        <div className="error-banner" style={{ marginBottom: '30px' }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="8" x2="12" y2="12"></line>
-            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-          </svg>
-          <span>{error}</span>
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span className="font-medium">{error}</span>
         </div>
       )}
 
       {/* Metric Cards Grid */}
-      <section className="metrics-grid">
-        <div className="metric-card">
-          <div className="metric-info">
-            <h4>Total Recipes</h4>
-            <p>{loading ? '...' : stats.totalRecipes}</p>
-          </div>
-          <div className="metric-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-            </svg>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-info">
-            <h4>Published</h4>
-            <p>{loading ? '...' : stats.publishedRecipes}</p>
-          </div>
-          <div className="metric-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-              <polyline points="22 4 12 14.01 9 11.01"></polyline>
-            </svg>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-info">
-            <h4>Drafts</h4>
-            <p>{loading ? '...' : stats.draftRecipes}</p>
-          </div>
-          <div className="metric-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-info">
-            <h4>Average Rating</h4>
-            <p>{loading ? '...' : `${stats.averageRating} ★`}</p>
-          </div>
-          <div className="metric-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-            </svg>
-          </div>
-        </div>
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard 
+          title="Total Recipes" 
+          value={loading ? '...' : stats.totalRecipes} 
+          icon={<ChefHat className="w-5 h-5 text-[var(--text-main)]" />} 
+        />
+        <StatCard 
+          title="Published" 
+          value={loading ? '...' : stats.publishedRecipes} 
+          icon={<CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />} 
+          iconBg="rgba(16, 185, 129, 0.1)"
+        />
+        <StatCard 
+          title="Drafts" 
+          value={loading ? '...' : stats.draftRecipes} 
+          icon={<FileEdit className="w-5 h-5 text-amber-600 dark:text-amber-400" />} 
+          iconBg="rgba(245, 158, 11, 0.1)"
+        />
+        <StatCard 
+          title="Average Rating" 
+          value={loading ? '...' : `${stats.averageRating} ★`} 
+          icon={<Star className="w-5 h-5 text-red-500 dark:text-red-400" />} 
+          iconBg="rgba(239, 68, 68, 0.1)"
+        />
       </section>
 
-      {/* Recipes Table Card */}
-      <section className="table-card">
-        <div className="table-header">
-          <h3>Recipes List</h3>
-          <div className="table-actions">
-            <button className="btn-primary" onClick={fetchData}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-              </svg>
-              <span>Refresh Data</span>
-            </button>
-          </div>
+      {/* Recipes Table Section */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-[var(--text-h)] tracking-tight m-0">Recent Recipes</h2>
         </div>
 
-        <div className="data-table-wrapper">
-          {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', fontWeight: 600 }}>Loading recipes database...</div>
-          ) : recipes.length === 0 ? (
-            <div className="empty-state">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-              </svg>
-              <p>No recipes available in the database.</p>
-            </div>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Recipe Details</th>
-                  {/* CHỨC NĂNG UC-71: Thêm cột tiêu đề hiển thị tổng hàm lượng Calo */}
-                  <th>TOTAL CALORIES</th>
-                  <th>LEVEL</th>
-                  <th>TIME (MINS)</th>
-                  <th>RATING</th>
-                  <th>STATUS</th>
-                  <th>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recipes.map((recipe) => (
-                  <tr key={recipe.id || recipe._id}>
-                    <td>
-                      <div className="recipe-cell">
-                        {recipe.imageUrl ? (
-                          <img className="recipe-img" src={recipe.imageUrl} alt={recipe.name} />
-                        ) : (
-                          <div className="recipe-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>🍳</div>
-                        )}
-                        <div style={{ textAlign: 'left' }}>
-                          <div className="recipe-title">{recipe.name}</div>
-                          <div className="recipe-desc">{recipe.description}</div>
-                        </div>
-                      </div>
-                    </td>
+        <DataTable 
+          headers={["Recipe", "Nutrition", "Level", "Time", "Rating", "Status", "Actions"]}
+          emptyState={
+            <tr>
+              <td colSpan="7" className="p-0">
+                {loading && recipes.length === 0 ? (
+                  <LoadingState text="Loading database..." />
+                ) : (
+                  <EmptyState icon={SearchX} title="No recipes available" description="There are no recent recipes to display." />
+                )}
+              </td>
+            </tr>
+          }
+        >
+          {recipes.length > 0 ? recipes.map((recipe) => {
+            const cals = recipe.nutrition?.calories || recipe.calories || 0;
+            const carbs = recipe.nutrition?.carbs || recipe.carbs || 0;
+            const protein = recipe.nutrition?.protein || recipe.protein || 0;
+            const fat = recipe.nutrition?.fat || recipe.fat || 0;
+            
+            let statusVariant = 'default';
+            if (recipe.status === 'published') statusVariant = 'success';
+            if (recipe.status === 'draft') statusVariant = 'warning';
+            if (recipe.status === 'archived') statusVariant = 'destructive';
 
-                    {/* CHỨC NĂNG UC-71: Render dữ liệu Calo và Macros (Carb, Protein, Fat) */}
-                    <td>
-                      <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontWeight: '700', color: '#38bdf8', fontSize: '15px', marginBottom: '2px' }}>
-                          {recipe.nutrition?.calories || recipe.calories || 0} kcal
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', gap: '6px' }}>
-                          <span>C: {recipe.nutrition?.carbs || recipe.carbs || 0}g</span>
-                          <span>P: {recipe.nutrition?.protein || recipe.protein || 0}g</span>
-                          <span>F: {recipe.nutrition?.fat || recipe.fat || 0}g</span>
-                        </div>
-                      </div>
-                    </td>
+            let levelVariant = 'default';
+            if (recipe.levelCooking === 'easy') levelVariant = 'success';
+            if (recipe.levelCooking === 'medium') levelVariant = 'warning';
+            if (recipe.levelCooking === 'hard') levelVariant = 'destructive';
 
-                    <td>
-                      <span className={`badge ${recipe.levelCooking}`}>
-                        {recipe.levelCooking}
-                      </span>
-                    </td>
-                    <td>{recipe.cookingTime} mins</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: '#f59e0b' }}>
-                        <span>{recipe.reviewStats?.averageRating || '—'}</span>
-                        {recipe.reviewStats?.averageRating > 0 && <span>★</span>}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${recipe.status}`}>
-                        {recipe.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="actions-cell">
-                        <button
-                          className="btn-icon-action"
-                          title="View Details"
-                          onClick={() => alert(`Details: \n\nName: ${recipe.name}\nCalories: ${recipe.nutrition?.calories || 0} kcal\nProtein: ${recipe.nutrition?.protein || 0}g\nCarbs: ${recipe.nutrition?.carbs || 0}g\nFat: ${recipe.nutrition?.fat || 0}g\n\nSteps:\n${recipe.cookingStep}`)}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="1"></circle>
-                            <circle cx="19" cy="12" r="1"></circle>
-                            <circle cx="5" cy="12" r="1"></circle>
-                          </svg>
-                        </button>
-                        {recipe.status !== 'archived' && (
-                          <button
-                            className="btn-icon-action delete"
-                            title="Archive Recipe"
-                            onClick={() => handleDelete(recipe.id || recipe._id)}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6"></polyline>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+            return (
+              <DataTableRow key={recipe.id || recipe._id}>
+                <DataTableCell>
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-xl overflow-hidden bg-[var(--bg-muted)] border border-[var(--border)] shrink-0 flex items-center justify-center">
+                      {recipe.imageUrl ? (
+                        <img src={recipe.imageUrl} alt={recipe.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <ChefHat className="w-5 h-5 text-[var(--text-muted)]" />
+                      )}
+                    </div>
+                    <div className="flex flex-col max-w-[200px]">
+                      <span className="font-semibold text-[var(--text-h)] truncate" title={recipe.name}>{recipe.name}</span>
+                      <span className="text-xs text-[var(--text-muted)] truncate" title={recipe.description}>{recipe.description}</span>
+                    </div>
+                  </div>
+                </DataTableCell>
+
+                <DataTableCell>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-sky-500">{cals} kcal</span>
+                    <div className="flex gap-2 text-xs text-[var(--text-muted)] mt-1">
+                      <span title="Carbs">C: {carbs}g</span>
+                      <span title="Protein">P: {protein}g</span>
+                      <span title="Fat">F: {fat}g</span>
+                    </div>
+                  </div>
+                </DataTableCell>
+
+                <DataTableCell>
+                  <Badge variant={levelVariant} className="capitalize">{recipe.levelCooking}</Badge>
+                </DataTableCell>
+
+                <DataTableCell>
+                  <span className="font-medium">{recipe.cookingTime}m</span>
+                </DataTableCell>
+
+                <DataTableCell>
+                  <div className="flex items-center gap-1 font-semibold text-amber-500">
+                    <span>{recipe.reviewStats?.averageRating || '—'}</span>
+                    {recipe.reviewStats?.averageRating > 0 && <Star className="w-3.5 h-3.5 fill-current" />}
+                  </div>
+                </DataTableCell>
+
+                <DataTableCell>
+                  <Badge variant={statusVariant} className="capitalize">{recipe.status}</Badge>
+                </DataTableCell>
+
+                <DataTableCell>
+                  <div className="flex items-center gap-2">
+                    <AdminButton 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => alert(`Details: \n\nName: ${recipe.name}\nCalories: ${cals} kcal\nProtein: ${protein}g\nCarbs: ${carbs}g\nFat: ${fat}g\n\nSteps:\n${recipe.cookingStep}`)}
+                      title="View Details"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </AdminButton>
+                    
+                    {recipe.status !== 'archived' && (
+                      <AdminButton 
+                        variant="ghost" 
+                        size="icon" 
+                        className="text-[var(--destructive)] hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-900/20"
+                        onClick={() => handleDelete(recipe.id || recipe._id)}
+                        title="Archive Recipe"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </AdminButton>
+                    )}
+                  </div>
+                </DataTableCell>
+              </DataTableRow>
+            );
+          }) : null}
+        </DataTable>
       </section>
-    </>
+    </main>
   );
 }

@@ -1,45 +1,43 @@
 const mongoose = require('mongoose');
 
 const UserProfileSchema = new mongoose.Schema({
-  _id: { 
-    type: String, 
-    default: () => new mongoose.Types.ObjectId().toString() 
+  _id: {
+    type: String,
+    default: () => new mongoose.Types.ObjectId().toString()
   },
-  user_id: { 
-    type: String, 
-    ref: 'User', 
-    required: true 
+  user_id: {
+    type: String,
+    ref: 'User',
+    required: true
   },
-  age: { 
-    type: Number, required: true 
+  full_name: {
+    type: String,
+    required: true
   },
-  gender: { 
-    type: String, required: true 
+  age: {
+    type: Number, required: true
   },
-  height: { 
-    type: Number, required: true 
+  gender: {
+    type: String, required: true
   },
-  weight: { 
-    type: Number, required: true 
+  height: {
+    type: Number, required: true
   },
-  health_goal: { 
-    type: String 
+  weight: {
+    type: Number, required: true
   },
-  bmi: { 
-    type: Number 
+  health_goal: {
+    type: String
   },
-  tdee: { 
-    type: Number 
+  bmi: {
+    type: Number
+  },
+  tdee: {
+    type: Number
 
   },
-  bmr: { 
-    type: String 
-
-  },
-  dietary_references: {
-    activity_level: { type: String, default: null },
-    diet_preferences: { type: [String], default: [] },
-    allergies: { type: [String], default: [] }
+  bmr: {
+    type: Number
   }
 });
 

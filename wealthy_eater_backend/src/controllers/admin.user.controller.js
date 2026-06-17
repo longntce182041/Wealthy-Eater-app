@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const UserProfile = require('../models/UserProfile');
 const UserDietary = require('../models/UserDietary');
+const AppError = require('../utils/AppError');
 
 /**
  * Escapa caracteres especiais para regex seguro (Hàm helper bảo vệ hệ thống khỏi Regex Injection)
@@ -54,6 +55,7 @@ function mapUserForAdmin(user, profile, dietary) {
     createdAt: user.created_at || new Date(),
     // Thông tin bổ sung từ bảng UserProfile
     profile: profile ? {
+      fullName: profile.full_name || 'New User',
       age: profile.age,
       gender: profile.gender,
       height: profile.height,
@@ -62,8 +64,8 @@ function mapUserForAdmin(user, profile, dietary) {
       tdee: profile.tdee || null,
       bmr: profile.bmr || null,
       healthGoal: profile.health_goal || '',
-      activityLevel: profile.dietary_references?.activity_level || null,
-      dietPreferences: profile.dietary_references?.diet_preferences || []
+      activityLevel: dietary?.activity_level || null,
+      dietPreferences: dietary?.diet_preferences || []
     } : null,
     // Thông tin bổ sung từ bảng UserDietary
     dietary: dietary ? {
@@ -87,7 +89,7 @@ function mapUserForAdmin(user, profile, dietary) {
  * - status: Bộ lọc theo trạng thái tài khoản ('active', 'blocked')
  * - sortBy: Tiêu chí sắp xếp ('newest', 'oldest', 'email_asc', 'email_desc')
  */
-async function getUsersList(req, res) {
+async function getUsersList(req, res, next) {
   try {
     // 1. Xây dựng bộ lọc tìm kiếm dữ liệu từ query params
     const filter = buildUserFilter(req.query || {});
@@ -165,7 +167,7 @@ async function getUsersList(req, res) {
     });
 
     // 6. Gộp dữ liệu hoàn chỉnh từ 3 bảng thông qua hàm Helper
-    const data = users.map(user => 
+    const data = users.map(user =>
       mapUserForAdmin(
         user,
         profileMap[user._id] || null,
@@ -195,17 +197,14 @@ async function getUsersList(req, res) {
 
   } catch (err) {
     console.error('❌ Error fetching admin users list:', err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || 'Xảy ra lỗi hệ thống khi tải danh sách người dùng.'
-    });
+    return next(new AppError(err.message || 'Xảy ra lỗi hệ thống khi tải danh sách người dùng.', 500));
   }
 }
 
 const DEFAULT_PASSWORD = process.env.DEFAULT_USER_PASSWORD || 'ChangeMe123!';
 const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
 
-async function createUser(req, res) {
+async function createUser(req, res, next) {
   try {
     console.log('createUser called');
     console.log('req.body:', req.body);
@@ -213,25 +212,25 @@ async function createUser(req, res) {
     const { email, password, role = 'customer', status = 'active' } = req.body || {};
 
     if (!email || typeof email !== 'string') {
-      return res.status(400).json({ success: false, message: 'Email is required.' });
+      return next(new AppError('Email is required.', 400));
     }
     const normalizedEmail = String(email).trim().toLowerCase();
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(normalizedEmail)) {
-      return res.status(400).json({ success: false, message: 'Invalid email format.' });
+      return next(new AppError('Invalid email format.', 400));
     }
 
     // Double-check DB connection
     if (!User.db || !User.db.readyState) {
       console.error('MongoDB not connected or readyState:', User.db && User.db.readyState);
-      return res.status(500).json({ success: false, message: 'Database not ready.' });
+      return next(new AppError('Database not ready.', 500));
     }
 
     // Check duplicate
     const existing = await User.findOne({ email: normalizedEmail }).lean();
     if (existing) {
-      return res.status(409).json({ success: false, message: 'Email already exists.' });
+      return next(new AppError('Email already exists.', 409));
     }
 
     const rawPassword = password && String(password).trim().length >= 6 ? String(password).trim() : DEFAULT_PASSWORD;
@@ -254,27 +253,38 @@ async function createUser(req, res) {
       // Handle duplicate key race and validation errors
       console.error('Error saving user:', saveErr);
       if (saveErr.code === 11000) {
-        return res.status(409).json({ success: false, message: 'Email already exists.' });
+        return next(new AppError('Email already exists.', 409));
       }
       if (saveErr.name === 'ValidationError') {
-        return res.status(400).json({ success: false, message: saveErr.message });
+        return next(new AppError(saveErr.message, 400));
       }
       throw saveErr;
     }
 
-    // Create profile but isolate errors so user creation still succeeds
+    // Create profile and dietary records but isolate errors so user creation still succeeds
     try {
       await UserProfile.create({
         user_id: savedUser._id,
-        age: null,
-        gender: null,
-        height: null,
-        weight: null,
-        dietary_references: { activity_level: null, diet_preferences: [], allergies: [] }
+        full_name: 'New User',
+        age: 18,
+        gender: 'other',
+        height: 170,
+        weight: 70,
       });
     } catch (profileErr) {
       console.error('Warning: failed to create UserProfile for', savedUser._id, profileErr);
-      // do not fail the whole request; return created user but log the issue
+    }
+    try {
+      await UserDietary.create({
+        user_id: savedUser._id,
+        medical_condition_id: null,
+        allergies: [],
+        dislike_ingredients: [],
+        activity_level: null,
+        diet_preferences: [],
+      });
+    } catch (dietaryErr) {
+      console.error('Warning: failed to create UserDietary for', savedUser._id, dietaryErr);
     }
 
     return res.status(201).json({
@@ -291,7 +301,7 @@ async function createUser(req, res) {
 
   } catch (err) {
     console.error('❌ Error creating user full stack:', err);
-    return res.status(500).json({ success: false, message: 'Server error while creating user.' });
+    return next(new AppError('Server error while creating user.', 500));
   }
 }
 

@@ -49,3 +49,12 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Markdown files
+*.md
+
+# Uploaded Media
+uploads/
+
+# Database seed manifests
+scripts/seed-manifest-*.json
