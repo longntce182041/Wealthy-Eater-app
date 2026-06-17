@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../features/nutritionist/presentation/pages/expert_registration_step1_page.dart';
+import '../../features/nutritionist/presentation/providers/providers.dart';
 import '../providers/auth_provider.dart';
 
 /// Simple nutritionist login screen: only email + password (no Google).
@@ -8,7 +10,8 @@ class NutritionistLoginScreen extends StatefulWidget {
   const NutritionistLoginScreen({super.key});
 
   @override
-  State<NutritionistLoginScreen> createState() => _NutritionistLoginScreenState();
+  State<NutritionistLoginScreen> createState() =>
+      _NutritionistLoginScreenState();
 }
 
 class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
@@ -27,7 +30,9 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
   String? _validateEmail(String? value) {
     if (value == null || value.trim().isEmpty) return 'Email is required';
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-    if (!emailRegex.hasMatch(value.trim())) return 'Enter a valid email address';
+    if (!emailRegex.hasMatch(value.trim())) {
+      return 'Enter a valid email address';
+    }
     return null;
   }
 
@@ -41,7 +46,11 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final auth = context.read<AuthProvider>();
-    await auth.login(_emailCtrl.text.trim(), _passCtrl.text, role: 'nutritionist');
+    await auth.login(
+      _emailCtrl.text.trim(),
+      _passCtrl.text,
+      role: 'nutritionist',
+    );
 
     if (!mounted) return;
     if (auth.state == AuthState.error) {
@@ -86,7 +95,13 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(height: 12),
-                      Text('Nutritionist sign in', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(
+                        'Nutritionist sign in',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       const SizedBox(height: 24),
 
                       TextFormField(
@@ -95,7 +110,10 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                         textInputAction: TextInputAction.next,
                         autocorrect: false,
                         validator: _validateEmail,
-                        decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email_outlined),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -108,8 +126,14 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                           labelText: 'Password',
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
-                            icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                         ),
                       ),
@@ -118,7 +142,14 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                       FilledButton(
                         onPressed: isLoading ? null : _doLogin,
                         child: isLoading
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
                             : const Text('Sign In'),
                       ),
 
@@ -128,11 +159,24 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           TextButton(
-                            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Register not implemented'))),
-                            child: const Text('Register'),
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => NutritionistProviders.provider(
+                                  child: const ExpertRegistrationStep1Page(),
+                                ),
+                              ),
+                            ),
+                            child: const Text('Register as Expert'),
                           ),
                           TextButton(
-                            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Forgot password not implemented'))),
+                            onPressed: () =>
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Forgot password not implemented',
+                                    ),
+                                  ),
+                                ),
                             child: const Text('Forgot Password?'),
                           ),
                         ],
