@@ -107,4 +107,33 @@ class ConsultationService {
       throw mapError(e);
     }
   }
+
+  /// POST /api/user/consultations/request-mealplan
+  /// Submits a request for a new weekly meal plan.
+  Future<bool> requestMealPlan() async {
+    try {
+      final response = await apiClient.post(
+        '/api/user/consultations/request-mealplan',
+      );
+      return response.statusCode == 201 && response.data['success'] == true;
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// GET /api/user/consultations/request-mealplan/status
+  /// Fetches the current request status.
+  Future<String?> fetchMealPlanRequestStatus() async {
+    try {
+      final response = await apiClient.get(
+        '/api/user/consultations/request-mealplan/status',
+      );
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return response.data['data']?['status']?.toString();
+      }
+      return 'NONE';
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
 }

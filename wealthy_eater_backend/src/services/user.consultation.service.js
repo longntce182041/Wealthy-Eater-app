@@ -750,6 +750,72 @@ class UserConsultationService {
 
     await Promise.all(notifications);
   }
+
+  /**
+   * Request a new meal plan from the active nutritionist.
+   */
+  async requestMealPlan(userId) {
+    const activeContract = await ConsultationContract.findOne({
+      user_id: userId,
+      status: "active",
+    });
+
+    if (!activeContract) {
+      throw new AppError("No active consultation contract found.", 400);
+    }
+
+    const MealPlanRequest = require("../models/MealPlanRequest");
+    
+    // Check if there's already a PENDING request
+    const existing = await MealPlanRequest.findOne({
+      user_id: userId,
+      nutritionist_id: activeContract.nutritionist_id,
+      status: "PENDING",
+    });
+
+    if (existing) {
+      throw new AppError("You already have a pending meal plan request.", 400);
+    }
+
+    const request = await MealPlanRequest.create({
+      user_id: userId,
+      nutritionist_id: activeContract.nutritionist_id,
+      status: "PENDING",
+    });
+
+    return request;
+  }
+
+  /**
+   * Get latest request status.
+   */
+  async getMealPlanRequestStatus(userId) {
+    const activeContract = await ConsultationContract.findOne({
+      user_id: userId,
+      status: "active",
+    });
+
+    if (!activeContract) {
+      return { status: "NO_CONTRACT" };
+    }
+
+    const MealPlanRequest = require("../models/MealPlanRequest");
+    const latestRequest = await MealPlanRequest.findOne({
+      user_id: userId,
+      nutritionist_id: activeContract.nutritionist_id,
+    })
+      .sort({ created_at: -1 })
+      .lean();
+
+    if (!latestRequest) {
+      return { status: "NONE" };
+    }
+
+    return {
+      status: latestRequest.status,
+      requested_at: latestRequest.created_at,
+    };
+  }
 }
 
 module.exports = new UserConsultationService();
