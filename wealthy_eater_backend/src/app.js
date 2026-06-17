@@ -107,8 +107,14 @@ const apiLimiter = rateLimit({
   },
 });
 
-app.use("/api/auth", authLimiter);
-app.use("/api", apiLimiter);
+// 🛠️ ĐÃ FIX: Chuyển limiter áp dụng theo dạng kiểm tra điều kiện thủ công trong middleware 
+// Để tránh dùng app.use("/api", ...) tạo ra bẫy chặn nhân đôi thành /api/api
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/auth")) {
+    return authLimiter(req, res, next);
+  }
+  return apiLimiter(req, res, next);
+});
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get("/", (req, res) => {
@@ -120,6 +126,7 @@ const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // ── API Routes ────────────────────────────────────────────────────────────────
+// Giữ nguyên nạp trực tiếp. Toàn bộ các tiền tố /api/admin/recipes... của team bác ở file index sẽ hoạt động chính xác tuyệt đối.
 app.use(routes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
@@ -135,8 +142,6 @@ app.use((req, res) => {
 });
 
 // ── Global Error Handler ──────────────────────────────────────────────────────
-// Must have 4 parameters for Express to treat it as an error handler.
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   const isDev = process.env.NODE_ENV === "development";
 
