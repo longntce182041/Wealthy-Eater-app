@@ -55,6 +55,7 @@ function mapUserForAdmin(user, profile, dietary) {
     createdAt: user.created_at || new Date(),
     // Thông tin bổ sung từ bảng UserProfile
     profile: profile ? {
+      fullName: profile.full_name || 'New User',
       age: profile.age,
       gender: profile.gender,
       height: profile.height,
@@ -63,8 +64,8 @@ function mapUserForAdmin(user, profile, dietary) {
       tdee: profile.tdee || null,
       bmr: profile.bmr || null,
       healthGoal: profile.health_goal || '',
-      activityLevel: profile.dietary_references?.activity_level || null,
-      dietPreferences: profile.dietary_references?.diet_preferences || []
+      activityLevel: dietary?.activity_level || null,
+      dietPreferences: dietary?.diet_preferences || []
     } : null,
     // Thông tin bổ sung từ bảng UserDietary
     dietary: dietary ? {
@@ -260,19 +261,30 @@ async function createUser(req, res, next) {
       throw saveErr;
     }
 
-    // Create profile but isolate errors so user creation still succeeds
+    // Create profile and dietary records but isolate errors so user creation still succeeds
     try {
       await UserProfile.create({
         user_id: savedUser._id,
-        age: null,
-        gender: null,
-        height: null,
-        weight: null,
-        dietary_references: { activity_level: null, diet_preferences: [], allergies: [] }
+        full_name: 'New User',
+        age: 18,
+        gender: 'other',
+        height: 170,
+        weight: 70,
       });
     } catch (profileErr) {
       console.error('Warning: failed to create UserProfile for', savedUser._id, profileErr);
-      // do not fail the whole request; return created user but log the issue
+    }
+    try {
+      await UserDietary.create({
+        user_id: savedUser._id,
+        medical_condition_id: null,
+        allergies: [],
+        dislike_ingredients: [],
+        activity_level: null,
+        diet_preferences: [],
+      });
+    } catch (dietaryErr) {
+      console.error('Warning: failed to create UserDietary for', savedUser._id, dietaryErr);
     }
 
     return res.status(201).json({

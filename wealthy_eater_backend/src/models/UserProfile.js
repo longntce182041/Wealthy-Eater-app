@@ -10,6 +10,10 @@ const UserProfileSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  full_name: {
+    type: String,
+    required: true
+  },
   age: {
     type: Number, required: true
   },
@@ -34,12 +38,6 @@ const UserProfileSchema = new mongoose.Schema({
   },
   bmr: {
     type: Number
-
-  },
-  dietary_references: {
-    activity_level: { type: String, default: null },
-    diet_preferences: { type: [String], default: [] },
-    allergies: { type: [String], default: [] }
   }
 });
 
