@@ -29,4 +29,11 @@ router.get('/transactions/:id', protect, consultationController.getTransactionDe
 // POST /api/user/consultations/verify-payment
 router.post('/verify-payment', protect, consultationController.verifyPayment);
 
+// 5. REQUEST MEAL PLAN & STATUS (UC-13) ----------------------------------------
+// POST /api/user/consultations/request-mealplan
+router.post('/request-mealplan', protect, consultationController.requestMealPlan);
+
+// GET /api/user/consultations/request-mealplan/status
+router.get('/request-mealplan/status', protect, consultationController.getMealPlanRequestStatus);
+
 module.exports = router;

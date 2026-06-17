@@ -85,17 +85,17 @@ class AuthProvider with ChangeNotifier {
         data: {
           'email': email.trim(),
           'password': password,
-          'role': ?role,
+          'role': role,
         },
       );
 
       if (res.statusCode == 200 && res.data['success'] == true) {
         await _handleAuthResponse(res.data['data'] as Map<String, dynamic>);
       } else {
-        _setError(res.data['message']?.toString() ?? 'Login failed');
+        _setError('Invalid username or password');
       }
     } catch (e) {
-      _setError(mapError(e).message);
+      _setError('Invalid username or password');
     }
   }
 

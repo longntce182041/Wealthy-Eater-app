@@ -45,10 +45,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
   bool _isLoadingMore = false;
+  late ChatProvider _chatProvider;
 
   @override
   void initState() {
     super.initState();
+    _chatProvider = context.read<ChatProvider>();
     WidgetsBinding.instance.addObserver(this);
     _initChat();
     _scrollController.addListener(_onScroll);
@@ -58,12 +60,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final token = await readAccessToken();
     if (token == null || !mounted) return;
 
-    final chatProvider = context.read<ChatProvider>();
-    await chatProvider.initChat(widget.contractId, token);
+    await _chatProvider.initChat(widget.contractId, token);
 
     // Mark messages read when screen opens
     if (mounted) {
-      chatProvider.markRead();
+      _chatProvider.markRead();
     }
   }
 
@@ -77,10 +78,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadMoreMessages() async {
-    final provider = context.read<ChatProvider>();
-    if (!provider.hasMore) return;
+    if (!_chatProvider.hasMore) return;
     setState(() => _isLoadingMore = true);
-    await provider.loadMoreMessages();
+    await _chatProvider.loadMoreMessages();
     if (mounted) setState(() => _isLoadingMore = false);
   }
 
@@ -91,7 +91,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final userId = context.read<AuthProvider>().user?.id ?? '';
     _textController.clear();
 
-    await context.read<ChatProvider>().sendTextMessage(
+    await _chatProvider.sendTextMessage(
           content: content,
           currentUserId: userId,
         );
@@ -106,7 +106,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (picked == null || !mounted) return;
 
     final userId = context.read<AuthProvider>().user?.id ?? '';
-    await context.read<ChatProvider>().sendImageMessage(
+    await _chatProvider.sendImageMessage(
           imageFile: File(picked.path),
           currentUserId: userId,
         );
@@ -129,8 +129,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _textController.dispose();
     _scrollController.dispose();
     
-    final chat = context.read<ChatProvider>();
-    Future.microtask(() => chat.resetChat());
+    Future.microtask(() => _chatProvider.resetChat());
     
     super.dispose();
   }

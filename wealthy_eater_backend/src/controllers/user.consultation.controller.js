@@ -183,6 +183,46 @@ class UserConsultationController {
       return next(new AppError(error.message || 'Failed to verify payment manually.', 400, 'VERIFICATION_ERROR'));
     }
   }
+
+  /**
+   * POST /api/user/consultations/request-mealplan
+   */
+  async requestMealPlan(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const request = await consultationService.requestMealPlan(userId);
+
+      return res.status(201).json({
+        success: true,
+        data: request,
+        error: null
+      });
+    } catch (error) {
+      console.error('UserConsultationController.requestMealPlan Error:', error.message);
+      const statusCode = error.statusCode || error.status || 500;
+      return next(new AppError(error.message || 'Failed to submit meal plan request.', statusCode, 'MEAL_PLAN_REQUEST_ERROR'));
+    }
+  }
+
+  /**
+   * GET /api/user/consultations/request-mealplan/status
+   */
+  async getMealPlanRequestStatus(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const statusData = await consultationService.getMealPlanRequestStatus(userId);
+
+      return res.status(200).json({
+        success: true,
+        data: statusData,
+        error: null
+      });
+    } catch (error) {
+      console.error('UserConsultationController.getMealPlanRequestStatus Error:', error.message);
+      const statusCode = error.statusCode || error.status || 500;
+      return next(new AppError(error.message || 'Failed to get meal plan request status.', statusCode, 'MEAL_PLAN_REQUEST_STATUS_ERROR'));
+    }
+  }
 }
 
 module.exports = new UserConsultationController();

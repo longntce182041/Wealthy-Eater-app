@@ -69,7 +69,7 @@ class NutritionistController {
    * GET /api/nutritionists
    * Fetch all approved nutritionists for the mobile app list
    */
-  async getNutritionists(req, res) {
+  async getNutritionists(req, res, next) {
     try {
       const nutritionists =
         await nutritionistService.getAllApprovedNutritionists();
@@ -81,7 +81,50 @@ class NutritionistController {
       });
     } catch (error) {
       console.error('NutritionistController.getNutritionists Error:', error);
-      return next(new AppError('Failed to fetch nutritionists. Please try again later.', 500)); // TODO: pass errorCode INTERNAL_SERVER_ERROR
+      return next(new AppError('Failed to fetch nutritionists. Please try again later.', 500));
+    }
+  }
+
+  /**
+   * GET /api/nutritionists/meal-plan-requests
+   */
+  async getMealPlanRequests(req, res, next) {
+    try {
+      const nutritionistUserId = req.user.id;
+      const requests = await nutritionistService.getMealPlanRequests(nutritionistUserId);
+
+      return res.status(200).json({
+        success: true,
+        data: requests,
+        error: null
+      });
+    } catch (error) {
+      console.error('NutritionistController.getMealPlanRequests Error:', error.message);
+      const statusCode = error.statusCode || error.status || 500;
+      return next(new AppError(error.message || 'Failed to fetch meal plan requests.', statusCode, 'FETCH_MEAL_PLAN_REQUESTS_ERROR'));
+    }
+  }
+
+  /**
+   * POST /api/nutritionists/meal-plan-requests/:id/respond
+   */
+  async respondToMealPlanRequest(req, res, next) {
+    try {
+      const nutritionistUserId = req.user.id;
+      const requestId = req.params.id;
+      const { status } = req.body;
+
+      const request = await nutritionistService.respondToMealPlanRequest(nutritionistUserId, requestId, status);
+
+      return res.status(200).json({
+        success: true,
+        data: request,
+        error: null
+      });
+    } catch (error) {
+      console.error('NutritionistController.respondToMealPlanRequest Error:', error.message);
+      const statusCode = error.statusCode || error.status || 500;
+      return next(new AppError(error.message || 'Failed to respond to meal plan request.', statusCode, 'RESPOND_MEAL_PLAN_REQUEST_ERROR'));
     }
   }
 }
