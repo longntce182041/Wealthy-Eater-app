@@ -3,7 +3,9 @@ import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
 // ĐỒNG BỘ CHUẨN CẤU TRÚC THƯ MỤC THỰC TẾ CỦA BẠN:
 import DashboardPage from "../pages/Dashboard.jsx"; // File Dashboard.jsx nằm trực tiếp trong pages
+import DashboardPage from "../pages/Dashboard.jsx"; // File Dashboard.jsx nằm trực tiếp trong pages
 import IngredientsPage from "../pages/ingredients/ingredients.jsx";
+import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx"; // Trỏ đúng vào file micronutrients.jsx chứ không phải index.jsx
 import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx"; // Trỏ đúng vào file micronutrients.jsx chứ không phải index.jsx
 import RecipesPage from "../pages/recipes/recipes.jsx"; 
 import RecipeDetail from '../pages/recipes/recipe-detail';
@@ -65,6 +67,7 @@ export function AppRoutes() {
             {/* 1. Trang danh sách công thức */}
             <Route path="recipes" element={<RecipesPage />} /> 
             
+            {/* 2. ✅ ĐƯA TRANG ADD LÊN TRÊN (Để tránh bị nhầm add là một cái id) */}
             {/* 2. ✅ ĐƯA TRANG ADD LÊN TRÊN (Để tránh bị nhầm add là một cái id) */}
             <Route path="recipes/add" element={<AddRecipePage />} />
             <Route path="recipes/edit/:id" element={<EditRecipePage />} />

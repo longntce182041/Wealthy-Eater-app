@@ -34,6 +34,7 @@ export default function AdminLayout() {
   }
 
   // 🆕 2. Thêm tiêu đề hiển thị ở Topbar khi bấm vào trang Users
+  // 🆕 2. Thêm tiêu đề hiển thị ở Topbar khi bấm vào trang Users
   const getTopbarTitle = () => {
     switch(location.pathname) {
       case '/dashboard': return 'Dashboard Overview';
@@ -47,6 +48,7 @@ export default function AdminLayout() {
     }
   };
 
+  // 🆕 3. Thêm mục điều hướng '/users' vào danh sách Menu Sidebar
   // 🆕 3. Thêm mục điều hướng '/users' vào danh sách Menu Sidebar
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
