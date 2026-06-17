@@ -9,9 +9,9 @@ class MicronutrientManagementController {
     async getMicronutrients(req, res, next) {
         try {
             const result = await micronutrientService.getAllMicronutrients(req.query);
-            res.json({ success: true, data: result });
+            res.json({ success: true, data: result, error: null });
         } catch (error) {
-            return next(new AppError(error.message, 500));
+            return next(new AppError(error.message, 500, 'INTERNAL_SERVER_ERROR'));
         }
     }
 
@@ -20,7 +20,7 @@ class MicronutrientManagementController {
         try {
             // 1. Validate dữ liệu đầu vào từ client giống như bên Ingredient
             const { errors, isValid } = validateCreateMicronutrient(req.body);
-            if (!isValid) return next(new AppError('Validation Error', 400, errors));
+            if (!isValid) return next(new AppError('Validation Error', 400, 'VALIDATION_ERROR', errors));
 
             const data = req.body;
 
@@ -30,7 +30,7 @@ class MicronutrientManagementController {
             });
             
             if (existingMicronutrient) {
-                return next(new AppError("Micronutrient with this name already exists", 400));
+                return next(new AppError("Micronutrient with this name already exists", 400, 'DUPLICATE_NAME'));
             }
 
             // 3. Tiến hành tạo mới dữ liệu
@@ -43,9 +43,9 @@ class MicronutrientManagementController {
             await micronutrient.save();
             
             // 4. Trả kết quả thành công về cho React Client
-            res.status(201).json({ success: true, message: "Micronutrient created successfully", data: micronutrient });
+            res.status(201).json({ success: true, data: micronutrient, error: null });
         } catch (error) {
-            return next(new AppError(error.message, 500));
+            return next(new AppError(error.message, 500, 'INTERNAL_SERVER_ERROR'));
         }
     }
     
@@ -53,12 +53,12 @@ class MicronutrientManagementController {
     async updateMicronutrient(req, res, next) {
         try {
             const { errors, isValid } = validateUpdateMicronutrient(req.body);
-            if (!isValid) return next(new AppError('Validation Error', 400, null, errors));
+            if (!isValid) return next(new AppError('Validation Error', 400, 'VALIDATION_ERROR', errors));
 
             const updatedMicronutrient = await micronutrientService.updateMicronutrient(req.params.id, req.body);
-            res.json({ success: true, message: "Micronutrient updated successfully", data: updatedMicronutrient });
+            res.json({ success: true, data: updatedMicronutrient, error: null });
         } catch (error) {
-            return next(new AppError(error.message, 400));
+            return next(new AppError(error.message, 400, 'UPDATE_FAILED'));
         }
     }
 
@@ -66,7 +66,7 @@ class MicronutrientManagementController {
     async deleteMicronutrient(req, res, next) {
         try {
             await micronutrientService.deleteMicronutrient(req.params.id);
-            res.json({ success: true, message: "Micronutrient deleted successfully" });
+            res.json({ success: true, data: null, error: null });
         } catch (error) {
             return next(new AppError(error.message, error.statusCode || 400, error.code, error.details));
         }

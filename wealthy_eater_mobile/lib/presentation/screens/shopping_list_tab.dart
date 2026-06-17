@@ -141,7 +141,10 @@ class _ShoppingListTabState extends State<ShoppingListTab>
 
                 // ── Progress Header ──────────────────────────────────────────
                 SliverToBoxAdapter(
-                  child: _ProgressHeader(stats: stats),
+                  child: _ProgressHeader(
+                    stats: stats,
+                    onClearAll: _confirmClearAll,
+                  ),
                 ),
 
                 // ── Pending Items (grouped by category) ───────────────────────
@@ -207,12 +210,6 @@ class _ShoppingListTabState extends State<ShoppingListTab>
               ],
             ),
           ),
-          floatingActionButton: _ListActions(
-            hasPurchased: purchased.isNotEmpty,
-            hasItems: provider.items.isNotEmpty,
-            onClearPurchased: _confirmClearPurchased,
-            onClearAll: _confirmClearAll,
-          ),
         );
       },
     );
@@ -223,7 +220,9 @@ class _ShoppingListTabState extends State<ShoppingListTab>
 
 class _ProgressHeader extends StatelessWidget {
   final ShoppingListStatsEntity stats;
-  const _ProgressHeader({required this.stats});
+  final VoidCallback? onClearAll;
+  
+  const _ProgressHeader({required this.stats, this.onClearAll});
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +262,17 @@ class _ProgressHeader extends StatelessWidget {
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.w700),
               ),
+              if (onClearAll != null && stats.total > 0) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: onClearAll,
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  color: theme.colorScheme.error,
+                  tooltip: 'Clear entire list',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
               const Spacer(),
               Container(
                 padding:
@@ -767,50 +777,4 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-// ─── FAB: List Actions ────────────────────────────────────────────────────────
 
-class _ListActions extends StatelessWidget {
-  final bool          hasPurchased;
-  final bool          hasItems;
-  final VoidCallback  onClearPurchased;
-  final VoidCallback  onClearAll;
-
-  const _ListActions({
-    required this.hasPurchased,
-    required this.hasItems,
-    required this.onClearPurchased,
-    required this.onClearAll,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!hasItems) return const SizedBox.shrink();
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        if (hasPurchased)
-          FloatingActionButton.extended(
-            heroTag: 'fab_clear_purchased',
-            onPressed: onClearPurchased,
-            icon: const Icon(Icons.delete_sweep_outlined),
-            label: const Text('Clear purchased'),
-            backgroundColor: Colors.green.shade600,
-            foregroundColor: Colors.white,
-          ),
-        if (hasPurchased) const SizedBox(height: 12),
-        FloatingActionButton(
-          heroTag: 'fab_clear_all',
-          mini: true,
-          onPressed: onClearAll,
-          backgroundColor:
-              Theme.of(context).colorScheme.error.withValues(alpha: 0.9),
-          foregroundColor: Colors.white,
-          tooltip: 'Clear all items',
-          child: const Icon(Icons.delete_forever_outlined),
-        ),
-      ],
-    );
-  }
-}

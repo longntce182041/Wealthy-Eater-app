@@ -22,7 +22,7 @@ async function upsertReview(req, res, next) {
 
     // Controller-level guard — service also validates, but catch early for clear errors
     if (rating === undefined || rating === null) {
-      return next(new AppError('rating is required', 400));
+      return next(new AppError('rating is required', 400, 'VALIDATION_ERROR'));
     }
 
     const review = await reviewService.upsertReview(userId, recipeId, rating, comment);
@@ -37,6 +37,7 @@ async function upsertReview(req, res, next) {
         createdAt: review.createdAt,
         updatedAt: review.updatedAt,
       },
+      error: null,
     });
   } catch (err) {
     const status = err.statusCode || 500;
@@ -70,6 +71,7 @@ async function getRecipeReviews(req, res, next) {
         stats:      result.stats,
       },
       meta: result.pagination,
+      error: null,
     });
   } catch (err) {
     return next(new AppError(err.message || 'Failed to load reviews', 500));
@@ -102,6 +104,7 @@ async function getMyReview(req, res, next) {
             }
           : null,
       },
+      error: null,
     });
   } catch (err) {
     return next(new AppError(err.message || 'Failed to load your review', 500));
@@ -129,6 +132,7 @@ async function getAllMyReviews(req, res, next) {
       success: true,
       data:    result.reviews,
       meta:    result.pagination,
+      error: null,
     });
   } catch (err) {
     return next(new AppError(err.message || 'Failed to load reviews', 500));
@@ -147,7 +151,7 @@ async function deleteReview(req, res, next) {
 
     await reviewService.deleteReview(reviewId, userId);
 
-    return res.json({ success: true, message: 'Review deleted' });
+    return res.json({ success: true, data: null, error: null });
   } catch (err) {
     const status = err.statusCode || 500;
     return next(new AppError(err.message || 'Failed to delete review', status));

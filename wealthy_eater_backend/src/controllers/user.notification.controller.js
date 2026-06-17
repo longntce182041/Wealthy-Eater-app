@@ -2,12 +2,12 @@ const AppError = require('../utils/AppError');
 const userNotificationService = require('../services/user.notification.service');
 
 // ─── Shared response helper ──────────────────────────────────────────────────
-function handleError(err, res, context) {
+function handleError(err, res, next, context) {
   if (err.code === 'NOT_FOUND') {
-    return next(new AppError('Notification not found', 404)); // TODO: pass errorCode NOT_FOUND
+    return next(new AppError('Notification not found', 404, 'NOT_FOUND'));
   }
   console.error(`[Notification Controller] ${context} error:`, err);
-  return next(new AppError('An unexpected error occurred', 500)); // TODO: pass errorCode INTERNAL_ERROR
+  return next(new AppError('An unexpected error occurred', 500, 'INTERNAL_SERVER_ERROR'));
 }
 
 exports.getSettings = async (req, res, next) => {
@@ -16,7 +16,7 @@ exports.getSettings = async (req, res, next) => {
     const settings = await userNotificationService.getSettings(user_id);
     return res.json({ success: true, data: settings, error: null });
   } catch (error) {
-    return handleError(error, res, 'getSettings');
+    return handleError(error, res, next, 'getSettings');
   }
 };
 
@@ -26,7 +26,7 @@ exports.updateSettings = async (req, res, next) => {
     const settings = await userNotificationService.updateSettings(user_id, req.body);
     return res.json({ success: true, data: settings, error: null });
   } catch (error) {
-    return handleError(error, res, 'updateSettings');
+    return handleError(error, res, next, 'updateSettings');
   }
 };
 
@@ -39,7 +39,7 @@ exports.getHistory = async (req, res, next) => {
     const history = await userNotificationService.getHistory(user_id, limit, skip);
     return res.json({ success: true, data: history, error: null });
   } catch (error) {
-    return handleError(error, res, 'getHistory');
+    return handleError(error, res, next, 'getHistory');
   }
 };
 
@@ -50,7 +50,7 @@ exports.markAsRead = async (req, res, next) => {
     const notification = await userNotificationService.markAsRead(user_id, notification_id);
     return res.json({ success: true, data: notification, error: null });
   } catch (error) {
-    return handleError(error, res, 'markAsRead');
+    return handleError(error, res, next, 'markAsRead');
   }
 };
 

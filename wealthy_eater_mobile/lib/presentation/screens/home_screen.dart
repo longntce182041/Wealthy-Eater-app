@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../domain/entities/user.dart';
 import '../providers/auth_provider.dart';
+import '../providers/chatbot_provider.dart';
 import '../providers/shopping_list_provider.dart';
 import '../providers/notification_provider.dart';
 import 'notification_history_screen.dart';
@@ -13,6 +14,7 @@ import 'recipe_list_view.dart';
 import 'recipe_my_reviews_tab.dart';
 import 'shopping_list_tab.dart';
 import 'dashboard_home_tab.dart';
+import 'chatbot_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserEntity? user;
@@ -45,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (confirmed == true && mounted) {
+      context.read<ChatbotProvider>().clear();
       await context.read<AuthProvider>().logout();
     }
   }
@@ -97,6 +100,16 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: _logout,
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ChatbotScreen()),
+          );
+        },
+        tooltip: 'AI Chatbot',
+        child: const Icon(Icons.chat_bubble_outline),
       ),
       body: SafeArea(
         child: IndexedStack(

@@ -15,7 +15,6 @@ class EnvConfig {
     }
   }
 
-  static const int connectTimeout =
-      15000; // 15 seconds network connection deadline
-  static const int receiveTimeout = 15000;
+  static const int connectTimeout = 15000; // 15 seconds network connection deadline
+  static const int receiveTimeout = 60000; // 60 seconds for AI and long requests
 }

@@ -5,3 +5,4 @@ export 'shopping_list_provider.dart';
 export 'notification_provider.dart';
 export 'nutritionist_provider.dart';
 export 'chat_provider.dart';
+export 'chatbot_provider.dart';

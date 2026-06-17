@@ -15,7 +15,7 @@ class UserConsultationController {
    * Creates a PayOS checkout link for hiring a nutritionist.
    * Body: { nutritionist_id: String }
    */
-  async hireNutritionist(req, res) {
+  async hireNutritionist(req, res, next) {
     try {
       const userId = req.user.id;
       const { nutritionist_id, package_type = '1_month' } = req.body;
@@ -43,7 +43,7 @@ class UserConsultationController {
    *
    * Returns a single transaction with full contract and nutritionist details.
    */
-  async getTransactionDetail(req, res) {
+  async getTransactionDetail(req, res, next) {
     try {
       const userId = req.user.id;
       const transactionId = req.params.id;
@@ -67,7 +67,7 @@ class UserConsultationController {
    *
    * Returns the user's currently active consultation contract (if any).
    */
-  async getActiveContract(req, res) {
+  async getActiveContract(req, res, next) {
     try {
       const userId = req.user.id;
       const activeContract = await consultationService.getActiveContract(userId);
@@ -79,7 +79,7 @@ class UserConsultationController {
       });
     } catch (error) {
       console.error('UserConsultationController.getActiveContract Error:', error.message);
-      return next(new AppError('Failed to fetch active contract.', 500)); // TODO: pass errorCode INTERNAL_SERVER_ERROR
+      return next(new AppError('Failed to fetch active contract.', 500, 'INTERNAL_SERVER_ERROR'));
     }
   }
 
@@ -88,7 +88,7 @@ class UserConsultationController {
    *
    * Returns configured PayOS return and cancel URLs for WebView interception.
    */
-  async getPayOSUrls(req, res) {
+  async getPayOSUrls(req, res, next) {
     try {
       const returnUrl = process.env.PAYOS_RETURN_URL;
       const cancelUrl = process.env.PAYOS_CANCEL_URL;
@@ -117,7 +117,7 @@ class UserConsultationController {
    * PayOS webhook callback — unauthenticated, verified via HMAC signature.
    * Must always return 200 to PayOS to prevent retries (unless payload is invalid).
    */
-  async handlePayOSWebhook(req, res) {
+  async handlePayOSWebhook(req, res, next) {
     try {
       let payload = req.body;
 
@@ -164,7 +164,7 @@ class UserConsultationController {
    * Manual fallback to verify payment status synchronously with PayOS
    * when local webhooks are blocked.
    */
-  async verifyPayment(req, res) {
+  async verifyPayment(req, res, next) {
     try {
       const { order_code } = req.body;
       if (!order_code) {

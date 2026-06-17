@@ -7,7 +7,7 @@ class NutritionistController {
    * POST /api/nutritionists/register-account
    * Create customer user account before nutritionist profile configuration
    */
-  async createNutritionistUserAccount(req, res) {
+  async createNutritionistUserAccount(req, res, next) {
     try {
       const result = await nutritionistService.createNutritionistUserAccount(
         req.body,
@@ -20,11 +20,7 @@ class NutritionistController {
       });
     } catch (error) {
       const statusCode = error.statusCode || error.status || 500;
-
-      return res.status(statusCode).json({
-        success: false,
-        message: error.message || "Failed to create user account",
-      });
+      return next(new AppError(error.message || "Failed to create user account", statusCode, 'USER_CREATION_FAILED'));
     }
   }
 
@@ -33,15 +29,12 @@ class NutritionistController {
    * POST /api/nutritionists/register
    * Submit nutritionist registration request
    */
-  async registerNutritionist(req, res) {
+  async registerNutritionist(req, res, next) {
     try {
       const userId = req.user?.id || req.user?.sub || req.user?.userId;
 
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Unauthorized user",
-        });
+        return next(new AppError("Unauthorized user", 401, 'UNAUTHORIZED'));
       }
 
       const result = await nutritionistService.registerNutritionist(
@@ -57,11 +50,7 @@ class NutritionistController {
       });
     } catch (error) {
       const statusCode = error.statusCode || error.status || 500;
-
-      return res.status(statusCode).json({
-        success: false,
-        message: error.message || "Failed to submit nutritionist registration",
-      });
+      return next(new AppError(error.message || "Failed to submit nutritionist registration", statusCode, 'REGISTRATION_FAILED'));
     }
   }
 
@@ -69,7 +58,7 @@ class NutritionistController {
    * GET /api/nutritionists
    * Fetch all approved nutritionists for the mobile app list
    */
-  async getNutritionists(req, res) {
+  async getNutritionists(req, res, next) {
     try {
       const nutritionists =
         await nutritionistService.getAllApprovedNutritionists();
@@ -81,7 +70,7 @@ class NutritionistController {
       });
     } catch (error) {
       console.error('NutritionistController.getNutritionists Error:', error);
-      return next(new AppError('Failed to fetch nutritionists. Please try again later.', 500)); // TODO: pass errorCode INTERNAL_SERVER_ERROR
+      return next(new AppError('Failed to fetch nutritionists. Please try again later.', 500, 'INTERNAL_SERVER_ERROR'));
     }
   }
 }
