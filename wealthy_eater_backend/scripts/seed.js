@@ -128,6 +128,7 @@ async function seedAllModels() {
     {
       _id: new mongoose.Types.ObjectId().toString(),
       user_id: ids.custUser1Id,
+      full_name: 'An Nguyen',
       age: 30,
       gender: 'male',
       height: 175,
@@ -140,6 +141,7 @@ async function seedAllModels() {
     {
       _id: new mongoose.Types.ObjectId().toString(),
       user_id: ids.custUser2Id,
+      full_name: 'Binh Le',
       age: 25,
       gender: 'male',
       height: 180,
@@ -152,6 +154,7 @@ async function seedAllModels() {
     {
       _id: new mongoose.Types.ObjectId().toString(),
       user_id: ids.custUser3Id,
+      full_name: 'Chi Tran',
       age: 45,
       gender: 'female',
       height: 160,
@@ -164,6 +167,7 @@ async function seedAllModels() {
     {
       _id: new mongoose.Types.ObjectId().toString(),
       user_id: ids.custUser4Id,
+      full_name: 'Dung Pham',
       age: 22,
       gender: 'female',
       height: 155,
@@ -176,6 +180,7 @@ async function seedAllModels() {
     {
       _id: new mongoose.Types.ObjectId().toString(),
       user_id: ids.custUser5Id,
+      full_name: 'Hoa Vu',
       age: 35,
       gender: 'female',
       height: 165,
@@ -222,10 +227,12 @@ async function seedAllModels() {
       _id: new mongoose.Types.ObjectId().toString(),
       user_id: ids.custUser1Id,
       medical_condition_id: ids.condDiabetesId,
-      allergies: ['peanuts'],
-      dislike_ingredients: ['celery'],
+      allergies: [ids.ingEggId],
+      dislike_ingredients: [ids.ingTofuId],
       cooking_skill_level: 'beginner',
-      available_cooking_time: 30
+      available_cooking_time: 30,
+      activity_level: 'moderate',
+      diet_preferences: ['Low-carb']
     },
     {
       _id: new mongoose.Types.ObjectId().toString(),
@@ -234,16 +241,20 @@ async function seedAllModels() {
       allergies: [],
       dislike_ingredients: [],
       cooking_skill_level: 'intermediate',
-      available_cooking_time: 45
+      available_cooking_time: 45,
+      activity_level: 'active',
+      diet_preferences: ['Keto']
     },
     {
       _id: new mongoose.Types.ObjectId().toString(),
       user_id: ids.custUser3Id,
       medical_condition_id: ids.condHypertensionId,
-      allergies: ['shrimp'],
-      dislike_ingredients: ['coriander'],
+      allergies: [ids.ingMilkId],
+      dislike_ingredients: [ids.ingBroccoliId],
       cooking_skill_level: 'expert',
-      available_cooking_time: 60
+      available_cooking_time: 60,
+      activity_level: 'sedentary',
+      diet_preferences: ['Vegetarian']
     },
     {
       _id: new mongoose.Types.ObjectId().toString(),
@@ -252,7 +263,9 @@ async function seedAllModels() {
       allergies: [],
       dislike_ingredients: [],
       cooking_skill_level: 'beginner',
-      available_cooking_time: 30
+      available_cooking_time: 30,
+      activity_level: 'light',
+      diet_preferences: []
     },
     {
       _id: new mongoose.Types.ObjectId().toString(),
@@ -261,7 +274,9 @@ async function seedAllModels() {
       allergies: [],
       dislike_ingredients: [],
       cooking_skill_level: 'intermediate',
-      available_cooking_time: 40
+      available_cooking_time: 40,
+      activity_level: 'moderate',
+      diet_preferences: []
     }
   ];
   await mongoose.model('UserDietary').insertMany(userDietaries);
@@ -745,9 +760,9 @@ async function seedAllModels() {
 
   // 18. Seed Consultation Contracts
   const consultationContracts = [
-    { _id: ids.contract1Id, user_id: ids.custUser1Id, nutritionists_id: 'active', create_at: now },
-    { _id: ids.contract2Id, user_id: ids.custUser2Id, nutritionists_id: 'completed', create_at: new Date(now.getTime() - 7*24*60*60*1000) },
-    { _id: ids.contract3Id, user_id: ids.custUser3Id, nutritionists_id: 'pending_payment', create_at: now },
+    { _id: ids.contract1Id, user_id: ids.custUser1Id, nutritionist_id: ids.nutri1Id, status: 'active', create_at: now },
+    { _id: ids.contract2Id, user_id: ids.custUser2Id, nutritionist_id: ids.nutri2Id, status: 'completed', create_at: new Date(now.getTime() - 7*24*60*60*1000) },
+    { _id: ids.contract3Id, user_id: ids.custUser3Id, nutritionist_id: ids.nutri3Id, status: 'pending_payment', create_at: now },
   ];
   await mongoose.model('ConsultationContract').insertMany(consultationContracts);
   console.log(`Seeded ${consultationContracts.length} ConsultationContracts.`);
@@ -896,10 +911,12 @@ async function seedAllModels() {
       ingredient_id: ids.ingChickenId,
       ingredient_name: 'Chicken Breast',
       recipe_id: ids.recChickenBowlId,
+      quantity: 150,
+      unit: 'g',
       is_purchase: false,
       category: 'Meat/Protein',
       add_at: now,
-      creat_at: now
+      created_at: now
     },
     {
       _id: new mongoose.Types.ObjectId().toString(),
@@ -907,10 +924,12 @@ async function seedAllModels() {
       ingredient_id: ids.ingBroccoliId,
       ingredient_name: 'Broccoli',
       recipe_id: ids.recChickenBowlId,
+      quantity: 100,
+      unit: 'g',
       is_purchase: true,
       category: 'Vegetables',
       add_at: now,
-      creat_at: now
+      created_at: now
     }
   ];
   await mongoose.model('ShoppingList').insertMany(shoppingLists);
@@ -921,6 +940,7 @@ async function seedAllModels() {
     {
       _id: new mongoose.Types.ObjectId().toString(),
       consultation_contracts_id_fk: ids.contract1Id,
+      user_id: ids.custUser1Id,
       payos_order_code: 'ORD172839210',
       payos_transaction_id: 'TXN839210293',
       payos_payment_link: 'https://pay.payos.vn/web/ORD172839210',
@@ -932,6 +952,7 @@ async function seedAllModels() {
     {
       _id: new mongoose.Types.ObjectId().toString(),
       consultation_contracts_id_fk: ids.contract2Id,
+      user_id: ids.custUser2Id,
       payos_order_code: 'ORD172839005',
       payos_transaction_id: 'TXN839210005',
       payos_payment_link: 'https://pay.payos.vn/web/ORD172839005',

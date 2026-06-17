@@ -16,21 +16,21 @@ class MealPlanService {
     if (!activeContract) throw new Error("NO_ACTIVE_CONTRACT");
 
     // 2. Fetch biometric files and preference maps
-    const profile = await UserProfile.findOne({ userId: clientId });
-    if (!profile || !profile.calculatedTDEE)
+    const profile = await UserProfile.findOne({ user_id: clientId });
+    if (!profile || !profile.tdee)
       throw new Error("MISSING_TDEE_PARAMETERS");
 
-    const dietary = await UserDietary.findOne({ userId: clientId });
-    if (!dietary || !dietary.dietaryPreference)
+    const dietary = await UserDietary.findOne({ user_id: clientId });
+    if (!dietary || !dietary.diet_preferences || !dietary.diet_preferences.length)
       throw new Error("MISSING_DIETARY_PREFERENCES");
 
     // 3. Dispatch the payload execution parameters to n8n
     const n8nPayload = {
       clientId: clientId,
-      tdee: profile.calculatedTDEE,
-      dietaryPreference: dietary.dietaryPreference,
+      tdee: profile.tdee,
+      dietaryPreference: dietary.diet_preferences,
       allergies: dietary.allergies || [],
-      medicalConditions: dietary.medicalConditions || [],
+      medicalConditions: dietary.medical_condition_id ? [dietary.medical_condition_id] : [],
     };
 
     const result = await n8nService.triggerTemplateMatch(n8nPayload);

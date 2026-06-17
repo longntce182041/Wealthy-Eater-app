@@ -113,7 +113,10 @@ class _AuthInterceptor extends Interceptor {
 
   @override
   Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
-    if (err.response?.statusCode == 401) {
+    const publicPaths = ['/api/auth/login', '/api/auth/google', '/api/auth/refresh'];
+    final isPublicPath = publicPaths.any((p) => err.requestOptions.path.startsWith(p));
+
+    if (err.response?.statusCode == 401 && !isPublicPath) {
       // If we're already refreshing, just queue this request and return immediately.
       if (_isRefreshing) {
         _failedRequests.add({
@@ -162,15 +165,18 @@ class _AuthInterceptor extends Interceptor {
           } else {
              await _clearTokens();
              _rejectQueue(err);
+             return handler.next(err);
           }
         } catch (_) {
           await _clearTokens();
           _rejectQueue(err);
+          return handler.next(err);
         } finally {
           _isRefreshing = false;
         }
       } else {
         _rejectQueue(err);
+        return handler.next(err);
       }
     } else {
       return handler.next(err);

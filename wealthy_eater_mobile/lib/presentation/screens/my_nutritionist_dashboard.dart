@@ -1,12 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../data/models/active_contract_model.dart';
 import '../../core/theme/app_colors.dart';
+import '../providers/consultation_provider.dart';
 import 'chat_screen.dart';
 
-class MyNutritionistDashboard extends StatelessWidget {
+class MyNutritionistDashboard extends StatefulWidget {
   final ActiveContractModel contract;
 
   const MyNutritionistDashboard({super.key, required this.contract});
+
+  @override
+  State<MyNutritionistDashboard> createState() => _MyNutritionistDashboardState();
+}
+
+class _MyNutritionistDashboardState extends State<MyNutritionistDashboard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ConsultationProvider>().loadMealPlanRequestStatus();
+    });
+  }
 
   String _formatPackageType(String package) {
     if (package == '3_months') return '3 Months';
@@ -19,10 +34,57 @@ class MyNutritionistDashboard extends StatelessWidget {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
+  void _showRequestConfirmDialog(BuildContext context, ConsultationProvider provider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Request Weekly Meal Plan'),
+        content: const Text(
+          'Do you want to send a request to your nutritionist to set up a new meal plan for your next week?',
+          style: TextStyle(height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              final success = await provider.submitMealPlanRequest();
+              if (!mounted) return;
+              if (success) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Request sent successfully, please wait for nutritionist response.'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } else {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to send request. Please try again.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            child: const Text('Request'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final doc = contract.nutritionist;
+    final doc = widget.contract.nutritionist;
     final theme = Theme.of(context);
+    final consultProvider = context.watch<ConsultationProvider>();
+    final requestStatus = consultProvider.mealPlanRequestStatus ?? 'NONE';
+    final isRequesting = consultProvider.isRequestingMealPlan;
 
     return Container(
       color: AppColors.background,
@@ -148,7 +210,7 @@ class MyNutritionistDashboard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          _formatPackageType(contract.packageType),
+                          _formatPackageType(widget.contract.packageType),
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             color: AppColors.primary,
@@ -174,7 +236,7 @@ class MyNutritionistDashboard extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              _formatDate(contract.createdAt),
+                              _formatDate(widget.contract.createdAt),
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
@@ -200,7 +262,7 @@ class MyNutritionistDashboard extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                _formatDate(contract.expireAt),
+                                _formatDate(widget.contract.expireAt),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: Colors.redAccent,
@@ -239,7 +301,7 @@ class MyNutritionistDashboard extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => ChatScreen(
-                            contractId: contract.id,
+                            contractId: widget.contract.id,
                             peerName: doc.fullName,
                             peerInitials: doc.initials,
                           ),
@@ -267,15 +329,24 @@ class MyNutritionistDashboard extends StatelessWidget {
             const SizedBox(height: 16),
             _buildActionCard(
               icon: Icons.restaurant_menu_rounded,
-              title: 'Meal Plan Review',
-              subtitle: 'Request a custom nutrition plan review',
-              color: const Color(0xFFFB8C00),
+              title: 'Request Weekly Meal Plan',
+              subtitle: requestStatus == 'PENDING'
+                  ? 'Requested (Waiting for response)'
+                  : 'Ask your nutritionist to design a new menu for next week',
+              color: requestStatus == 'PENDING' ? Colors.grey : const Color(0xFFFB8C00),
               isFullWidth: true,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Meal Plan Review feature coming soon!')),
-                );
-              },
+              onTap: isRequesting
+                  ? () {}
+                  : (requestStatus == 'PENDING'
+                      ? () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Your request is already pending nutritionist response.'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        }
+                      : () => _showRequestConfirmDialog(context, consultProvider)),
             ),
             const SizedBox(height: 32),
 

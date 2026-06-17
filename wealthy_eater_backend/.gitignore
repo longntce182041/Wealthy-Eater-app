@@ -55,3 +55,6 @@ Thumbs.db
 
 # Uploaded Media
 uploads/
+
+# Database seed manifests
+scripts/seed-manifest-*.json

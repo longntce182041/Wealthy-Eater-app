@@ -5,6 +5,7 @@ import '../../domain/entities/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/notification_provider.dart';
+import '../providers/nutritionist_provider.dart';
 import '../widgets/coming_soon_tab.dart';
 import 'chat_screen.dart';
 import 'notification_history_screen.dart';
@@ -47,7 +48,7 @@ class _NutritionistDashboardScreenState extends State<NutritionistDashboardScree
   String _navTitle(int index) {
     switch (index) {
       case 0:
-        return 'Appointments';
+        return 'Requests';
       case 1:
         return 'Clients';
       case 2:
@@ -117,11 +118,7 @@ class _NutritionistDashboardScreenState extends State<NutritionistDashboardScree
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          const ComingSoonTab(
-            icon: Icons.calendar_month,
-            title: 'Appointments',
-            description: 'Manage your consultation requests and schedule.',
-          ),
+          const _NutritionistRequestsTab(),
           const _NutritionistClientsTab(),
           const ComingSoonTab(
             icon: Icons.manage_accounts_outlined,
@@ -135,9 +132,9 @@ class _NutritionistDashboardScreenState extends State<NutritionistDashboardScree
         onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
-            label: 'Appointments',
+            icon: Icon(Icons.assignment_outlined),
+            selectedIcon: Icon(Icons.assignment),
+            label: 'Requests',
           ),
           NavigationDestination(
             icon: Icon(Icons.people_alt_outlined),
@@ -337,7 +334,7 @@ class _NutritionistClientsTabState extends State<_NutritionistClientsTab> {
                           Text(
                             '$unread unread message${unread > 1 ? 's' : ''}',
                             style: const TextStyle(
-                                fontSize: 12, color: Colors.red),
+                                 fontSize: 12, color: Colors.red),
                           ),
                       ],
                     ),
@@ -350,6 +347,256 @@ class _NutritionistClientsTabState extends State<_NutritionistClientsTab> {
           );
         },
       ),
+    );
+  }
+}
+
+// ── Nutritionist Requests Tab ──────────────────────────────────────────────────
+
+class _NutritionistRequestsTab extends StatefulWidget {
+  const _NutritionistRequestsTab();
+
+  @override
+  State<_NutritionistRequestsTab> createState() => _NutritionistRequestsTabState();
+}
+
+class _NutritionistRequestsTabState extends State<_NutritionistRequestsTab> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NutritionistProvider>().loadMealPlanRequests();
+    });
+  }
+
+  String _formatDate(String? isoString) {
+    if (isoString == null) return '';
+    final date = DateTime.tryParse(isoString);
+    if (date == null) return '';
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Consumer<NutritionistProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoadingRequests) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (provider.requestsError != null) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  const SizedBox(height: 12),
+                  Text(provider.requestsError!, textAlign: TextAlign.center),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () => provider.loadMealPlanRequests(),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final requests = provider.mealPlanRequests;
+
+        if (requests.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.restaurant_menu_outlined, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'No pending meal plan requests.',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () => provider.loadMealPlanRequests(),
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: requests.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final req = requests[index];
+              final client = req['user_id'] as Map<String, dynamic>?;
+              final email = client?['email']?.toString() ?? 'Client';
+              final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
+              final dateStr = _formatDate(req['created_at']?.toString());
+
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: theme.colorScheme.primaryContainer,
+                          child: Text(
+                            initial,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.onPrimaryContainer,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                email,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (dateStr.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Requested: $dateStr',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade200),
+                          ),
+                          child: Text(
+                            req['status']?.toString() ?? 'PENDING',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange.shade800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+                    const Text(
+                      'Request message:',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      '"I want the nutritionist to set up a new meal plan for my next week."',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () async {
+                            final success = await provider.respondToRequest(
+                              req['_id']?.toString() ?? '',
+                              'REJECTED',
+                            );
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(success
+                                    ? 'Request rejected.'
+                                    : 'Failed to reject request.'),
+                                backgroundColor: success ? Colors.orange : Colors.red,
+                              ),
+                            );
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text('Reject'),
+                        ),
+                        const SizedBox(width: 12),
+                        FilledButton(
+                          onPressed: () async {
+                            final success = await provider.respondToRequest(
+                              req['_id']?.toString() ?? '',
+                              'APPROVED',
+                            );
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(success
+                                    ? 'Request approved! You can now create a meal plan for this client.'
+                                    : 'Failed to approve request.'),
+                                backgroundColor: success ? Colors.green : Colors.red,
+                              ),
+                            );
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: theme.colorScheme.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text('Approve & Plan'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

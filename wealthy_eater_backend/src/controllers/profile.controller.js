@@ -47,4 +47,13 @@ async function getWeightHistory(req, res, next) {
   }
 }
 
-module.exports = { getMyProfile, createOrUpdateProfile, logWeight, getWeightHistory };
+async function getSetupMetadata(req, res, next) {
+  try {
+    const metadata = await ProfileService.getSetupMetadata();
+    return res.json({ success: true, data: metadata });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { getMyProfile, createOrUpdateProfile, logWeight, getWeightHistory, getSetupMetadata };

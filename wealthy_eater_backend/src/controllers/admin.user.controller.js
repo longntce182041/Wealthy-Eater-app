@@ -4,7 +4,7 @@ const adminUserService = require('../services/admin.user.service');
 async function getUsersList(req, res, next) {
   try {
     const result = await adminUserService.getPaginatedUsers(req.query);
-    
+
     if (result.data.length === 0) {
       return res.json({
         success: true,
@@ -34,7 +34,7 @@ async function createUser(req, res, next) {
     if (!email || typeof email !== 'string') {
       return next(new AppError('Email is required.', 400));
     }
-    
+
     const normalizedEmail = String(email).trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(normalizedEmail)) {

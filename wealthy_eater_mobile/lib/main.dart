@@ -85,11 +85,18 @@ class _AppRoot extends StatefulWidget {
 }
 
 class _AppRootState extends State<_AppRoot> {
+  bool _initialized = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().restoreSession().then((_) {
+        if (mounted) {
+          setState(() {
+            _initialized = true;
+          });
+        }
         if (mounted && context.read<AuthProvider>().isAuthenticated) {
           context.read<RecipeProvider>().loadRecipes();
           context.read<NotificationProvider>().fetchSettings();
@@ -101,21 +108,19 @@ class _AppRootState extends State<_AppRoot> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_initialized) {
+      return const _SplashScreen();
+    }
+
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
-        switch (auth.state) {
-          case AuthState.initial:
-          case AuthState.loading:
-            return const _SplashScreen();
-          case AuthState.authenticated:
-            if (auth.user?.role == 'nutritionist') {
-              return NutritionistDashboardScreen(user: auth.user);
-            }
-            return HomeScreen(user: auth.user);
-          case AuthState.unauthenticated:
-          case AuthState.error:
-            return const LoginScreen();
+        if (auth.isAuthenticated) {
+          if (auth.user?.role == 'nutritionist') {
+            return NutritionistDashboardScreen(user: auth.user);
+          }
+          return HomeScreen(user: auth.user);
         }
+        return const LoginScreen();
       },
     );
   }
