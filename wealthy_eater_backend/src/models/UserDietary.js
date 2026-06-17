@@ -14,13 +14,21 @@ const UserDietarySchema = new mongoose.Schema({
     type: String, 
     ref: 'MedicalCondition' 
   },
-  allergies: [{ type: String }],
-  dislike_ingredients: [{ type: String }], 
+  allergies: [{ type: String, ref: 'Ingredient' }],
+  dislike_ingredients: [{ type: String, ref: 'Ingredient' }], 
   cooking_skill_level: { 
     type: String 
   },
   available_cooking_time: { 
     type: Number 
+  },
+  activity_level: { 
+    type: String, 
+    default: null 
+  },
+  diet_preferences: { 
+    type: [String], 
+    default: [] 
   }
 });
 

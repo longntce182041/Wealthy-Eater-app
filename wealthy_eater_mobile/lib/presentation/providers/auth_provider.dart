@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier;
+import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier, debugPrint;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -255,6 +255,19 @@ class AuthProvider with ChangeNotifier {
 
   /// Public wrapper to fetch user profile on demand.
   Future<void> fetchUserProfile() async => _fetchUserProfile();
+
+  /// Fetch dynamic setup metadata (Ingredients and Medical Conditions)
+  Future<Map<String, dynamic>?> fetchSetupMetadata() async {
+    try {
+      final res = await _api.get('/api/profile/setup-metadata');
+      if (res.statusCode == 200 && res.data['success'] == true && res.data['data'] != null) {
+        return Map<String, dynamic>.from(res.data['data'] as Map<String, dynamic>);
+      }
+    } catch (e) {
+      debugPrint("Error fetching setup metadata: $e");
+    }
+    return null;
+  }
 
   Future<void> _fetchWeightHistory() async {
     try {

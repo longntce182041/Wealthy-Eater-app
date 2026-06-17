@@ -190,10 +190,22 @@ class _LoginScreenState extends State<LoginScreen> {
     return SizedBox(
       height: 56,
       width: double.infinity,
-      child: OutlinedButton.icon(
+      child: OutlinedButton(
         onPressed: isLoading ? null : _doGoogle,
-        icon: const Icon(Icons.g_mobiledata, size: 28),
-        label: const Text('Continue with Google'),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.g_mobiledata, size: 28),
+            SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Continue with Google',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -215,17 +227,27 @@ class _LoginScreenState extends State<LoginScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        TextButton(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const RegisterScreen()),
+        Flexible(
+          child: TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const RegisterScreen()),
+            ),
+            child: const Text(
+              'Create Account',
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          child: const Text('Create Account'),
         ),
-        TextButton(
-          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Forgot password not implemented')),
+        Flexible(
+          child: TextButton(
+            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Forgot password not implemented')),
+            ),
+            child: const Text(
+              'Forgot Password?',
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          child: const Text('Forgot Password?'),
         ),
       ],
     );

@@ -13,6 +13,7 @@ import 'recipe_list_view.dart';
 import 'recipe_my_reviews_tab.dart';
 import 'shopping_list_tab.dart';
 import 'dashboard_home_tab.dart';
+import 'customer_profile_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserEntity? user;
@@ -123,12 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const NutritionistsTab(),
 
             // ── 4: Profile ─────────────────────────────────────────────
-            const ComingSoonTab(
-              icon: Icons.person_outline,
-              title: 'Profile',
-              description:
-                  'Manage your profile, preferences, and favorite recipes.',
-            ),
+            const CustomerProfileTab(),
           ],
         ),
       ),
