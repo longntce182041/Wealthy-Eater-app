@@ -3,11 +3,15 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
-import '../../core/network/api_client.dart';
-import '../../core/error/app_error.dart';
+import '../../domain/entities/notification.dart';
+import '../../domain/usecases/notification_usecases.dart';
 
 class NotificationProvider with ChangeNotifier {
-  final ApiClient _api;
+  final FetchNotificationSettingsUseCase fetchNotificationSettingsUseCase;
+  final UpdateNotificationSettingsUseCase updateSettingsUseCase;
+  final FetchNotificationHistoryUseCase fetchHistoryUseCase;
+  final MarkNotificationAsReadUseCase markAsReadUseCase;
+
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin;
 
   Map<String, dynamic>? settings;
@@ -16,9 +20,12 @@ class NotificationProvider with ChangeNotifier {
   bool isLoading = false;
   String? errorMessage;
 
-  NotificationProvider({required ApiClient api})
-      : _api = api,
-        _localNotificationsPlugin = FlutterLocalNotificationsPlugin() {
+  NotificationProvider({
+    required this.fetchNotificationSettingsUseCase,
+    required this.updateSettingsUseCase,
+    required this.fetchHistoryUseCase,
+    required this.markAsReadUseCase,
+  }) : _localNotificationsPlugin = FlutterLocalNotificationsPlugin() {
     _initLocalNotifications();
   }
 
@@ -108,16 +115,12 @@ class NotificationProvider with ChangeNotifier {
   Future<void> fetchSettings() async {
     _setLoading(true);
     try {
-      final res = await _api.get('/api/user/notifications/settings');
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        settings = res.data['data'] as Map<String, dynamic>?;
-        errorMessage = null;
-        _scheduleLocalReminders();
-      } else {
-        _setError(res.data['error']?['message'] ?? 'Failed to fetch settings');
-      }
+      final res = await fetchNotificationSettingsUseCase();
+      settings = res?.data;
+      errorMessage = null;
+      _scheduleLocalReminders();
     } catch (e) {
-      _setError(mapError(e).message);
+      _setError(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       _setLoading(false);
     }
@@ -126,16 +129,12 @@ class NotificationProvider with ChangeNotifier {
   Future<void> updateSettings(Map<String, dynamic> data) async {
     _setLoading(true);
     try {
-      final res = await _api.put('/api/user/notifications/settings', data: data);
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        settings = res.data['data'] as Map<String, dynamic>?;
-        errorMessage = null;
-        _scheduleLocalReminders();
-      } else {
-        _setError(res.data['error']?['message'] ?? 'Failed to update settings');
-      }
+      final res = await updateSettingsUseCase(data);
+      settings = res.data;
+      errorMessage = null;
+      _scheduleLocalReminders();
     } catch (e) {
-      _setError(mapError(e).message);
+      _setError(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       _setLoading(false);
     }
@@ -144,20 +143,12 @@ class NotificationProvider with ChangeNotifier {
   Future<void> fetchHistory({int limit = 20, int skip = 0}) async {
     _setLoading(true);
     try {
-      final res = await _api.get('/api/user/notifications/history', queryParameters: {
-        'limit': limit,
-        'skip': skip,
-      });
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        final data = res.data['data'];
-        history = List<dynamic>.from(data['notifications'] ?? []);
-        unreadCount = data['unreadCount'] ?? 0;
-        errorMessage = null;
-      } else {
-        _setError(res.data['error']?['message'] ?? 'Failed to fetch history');
-      }
+      final res = await fetchHistoryUseCase(limit: limit, skip: skip);
+      history = res.notifications;
+      unreadCount = res.unreadCount;
+      errorMessage = null;
     } catch (e) {
-      _setError(mapError(e).message);
+      _setError(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       _setLoading(false);
     }
@@ -165,15 +156,13 @@ class NotificationProvider with ChangeNotifier {
 
   Future<void> markAsRead(String notificationId) async {
     try {
-      final res = await _api.patch('/api/user/notifications/$notificationId/read');
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        // Update local history list
-        final index = history.indexWhere((n) => n['_id'] == notificationId);
-        if (index != -1) {
-          history[index]['is_read'] = true;
-          if (unreadCount > 0) unreadCount--;
-          notifyListeners();
-        }
+      await markAsReadUseCase(notificationId);
+      // Update local history list
+      final index = history.indexWhere((n) => n['_id'] == notificationId);
+      if (index != -1) {
+        history[index]['is_read'] = true;
+        if (unreadCount > 0) unreadCount--;
+        notifyListeners();
       }
     } catch (e) {
       // Background fail

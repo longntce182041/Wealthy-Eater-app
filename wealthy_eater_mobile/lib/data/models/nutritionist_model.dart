@@ -1,18 +1,13 @@
-class NutritionistModel {
-  final String id;
-  final String fullName;
-  final String specialization;
-  final int serviceFee;
-  final double averageRating;
-  final String? certificationUrl;
+import '../../domain/entities/consultation.dart';
 
+class NutritionistModel extends NutritionistEntity {
   NutritionistModel({
-    required this.id,
-    required this.fullName,
-    required this.specialization,
-    required this.serviceFee,
-    required this.averageRating,
-    this.certificationUrl,
+    required super.id,
+    required super.fullName,
+    required super.specialization,
+    required super.serviceFee,
+    required super.averageRating,
+    super.certificationUrl,
   });
 
   factory NutritionistModel.fromJson(Map<String, dynamic> json) {
@@ -25,24 +20,5 @@ class NutritionistModel {
       certificationUrl: json['certification_url'],
     );
   }
-
-  // Helper method to get initials for default avatar
-  String get initials {
-    if (fullName.isEmpty) return '??';
-    final parts = fullName.split(' ').where((part) => part.isNotEmpty).toList();
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
-    }
-    return fullName.substring(0, 1).toUpperCase();
-  }
-
-  // Pure logic for calculating package prices
-  int calculatePriceForPackage(String packageType) {
-    if (packageType == '3_months') {
-      return (serviceFee * 3 * 0.89).round();
-    } else if (packageType == '6_months') {
-      return (serviceFee * 6 * 0.84).round();
-    }
-    return serviceFee;
-  }
 }
+

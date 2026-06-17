@@ -1,19 +1,24 @@
 import 'package:flutter/foundation.dart';
-import '../../core/network/api_client.dart';
-import '../../data/models/nutritionist_model.dart';
-import '../../data/services/nutritionist_service.dart';
+
+import '../../domain/entities/consultation.dart';
+import '../../domain/usecases/nutritionist_usecases.dart';
 
 class NutritionistProvider extends ChangeNotifier {
-  final NutritionistService _service;
+  final FetchNutritionistsUseCase fetchNutritionistsUseCase;
+  final FetchMealPlanRequestsUseCase fetchMealPlanRequestsUseCase;
+  final RespondToMealPlanRequestUseCase respondToMealPlanRequestUseCase;
 
-  NutritionistProvider({required ApiClient api})
-      : _service = NutritionistService(apiClient: api);
+  NutritionistProvider({
+    required this.fetchNutritionistsUseCase,
+    required this.fetchMealPlanRequestsUseCase,
+    required this.respondToMealPlanRequestUseCase,
+  });
 
-  List<NutritionistModel> _nutritionists = [];
+  List<NutritionistEntity> _nutritionists = [];
   bool _isLoading = false;
   String? _error;
 
-  List<NutritionistModel> get nutritionists => _nutritionists;
+  List<NutritionistEntity> get nutritionists => _nutritionists;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -23,7 +28,7 @@ class NutritionistProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _nutritionists = await _service.fetchNutritionists();
+      _nutritionists = await fetchNutritionistsUseCase();
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -47,7 +52,7 @@ class NutritionistProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _mealPlanRequests = await _service.fetchMealPlanRequests();
+      _mealPlanRequests = await fetchMealPlanRequestsUseCase();
     } catch (e) {
       _requestsError = e.toString().replaceFirst('Exception: ', '');
     } finally {
@@ -58,7 +63,7 @@ class NutritionistProvider extends ChangeNotifier {
 
   Future<bool> respondToRequest(String requestId, String status) async {
     try {
-      final success = await _service.respondToMealPlanRequest(requestId, status);
+      final success = await respondToMealPlanRequestUseCase(requestId, status);
       if (success) {
         // Remove from local list to refresh UI instantly
         _mealPlanRequests.removeWhere((r) => r['_id'] == requestId);

@@ -1,39 +1,23 @@
+import '../../domain/entities/consultation.dart';
+
 /// Data model for a Transaction/Invoice record from the backend API.
-class TransactionModel {
-  final String id;
-  final String consultationContractId;
-  final String userId;
-  final String payosOrderCode;
-  final String? payosTransactionId;
-  final String? payosPaymentLink;
-  final String? payosQrCode;
-  final int amountGross;
-  final int platformFee;
-  final int expertPayout;
-  final String status; // PENDING, PAID, FAILED, CANCELLED
-  final String description;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
-
-  // Populated contract data
-  final ContractInfo? contract;
-
+class TransactionModel extends ConsultationTransactionEntity {
   TransactionModel({
-    required this.id,
-    required this.consultationContractId,
-    required this.userId,
-    required this.payosOrderCode,
-    this.payosTransactionId,
-    this.payosPaymentLink,
-    this.payosQrCode,
-    required this.amountGross,
-    required this.platformFee,
-    required this.expertPayout,
-    required this.status,
-    required this.description,
-    this.createdAt,
-    this.updatedAt,
-    this.contract,
+    required super.id,
+    required super.consultationContractId,
+    required super.userId,
+    required super.payosOrderCode,
+    super.payosTransactionId,
+    super.payosPaymentLink,
+    super.payosQrCode,
+    required super.amountGross,
+    required super.platformFee,
+    required super.expertPayout,
+    required super.status,
+    required super.description,
+    super.createdAt,
+    super.updatedAt,
+    ContractInfo? super.contract,
   });
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) {
@@ -63,42 +47,14 @@ class TransactionModel {
           : null,
     );
   }
-
-  /// Format amount as Vietnamese currency string.
-  String get formattedAmount {
-    return '${amountGross.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} VND';
-  }
-
-  /// Human-readable status label.
-  String get statusLabel {
-    switch (status) {
-      case 'PENDING':
-        return 'Pending';
-      case 'PAID':
-        return 'Paid';
-      case 'FAILED':
-        return 'Failed';
-      case 'CANCELLED':
-        return 'Cancelled';
-      default:
-        return status;
-    }
-  }
-
-  bool get isPaid => status == 'PAID';
-  bool get isPending => status == 'PENDING';
 }
 
 /// Populated contract info from the Transaction query.
-class ContractInfo {
-  final String id;
-  final String status;
-  final NutritionistInfo? nutritionist;
-
+class ContractInfo extends ContractInfoEntity {
   ContractInfo({
-    required this.id,
-    required this.status,
-    this.nutritionist,
+    required super.id,
+    required super.status,
+    NutritionistInfo? super.nutritionist,
   });
 
   factory ContractInfo.fromJson(Map<String, dynamic> json) {
@@ -113,19 +69,13 @@ class ContractInfo {
 }
 
 /// Minimal nutritionist info populated from contract reference.
-class NutritionistInfo {
-  final String id;
-  final String fullName;
-  final String specialization;
-  final int serviceFee;
-  final double averageRating;
-
+class NutritionistInfo extends NutritionistInfoEntity {
   NutritionistInfo({
-    required this.id,
-    required this.fullName,
-    required this.specialization,
-    required this.serviceFee,
-    required this.averageRating,
+    required super.id,
+    required super.fullName,
+    required super.specialization,
+    required super.serviceFee,
+    required super.averageRating,
   });
 
   factory NutritionistInfo.fromJson(Map<String, dynamic> json) {
@@ -140,21 +90,14 @@ class NutritionistInfo {
 }
 
 /// Response from the hire checkout endpoint.
-class CheckoutResult {
-  final String orderCode;
-  final int amount;
-  final String checkoutUrl;
-  final String? qrCode;
-  final String contractId;
-  final String? transactionId;
-
+class CheckoutResult extends CheckoutResultEntity {
   CheckoutResult({
-    required this.orderCode,
-    required this.amount,
-    required this.checkoutUrl,
-    this.qrCode,
-    required this.contractId,
-    this.transactionId,
+    required super.orderCode,
+    required super.amount,
+    required super.checkoutUrl,
+    super.qrCode,
+    required super.contractId,
+    super.transactionId,
   });
 
   factory CheckoutResult.fromJson(Map<String, dynamic> json) {
@@ -170,13 +113,10 @@ class CheckoutResult {
 }
 
 /// Model containing the configured PayOS redirect URLs for WebView interception.
-class PayOSUrlsModel {
-  final String returnUrl;
-  final String cancelUrl;
-
+class PayOSUrlsModel extends PayOSUrlsEntity {
   const PayOSUrlsModel({
-    required this.returnUrl,
-    required this.cancelUrl,
+    required super.returnUrl,
+    required super.cancelUrl,
   });
 
   factory PayOSUrlsModel.fromJson(Map<String, dynamic> json) {
@@ -186,3 +126,4 @@ class PayOSUrlsModel {
     );
   }
 }
+

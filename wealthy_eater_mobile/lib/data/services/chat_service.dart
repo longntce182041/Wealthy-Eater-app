@@ -53,7 +53,7 @@ class ChatService {
       final queryParams = <String, dynamic>{
         'page': page,
         'limit': limit,
-        'before': ?before,
+        'before': before,
       };
 
       final response = await _apiClient.get(

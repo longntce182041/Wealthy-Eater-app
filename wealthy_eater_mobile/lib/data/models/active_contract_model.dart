@@ -1,21 +1,14 @@
 import 'nutritionist_model.dart';
+import '../../domain/entities/consultation.dart';
 
-class ActiveContractModel {
-  final String id;
-  final String status;
-  final NutritionistModel nutritionist;
-
-  final String packageType;
-  final DateTime? expireAt;
-  final DateTime? createdAt;
-
+class ActiveContractModel extends ConsultationContractEntity {
   ActiveContractModel({
-    required this.id,
-    required this.status,
-    required this.nutritionist,
-    this.packageType = '1_month',
-    this.expireAt,
-    this.createdAt,
+    required super.id,
+    required super.status,
+    required NutritionistModel super.nutritionist,
+    super.packageType = '1_month',
+    super.expireAt,
+    super.createdAt,
   });
 
   factory ActiveContractModel.fromJson(Map<String, dynamic> json) {
@@ -29,3 +22,4 @@ class ActiveContractModel {
     );
   }
 }
+

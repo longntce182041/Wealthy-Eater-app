@@ -1,9 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-import '../../core/network/api_client.dart';
-import '../../data/models/active_contract_model.dart';
-import '../../data/models/transaction_model.dart';
-import '../../data/services/consultation_service.dart';
+import '../../domain/entities/consultation.dart';
+import '../../domain/usecases/consultation_usecases.dart';
 
 /// State enum for consultation checkout flow.
 enum CheckoutState { initial, loading, success, error }
@@ -15,18 +13,31 @@ enum CheckoutState { initial, loading, success, error }
 ///  - Loading transaction history with pagination.
 ///  - Loading single transaction detail.
 class ConsultationProvider extends ChangeNotifier {
-  final ConsultationService _service;
+  final HireNutritionistUseCase hireNutritionistUseCase;
+  final GetTransactionDetailUseCase getTransactionDetailUseCase;
+  final VerifyPaymentUseCase verifyPaymentUseCase;
+  final GetPayOSUrlsUseCase getPayOSUrlsUseCase;
+  final GetActiveContractUseCase getActiveContractUseCase;
+  final RequestMealPlanUseCase requestMealPlanUseCase;
+  final GetMealPlanRequestStatusUseCase getMealPlanRequestStatusUseCase;
 
-  ConsultationProvider({required ApiClient api})
-      : _service = ConsultationService(apiClient: api);
+  ConsultationProvider({
+    required this.hireNutritionistUseCase,
+    required this.getTransactionDetailUseCase,
+    required this.verifyPaymentUseCase,
+    required this.getPayOSUrlsUseCase,
+    required this.getActiveContractUseCase,
+    required this.requestMealPlanUseCase,
+    required this.getMealPlanRequestStatusUseCase,
+  });
 
   // ── Checkout State ──────────────────────────────────────────────────────────
   CheckoutState _checkoutState = CheckoutState.initial;
-  CheckoutResult? _checkoutResult;
+  CheckoutResultEntity? _checkoutResult;
   String? _checkoutError;
 
   CheckoutState get checkoutState => _checkoutState;
-  CheckoutResult? get checkoutResult => _checkoutResult;
+  CheckoutResultEntity? get checkoutResult => _checkoutResult;
   String? get checkoutError => _checkoutError;
 
   /// Initiate the hire flow: calls the API to create a PayOS checkout link.
@@ -37,7 +48,7 @@ class ConsultationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _checkoutResult = await _service.hireNutritionist(nutritionistId, packageType: packageType);
+      _checkoutResult = await hireNutritionistUseCase(nutritionistId, packageType: packageType);
       _checkoutState = CheckoutState.success;
     } catch (e) {
       _checkoutError = e.toString().replaceFirst('Exception: ', '');
@@ -56,11 +67,11 @@ class ConsultationProvider extends ChangeNotifier {
   }
 
   // ── Transaction Detail State ────────────────────────────────────────────────
-  TransactionModel? _selectedTransaction;
+  ConsultationTransactionEntity? _selectedTransaction;
   bool _isLoadingDetail = false;
   String? _detailError;
 
-  TransactionModel? get selectedTransaction => _selectedTransaction;
+  ConsultationTransactionEntity? get selectedTransaction => _selectedTransaction;
   bool get isLoadingDetail => _isLoadingDetail;
   String? get detailError => _detailError;
 
@@ -73,7 +84,7 @@ class ConsultationProvider extends ChangeNotifier {
 
     try {
       _selectedTransaction =
-          await _service.fetchTransactionDetail(transactionId);
+          await getTransactionDetailUseCase(transactionId);
     } catch (e) {
       _detailError = e.toString().replaceFirst('Exception: ', '');
     }
@@ -83,10 +94,10 @@ class ConsultationProvider extends ChangeNotifier {
   }
 
   // ── PayOS URLs State ──────────────────────────────────────────────────────
-  PayOSUrlsModel? _payOSUrls;
+  PayOSUrlsEntity? _payOSUrls;
   bool _isLoadingUrls = false;
 
-  PayOSUrlsModel? get payOSUrls => _payOSUrls;
+  PayOSUrlsEntity? get payOSUrls => _payOSUrls;
   bool get isLoadingUrls => _isLoadingUrls;
 
   /// Load PayOS intercept URLs from backend.
@@ -96,7 +107,7 @@ class ConsultationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _payOSUrls = await _service.fetchPayOSUrls();
+      _payOSUrls = await getPayOSUrlsUseCase();
     } catch (e) {
       debugPrint('Failed to load PayOS URLs: $e');
     }
@@ -106,10 +117,10 @@ class ConsultationProvider extends ChangeNotifier {
   }
 
   // ── Active Contract State ───────────────────────────────────────────────────
-  ActiveContractModel? _activeContract;
+  ConsultationContractEntity? _activeContract;
   bool _isLoadingActiveContract = false;
 
-  ActiveContractModel? get activeContract => _activeContract;
+  ConsultationContractEntity? get activeContract => _activeContract;
   bool get isLoadingActiveContract => _isLoadingActiveContract;
   bool get hasActiveNutritionist => _activeContract != null;
 
@@ -119,7 +130,7 @@ class ConsultationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _activeContract = await _service.fetchActiveContract();
+      _activeContract = await getActiveContractUseCase();
     } catch (e) {
       debugPrint('Failed to load active contract: $e');
       _activeContract = null;
@@ -140,14 +151,14 @@ class ConsultationProvider extends ChangeNotifier {
     // Tell backend to sync with PayOS now, before polling.
     if (orderCode != null && orderCode.isNotEmpty) {
       debugPrint('[ConsultationProvider] Syncing payment with backend, orderCode=$orderCode');
-      await _service.verifyPayment(orderCode);
+      await verifyPaymentUseCase(orderCode);
     }
 
     // Poll up to 10 times (10s) waiting for the contract to become active.
     bool found = false;
     for (int i = 0; i < 10; i++) {
       try {
-        final contract = await _service.fetchActiveContract();
+        final contract = await getActiveContractUseCase();
         if (contract != null) {
           _activeContract = contract;
           found = true;
@@ -174,7 +185,7 @@ class ConsultationProvider extends ChangeNotifier {
 
   Future<void> loadMealPlanRequestStatus() async {
     try {
-      _mealPlanRequestStatus = await _service.fetchMealPlanRequestStatus();
+      _mealPlanRequestStatus = await getMealPlanRequestStatusUseCase();
     } catch (e) {
       debugPrint('Failed to load meal plan request status: $e');
       _mealPlanRequestStatus = 'NONE';
@@ -188,7 +199,7 @@ class ConsultationProvider extends ChangeNotifier {
 
     bool success = false;
     try {
-      success = await _service.requestMealPlan();
+      success = await requestMealPlanUseCase();
       if (success) {
         _mealPlanRequestStatus = 'PENDING';
       }
@@ -201,3 +212,4 @@ class ConsultationProvider extends ChangeNotifier {
     return success;
   }
 }
+

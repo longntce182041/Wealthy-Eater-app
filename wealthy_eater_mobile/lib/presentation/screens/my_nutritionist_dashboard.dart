@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../data/models/active_contract_model.dart';
+import '../../domain/entities/consultation.dart';
 import '../../core/theme/app_colors.dart';
 import '../providers/consultation_provider.dart';
 import 'chat_screen.dart';
 
 class MyNutritionistDashboard extends StatefulWidget {
-  final ActiveContractModel contract;
+  final ConsultationContractEntity contract;
 
   const MyNutritionistDashboard({super.key, required this.contract});
+
 
   @override
   State<MyNutritionistDashboard> createState() => _MyNutritionistDashboardState();

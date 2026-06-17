@@ -1,72 +1,75 @@
-import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier, debugPrint;
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../../core/config/secrets.dart';
 import '../../core/error/app_error.dart';
-import '../../core/network/api_client.dart';
 import '../../domain/entities/user.dart';
+import '../../domain/usecases/auth_usecases.dart';
 
 /// Lifecycle states for authentication flow.
 enum AuthState { initial, loading, authenticated, unauthenticated, error }
 
 /// Manages authentication state, token persistence, and user session.
-///
-/// Responsibilities:
-/// - Email/password login
-/// - Google Sign-In
-/// - Session restore on app launch (`restoreSession`)
-/// - Secure token storage via [FlutterSecureStorage]
-/// - Logout (clears token + user)
 class AuthProvider with ChangeNotifier {
-  final ApiClient _api;
+  final RestoreSessionUseCase restoreSessionUseCase;
+  final LoginUseCase loginUseCase;
+  final GoogleSignInUseCase googleSignInUseCase;
+  final RegisterUseCase registerUseCase;
+  final VerifyOtpUseCase verifyOtpUseCase;
+  final ResendOtpUseCase resendOtpUseCase;
+  final LogoutUseCase logoutUseCase;
+  final FetchUserProfileUseCase fetchUserProfileUseCase;
+  final FetchSetupMetadataUseCase fetchSetupMetadataUseCase;
+  final FetchWeightHistoryUseCase fetchWeightHistoryUseCase;
+  final LogWeightUseCase logWeightUseCase;
+  final SaveUserProfileUseCase saveUserProfileUseCase;
+
   final FlutterSecureStorage _storage;
 
-  AuthProvider({required ApiClient api, FlutterSecureStorage? storage})
-      : _api = api,
-        _storage = storage ?? const FlutterSecureStorage();
+  AuthProvider({
+    required this.restoreSessionUseCase,
+    required this.loginUseCase,
+    required this.googleSignInUseCase,
+    required this.registerUseCase,
+    required this.verifyOtpUseCase,
+    required this.resendOtpUseCase,
+    required this.logoutUseCase,
+    required this.fetchUserProfileUseCase,
+    required this.fetchSetupMetadataUseCase,
+    required this.fetchWeightHistoryUseCase,
+    required this.logWeightUseCase,
+    required this.saveUserProfileUseCase,
+    FlutterSecureStorage? storage,
+  }) : _storage = storage ?? const FlutterSecureStorage();
 
   AuthState state = AuthState.initial;
   String? errorMessage;
   UserEntity? user;
   Map<String, dynamic>? userProfile;
   List<Map<String, dynamic>> weightHistory = [];
-  String? _accessToken;
 
-  bool get isAuthenticated => state == AuthState.authenticated && _accessToken != null;
+  bool get isAuthenticated => state == AuthState.authenticated && user != null;
 
   // ---------------------------------------------------------------------------
   // Session Restore
   // ---------------------------------------------------------------------------
 
   /// Called on app start to check if a valid token exists in secure storage.
-  /// Navigates accordingly without requiring user to log in again.
   Future<void> restoreSession() async {
     state = AuthState.loading;
     notifyListeners();
 
     try {
-      final token = await _storage.read(key: 'accessToken');
-      if (token == null || token.isEmpty) {
-        state = AuthState.unauthenticated;
-        notifyListeners();
-        return;
-      }
-
-      // Verify token with backend by fetching user profile
-      final res = await _api.get('/api/auth/me');
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        _accessToken = token;
-        user = UserEntity.fromJson(res.data['data'] as Map<String, dynamic>);
+      final userEntity = await restoreSessionUseCase();
+      if (userEntity != null) {
+        user = userEntity;
         await _fetchUserProfile();
         await _fetchWeightHistory();
         state = AuthState.authenticated;
       } else {
-        await _clearSession();
+        await _clearSessionState();
         state = AuthState.unauthenticated;
       }
     } catch (_) {
-      // Token may be expired or network unavailable — fall back to unauthenticated
       state = AuthState.unauthenticated;
     }
 
@@ -80,23 +83,15 @@ class AuthProvider with ChangeNotifier {
   Future<void> login(String email, String password, {String? role}) async {
     _setLoading();
     try {
-      final res = await _api.post(
-        '/api/auth/login',
-        data: {
-          'email': email.trim(),
-          'password': password,
-          'role': role,
-        },
-      );
-
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        await _handleAuthResponse(res.data['data'] as Map<String, dynamic>);
-      } else {
-        _setError('Invalid username or password');
-      }
+      user = await loginUseCase(email, password, role: role);
+      state = AuthState.authenticated;
+      errorMessage = null;
+      await _fetchUserProfile();
+      await _fetchWeightHistory();
     } catch (e) {
-      _setError('Invalid username or password');
+      _setError(e.toString().replaceFirst('Exception: ', ''));
     }
+    notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
@@ -106,32 +101,15 @@ class AuthProvider with ChangeNotifier {
   Future<void> googleSignIn() async {
     _setLoading();
     try {
-      final GoogleSignIn googleSignIn = kIsWeb
-          ? GoogleSignIn(clientId: googleClientId)
-          : GoogleSignIn();
-
-      final account = await googleSignIn.signIn();
-      if (account == null) {
-        _setError('Google sign-in was cancelled');
-        return;
-      }
-
-      final idToken = (await account.authentication).idToken;
-      if (idToken == null) {
-        _setError('Failed to retrieve Google ID token');
-        return;
-      }
-
-      final res = await _api.post('/api/auth/google', data: {'idToken': idToken});
-
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        await _handleAuthResponse(res.data['data'] as Map<String, dynamic>);
-      } else {
-        _setError(res.data['message']?.toString() ?? 'Google login failed');
-      }
+      user = await googleSignInUseCase();
+      state = AuthState.authenticated;
+      errorMessage = null;
+      await _fetchUserProfile();
+      await _fetchWeightHistory();
     } catch (e) {
-      _setError(mapError(e).message);
+      _setError(e.toString().replaceFirst('Exception: ', ''));
     }
+    notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
@@ -141,61 +119,44 @@ class AuthProvider with ChangeNotifier {
   Future<void> register(String email, String password, String confirmPassword) async {
     _setLoading();
     try {
-      final res = await _api.post('/api/auth/register', data: {
-        'email': email.trim(),
-        'password': password,
-        'confirmPassword': confirmPassword,
-      });
-
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        // Registration started — server sent OTP. Stay unauthenticated.
-        state = AuthState.unauthenticated;
-        errorMessage = null;
-        notifyListeners();
-      } else {
-        _setError(res.data['message']?.toString() ?? 'Registration failed');
-      }
+      await registerUseCase(email, password, confirmPassword);
+      state = AuthState.unauthenticated;
+      errorMessage = null;
     } catch (e) {
-      _setError(mapError(e).message);
+      _setError(e.toString().replaceFirst('Exception: ', ''));
     }
+    notifyListeners();
   }
 
   Future<void> verifyOtp(String email, String otp) async {
     _setLoading();
     try {
-      final res = await _api.post('/api/auth/verify-otp', data: {'email': email.trim(), 'otp': otp});
-
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        final data = res.data['data'] as Map<String, dynamic>?;
-        if (data != null) {
-          await _handleAuthResponse(data);
-        } else {
-          // If server didn't return tokens, fall back to unauthenticated state
-          state = AuthState.unauthenticated;
-          notifyListeners();
-        }
+      final userEntity = await verifyOtpUseCase(email, otp);
+      if (userEntity != null) {
+        user = userEntity;
+        state = AuthState.authenticated;
+        errorMessage = null;
+        await _fetchUserProfile();
+        await _fetchWeightHistory();
       } else {
-        _setError(res.data['message']?.toString() ?? 'Verification failed');
+        state = AuthState.unauthenticated;
       }
     } catch (e) {
-      _setError(mapError(e).message);
+      _setError(e.toString().replaceFirst('Exception: ', ''));
     }
+    notifyListeners();
   }
 
   Future<void> resendOtp(String email) async {
     _setLoading();
     try {
-      final res = await _api.post('/api/auth/resend-otp', data: {'email': email.trim()});
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        state = AuthState.unauthenticated;
-        errorMessage = null;
-        notifyListeners();
-      } else {
-        _setError(res.data['message']?.toString() ?? 'Resend failed');
-      }
+      await resendOtpUseCase(email);
+      state = AuthState.unauthenticated;
+      errorMessage = null;
     } catch (e) {
-      _setError(mapError(e).message);
+      _setError(e.toString().replaceFirst('Exception: ', ''));
     }
+    notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
@@ -203,66 +164,34 @@ class AuthProvider with ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Future<void> logout() async {
-    await _clearSession();
+    await logoutUseCase();
+    await _clearSessionState();
     state = AuthState.unauthenticated;
     notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
-  // Private helpers
+  // Private helpers / profiles
   // ---------------------------------------------------------------------------
-
-  Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
-    final token = data['accessToken']?.toString();
-    if (token == null || token.isEmpty) {
-      _setError('Invalid response from server');
-      return;
-    }
-
-    _accessToken = token;
-    await _storage.write(key: 'accessToken', value: token);
-
-    final rToken = data['refreshToken']?.toString();
-    if (rToken != null && rToken.isNotEmpty) {
-      await _storage.write(key: 'refreshToken', value: rToken);
-    }
-
-    final userData = data['user'];
-    if (userData is Map<String, dynamic>) {
-      user = UserEntity.fromJson(userData);
-    }
-
-    state = AuthState.authenticated;
-    errorMessage = null;
-    // Fetch profile after successful login
-    await _fetchUserProfile();
-    await _fetchWeightHistory();
-    notifyListeners();
-  }
 
   Future<void> _fetchUserProfile() async {
     try {
-      final res = await _api.get('/api/profile/me');
-      if (res.statusCode == 200 && res.data['success'] == true && res.data['data'] != null) {
-        userProfile = Map<String, dynamic>.from(res.data['data'] as Map<String, dynamic>);
-      } else {
-        userProfile = null;
-      }
+      userProfile = await fetchUserProfileUseCase();
     } catch (_) {
       userProfile = null;
     }
   }
 
   /// Public wrapper to fetch user profile on demand.
-  Future<void> fetchUserProfile() async => _fetchUserProfile();
+  Future<void> fetchUserProfile() async {
+    await _fetchUserProfile();
+    notifyListeners();
+  }
 
   /// Fetch dynamic setup metadata (Ingredients and Medical Conditions)
   Future<Map<String, dynamic>?> fetchSetupMetadata() async {
     try {
-      final res = await _api.get('/api/profile/setup-metadata');
-      if (res.statusCode == 200 && res.data['success'] == true && res.data['data'] != null) {
-        return Map<String, dynamic>.from(res.data['data'] as Map<String, dynamic>);
-      }
+      return await fetchSetupMetadataUseCase();
     } catch (e) {
       debugPrint("Error fetching setup metadata: $e");
     }
@@ -271,74 +200,69 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> _fetchWeightHistory() async {
     try {
-      final res = await _api.get('/api/profile/weight-history');
-      if (res.statusCode == 200 && res.data['success'] == true && res.data['data'] != null) {
-        weightHistory = List<Map<String, dynamic>>.from(
-          (res.data['data'] as List).map((x) => Map<String, dynamic>.from(x as Map)),
-        );
-      } else {
-        weightHistory = [];
-      }
+      weightHistory = await fetchWeightHistoryUseCase();
     } catch (_) {
       weightHistory = [];
     }
   }
 
   /// Public wrapper to fetch weight logs on demand.
-  Future<void> fetchWeightHistory() async => _fetchWeightHistory();
+  Future<void> fetchWeightHistory() async {
+    await _fetchWeightHistory();
+    notifyListeners();
+  }
 
-  /// Log user weight via API, refresh user profile to recalculate health indexes, and refresh weight history.
+  /// Log user weight via API
   Future<bool> logWeight(double weight) async {
     errorMessage = null;
     notifyListeners();
     try {
-      final res = await _api.post('/api/profile/weight', data: {'weight': weight});
-      if (res.statusCode == 200 && res.data['success'] == true) {
+      final success = await logWeightUseCase(weight);
+      if (success) {
         await _fetchUserProfile();
         await _fetchWeightHistory();
         errorMessage = null;
         notifyListeners();
         return true;
       } else {
-        errorMessage = res.data['message']?.toString() ?? 'Log weight failed';
+        errorMessage = 'Log weight failed';
         notifyListeners();
         return false;
       }
     } catch (e) {
-      errorMessage = mapError(e).message;
+      errorMessage = e.toString().replaceFirst('Exception: ', '');
       notifyListeners();
       return false;
     }
   }
 
-  /// Save or update user profile via API and refresh local cache.
+  /// Save or update user profile via API
   Future<bool> saveUserProfile(Map<String, dynamic> data) async {
     errorMessage = null;
     notifyListeners();
     try {
-      final res = await _api.post('/api/profile', data: data);
-      if (res.statusCode == 200 && res.data['success'] == true) {
+      final success = await saveUserProfileUseCase(data);
+      if (success) {
         await _fetchUserProfile();
         errorMessage = null;
         notifyListeners();
         return true;
       } else {
-        errorMessage = res.data['message']?.toString() ?? 'Save profile failed';
+        errorMessage = 'Save profile failed';
         notifyListeners();
         return false;
       }
     } catch (e) {
-      errorMessage = mapError(e).message;
+      errorMessage = e.toString().replaceFirst('Exception: ', '');
       notifyListeners();
       return false;
     }
   }
 
-  Future<void> _clearSession() async {
-    _accessToken = null;
+  Future<void> _clearSessionState() async {
     user = null;
-    await _storage.delete(key: 'accessToken');
-    await _storage.delete(key: 'refreshToken');
+    userProfile = null;
+    weightHistory = [];
   }
 
   void _setLoading() {
