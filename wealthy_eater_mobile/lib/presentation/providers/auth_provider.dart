@@ -1,7 +1,4 @@
 import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
-import '../../core/error/app_error.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/usecases/auth_usecases.dart';
 
@@ -23,8 +20,6 @@ class AuthProvider with ChangeNotifier {
   final LogWeightUseCase logWeightUseCase;
   final SaveUserProfileUseCase saveUserProfileUseCase;
 
-  final FlutterSecureStorage _storage;
-
   AuthProvider({
     required this.restoreSessionUseCase,
     required this.loginUseCase,
@@ -38,8 +33,7 @@ class AuthProvider with ChangeNotifier {
     required this.fetchWeightHistoryUseCase,
     required this.logWeightUseCase,
     required this.saveUserProfileUseCase,
-    FlutterSecureStorage? storage,
-  }) : _storage = storage ?? const FlutterSecureStorage();
+  });
 
   AuthState state = AuthState.initial;
   String? errorMessage;

@@ -8,7 +8,7 @@ class ChatMessageModel extends ChatMessageEntity {
     required super.contractId,
     required super.senderId,
     super.senderName,
-    required MessageTypeEntity super.type,
+    required super.type,
     required super.content,
     required super.isRead,
     super.readAt,
@@ -75,6 +75,7 @@ class ChatMessageModel extends ChatMessageEntity {
     };
   }
 
+  @override
   ChatMessageModel copyWith({
     bool? isRead,
     DateTime? readAt,
