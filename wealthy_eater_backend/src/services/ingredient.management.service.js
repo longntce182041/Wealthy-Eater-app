@@ -1,9 +1,13 @@
 const Ingredient = require("../models/Ingredient"); 
 const XLSX = require("xlsx");
 const IngredientMicronutrientValues = require("../models/IngredientMicronutrientValue"); 
-const cloudinary = require("cloudinary").v2; // Đảm bảo bạn đã cấu hình cloudinary.config(...) tại server
+const cloudinary = require("cloudinary").v2;
 
-// Hàm helper upload Stream lên Cloudinary
+// ==========================================
+// 🌐 CÁC HÀM HELPER XỬ LÝ ẢNH CLOUDINARY
+// ==========================================
+
+// Hàm 1: Upload File Ảnh từ bộ nhớ RAM lên Cloudinary (Dành cho Create/Update thủ công)
 const uploadToCloudinary = (fileBuffer) => {
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -17,7 +21,24 @@ const uploadToCloudinary = (fileBuffer) => {
     });
 };
 
+// Hàm 2: Truyền thẳng link URL để Cloudinary tự kéo ảnh về kho (Dành cho Import Excel)
+const uploadUrlToCloudinary = async (url) => {
+    try {
+        const result = await cloudinary.uploader.upload(url.trim(), {
+            folder: "ingredients"
+        });
+        return result.secure_url;
+    } catch (error) {
+        console.error("❌ Cloudinary failed to pull image from URL:", error.message);
+        return ""; // Nếu lỗi link ảnh, trả về chuỗi rỗng để tránh crash tiến trình import
+    }
+};
+
 class IngredientManagementService {
+    
+    // ==========================================
+    // 🔍 [GET] LOGIC LẤY DANH SÁCH NGUYÊN LIỆU
+    // ==========================================
     async getAllIngredients(query) {
         const { keyword, unit, page = 1, limit = 10, sort = 'name' } = query;
         let filter = {};
@@ -31,6 +52,9 @@ class IngredientManagementService {
         return { ingredients, total, page: parseInt(page), totalPages: Math.ceil(total / limit) };
     }
 
+    // ==========================================
+    // 👁️ [GET] LOGIC LẤY CHI TIẾT NGUYÊN LIỆU + VI LƯỢNG
+    // ==========================================
     async getIngredientById(id) {
         const stringId = id.toString();
         const ingredient = await Ingredient.findById(stringId);
@@ -49,7 +73,9 @@ class IngredientManagementService {
         return result;
     }
 
-    // 🎯 SỬA HÀM CREATE: Nhận thêm biến file
+    // ==========================================
+    // ➕ [CREATE] LOGIC TẠO NGUYÊN LIỆU MỚI (UP ẢNH THỦ CÔNG)
+    // ==========================================
     async createIngredient(data, file) {
         const existing = await Ingredient.findOne({ name: data.name });
         if (existing) throw new Error("Ingredient name already exists");
@@ -61,7 +87,7 @@ class IngredientManagementService {
 
         const newIngredient = new Ingredient({
             name: data.name,
-            image_url: secureUrl, // Lưu link từ Cloudinary
+            image_url: secureUrl,
             calories_per_unit: Number(data.calories_per_unit) || 0,
             protein: Number(data.protein) || 0,
             carbs: Number(data.carbs) || 0,
@@ -87,7 +113,9 @@ class IngredientManagementService {
         return saved;
     }
 
-    // 🎯 SỬA HÀM UPDATE: Nhận thêm biến file
+    // ==========================================
+    // 📝 [UPDATE] LOGIC CẬP NHẬT NGUYÊN LIỆU (UP ẢNH THỦ CÔNG)
+    // ==========================================
     async updateIngredient(id, data, file) {
         const stringId = id.toString();
         const ingredient = await Ingredient.findById(stringId);
@@ -98,7 +126,6 @@ class IngredientManagementService {
             if (duplicate) throw new Error("Ingredient name already exists");
         }
 
-        // Nếu người dùng upload file mới, ghi đè link image_url cũ
         if (file && file.buffer) {
             ingredient.image_url = await uploadToCloudinary(file.buffer);
         }
@@ -131,6 +158,9 @@ class IngredientManagementService {
         return updated;
     }
 
+    // ==========================================
+    // 🗑️ [DELETE] LOGIC XÓA NGUYÊN LIỆU + VI LƯỢNG KÈM THEO
+    // ==========================================
     async deleteIngredient(id) {
         const stringId = id.toString();
         const ingredient = await Ingredient.findByIdAndDelete(stringId);
@@ -139,15 +169,22 @@ class IngredientManagementService {
         return ingredient;
     }
 
+    // ==========================================
+    // 📥 [IMPORT] LOGIC PARSE EXCEL + ĐỒNG BỘ ẢNH LÊN CLOUDINARY
+    // ==========================================
     async importIngredientsFromExcel(fileBuffer) {
+        // Thay vì import validator ở đầu file, ta require trực tiếp tại đây để tránh lỗi vòng lặp require
+        const { validateIngredient } = require("../validators/ingredient.management.validators");
+
         const workbook = XLSX.read(fileBuffer, { type: "buffer" });
         const sheetName = workbook.SheetNames[0];
         const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
         if (!rawRows || rawRows.length === 0) throw new Error("The Excel file is empty");
 
-        const bulkOperations = [];
         const rowErrors = [];
+        const validatedRows = [];
 
+        // Bước 1: Duyệt qua file Excel và kiểm tra tính hợp lệ (Validate dữ liệu thô)
         rawRows.forEach((row, index) => {
             const rowNumber = index + 2;
             const ingredientData = {
@@ -161,32 +198,56 @@ class IngredientManagementService {
                 image_url: row["Image URL"] || row["image_url"] || row["ImageUrl"] || ""
             };
 
+            // Tiến hành chạy qua bộ validator nghiêm ngặt của bạn
             const { errors, isValid } = validateIngredient(ingredientData);
             if (!isValid) {
                 rowErrors.push({ rowNumber, errors });
             } else {
-                bulkOperations.push({
-                    updateOne: {
-                        filter: { name: ingredientData.name.trim() },
-                        update: { $set: ingredientData },
-                        upsert: true
-                    }
-                });
+                validatedRows.push(ingredientData);
             }
         });
 
+        // Nếu phát hiện bất kỳ dòng nào trong Excel bị thiếu/sai dữ liệu số -> Trả lỗi về ngay lập tức
         if (rowErrors.length > 0) {
             const errorDetails = new Error("Validation failed for some rows");
             errorDetails.details = rowErrors;
             throw errorDetails;
         }
 
-        let result = { insertedCount: 0, modifiedCount: 0 };
-        if (bulkOperations.length > 0) {
-            const bulkResult = await Ingredient.bulkWrite(bulkOperations);
-            result = { insertedCount: bulkResult.upsertedCount, modifiedCount: bulkResult.modifiedCount };
+        let insertedCount = 0;
+        let modifiedCount = 0;
+
+        // Bước 2: Chạy vòng lặp đồng bộ, đẩy ảnh lên Cloudinary tuần tự
+        for (const item of validatedRows) {
+            let finalImageUrl = item.image_url;
+
+            // Nếu cột Image URL có chứa link web hợp lệ
+            if (item.image_url && typeof item.image_url === 'string' && item.image_url.trim().startsWith('http')) {
+                const cloudinaryUrl = await uploadUrlToCloudinary(item.image_url);
+                if (cloudinaryUrl) {
+                    finalImageUrl = cloudinaryUrl; // Thay bằng link Cloudinary hệ thống
+                }
+            }
+
+            // Gán lại giá trị ảnh sạch sau khi xử lý
+            item.image_url = finalImageUrl;
+
+            // Kiểm tra xem nguyên liệu này đã có trong database chưa
+            const existingIngredient = await Ingredient.findOne({ name: item.name.trim() });
+
+            if (existingIngredient) {
+                // Nếu đã có -> Tiến hành Cập nhật các chỉ số Macros mà không đụng vào Micronutrients (Vi lượng)
+                await Ingredient.updateOne({ _id: existingIngredient._id }, { $set: item });
+                modifiedCount++;
+            } else {
+                // Nếu chưa có -> Tiến hành Thêm mới hoàn toàn nguyên liệu sạch vào hệ thống
+                const newIng = new Ingredient(item);
+                await newIng.save();
+                insertedCount++;
+            }
         }
-        return result;
+
+        return { insertedCount, modifiedCount };
     }
 }
 
