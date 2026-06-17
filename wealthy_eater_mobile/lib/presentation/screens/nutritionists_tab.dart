@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../domain/entities/consultation.dart';
 import '../providers/consultation_provider.dart';
 import '../providers/nutritionist_provider.dart';
+import '../widgets/shimmer_loading.dart';
 import 'my_nutritionist_dashboard.dart';
 import 'nutritionist_detail_screen.dart';
 import 'payment_checkout_screen.dart';
@@ -67,7 +68,7 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
         return Consumer<NutritionistProvider>(
           builder: (context, provider, child) {
             if (provider.isLoading) {
-              return const Center(child: CircularProgressIndicator());
+              return _buildLoadingSkeleton(context);
             }
 
         if (provider.error != null) {
@@ -288,6 +289,84 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
         );
       },
     );
+      },
+    );
+  }
+
+  Widget _buildLoadingSkeleton(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(20),
+      itemCount: 3,
+      itemBuilder: (context, index) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const ShimmerLoading.circular(width: 64, height: 64),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            ShimmerLoading.rectangular(
+                              width: MediaQuery.of(context).size.width * 0.35,
+                              height: 18,
+                            ),
+                            const ShimmerLoading.rectangular(width: 40, height: 16),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ShimmerLoading.rectangular(
+                          width: MediaQuery.of(context).size.width * 0.25,
+                          height: 14,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              const ShimmerLoading.rectangular(height: 14),
+              const SizedBox(height: 8),
+              ShimmerLoading.rectangular(
+                width: MediaQuery.of(context).size.width * 0.6,
+                height: 14,
+              ),
+              const Divider(height: 28),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const ShimmerLoading.rectangular(width: 80, height: 10),
+                      const SizedBox(height: 6),
+                      ShimmerLoading.rectangular(
+                        width: MediaQuery.of(context).size.width * 0.3,
+                        height: 18,
+                      ),
+                    ],
+                  ),
+                  ShimmerLoading.rectangular(
+                    width: MediaQuery.of(context).size.width * 0.25,
+                    height: 40,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
       },
     );
   }

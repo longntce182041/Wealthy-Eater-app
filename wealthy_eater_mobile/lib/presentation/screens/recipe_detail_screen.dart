@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../domain/entities/recipe.dart';
 import '../providers/recipe_provider.dart';
 import '../providers/shopping_list_provider.dart';
+import '../widgets/shimmer_loading.dart';
 
 /// Recipe detail screen with three tabs: Info, Reviews.
 /// View is recorded automatically on open.
@@ -87,7 +88,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen>
 
   Widget _buildBodyContent(RecipeProvider provider, RecipeEntity? recipe) {
     if (provider.detailState == RecipeViewState.loading) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildDetailLoadingSkeleton(context);
     } else if (provider.detailState == RecipeViewState.error) {
       return _DetailError(
         message: provider.errorMessage ?? 'Unable to load recipe',
@@ -104,6 +105,88 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen>
         _ReviewsTab(
           recipeId: recipe.id,
         ),
+      ],
+    );
+  }
+
+  Widget _buildDetailLoadingSkeleton(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        // Description title & paragraph
+        const ShimmerLoading.rectangular(width: 120, height: 20),
+        const SizedBox(height: 12),
+        const ShimmerLoading.rectangular(height: 14),
+        const SizedBox(height: 8),
+        const ShimmerLoading.rectangular(height: 14),
+        const SizedBox(height: 8),
+        ShimmerLoading.rectangular(
+          width: MediaQuery.of(context).size.width * 0.5,
+          height: 14,
+        ),
+        const SizedBox(height: 24),
+
+        // Ingredients title
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const ShimmerLoading.rectangular(width: 100, height: 20),
+            ShimmerLoading.rectangular(
+              width: MediaQuery.of(context).size.width * 0.25,
+              height: 32,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // Ingredients items
+        ...List.generate(3, (index) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              const ShimmerLoading.circular(width: 20, height: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ShimmerLoading.rectangular(
+                  width: double.infinity,
+                  height: 14,
+                ),
+              ),
+              const SizedBox(width: 40),
+              ShimmerLoading.rectangular(
+                width: 60,
+                height: 14,
+              ),
+            ],
+          ),
+        )),
+        const SizedBox(height: 24),
+
+        // Cooking steps
+        const ShimmerLoading.rectangular(width: 140, height: 20),
+        const SizedBox(height: 16),
+        ...List.generate(2, (index) => Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const ShimmerLoading.circular(width: 24, height: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const ShimmerLoading.rectangular(height: 14),
+                    const SizedBox(height: 8),
+                    ShimmerLoading.rectangular(
+                      width: MediaQuery.of(context).size.width * 0.7,
+                      height: 14,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        )),
       ],
     );
   }

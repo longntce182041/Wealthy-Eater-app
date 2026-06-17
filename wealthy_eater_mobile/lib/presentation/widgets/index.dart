@@ -4,3 +4,4 @@ export 'water_reminder_card.dart';
 export 'custom_elevated_button.dart';
 export 'custom_text_field.dart';
 export 'base_card.dart';
+export 'shimmer_loading.dart';
