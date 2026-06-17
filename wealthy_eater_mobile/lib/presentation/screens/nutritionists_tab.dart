@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../data/models/nutritionist_model.dart';
+import '../../domain/entities/consultation.dart';
 import '../providers/consultation_provider.dart';
 import '../providers/nutritionist_provider.dart';
 import 'my_nutritionist_dashboard.dart';
@@ -36,7 +36,7 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
     return colors[index % colors.length];
   }
 
-  void _showHireSheet(BuildContext context, NutritionistModel doctor) {
+  void _showHireSheet(BuildContext context, NutritionistEntity doctor) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -295,7 +295,7 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
 
 /// Bottom sheet for confirming the hire and initiating PayOS payment.
 class _HireConfirmationSheet extends StatefulWidget {
-  final NutritionistModel doctor;
+  final NutritionistEntity doctor;
 
   const _HireConfirmationSheet({required this.doctor});
 

@@ -20,7 +20,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../core/theme/app_colors.dart';
-import '../../data/models/chat_message_model.dart';
+import '../../domain/entities/chat.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 
@@ -627,7 +627,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 // ── Extracted Widgets ──────────────────────────────────────────────────────────
 
 class _MessageBubble extends StatelessWidget {
-  final ChatMessageModel msg;
+  final ChatMessageEntity msg;
   final String currentUserId;
   final String peerInitials;
   final void Function(String) onImageTap;

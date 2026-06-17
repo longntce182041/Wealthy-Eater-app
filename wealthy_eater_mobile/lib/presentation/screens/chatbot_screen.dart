@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../domain/entities/chatbot.dart';
 import '../providers/chatbot_provider.dart';
 
 class ChatbotScreen extends StatefulWidget {
@@ -149,7 +150,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
 }
 
 class _ChatBubble extends StatelessWidget {
-  final ChatMessage message;
+  final ChatbotMessageEntity message;
 
   const _ChatBubble({required this.message});
 

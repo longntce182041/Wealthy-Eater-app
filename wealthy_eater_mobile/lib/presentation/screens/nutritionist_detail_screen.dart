@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../data/models/nutritionist_model.dart';
+import '../../domain/entities/consultation.dart';
 
 class NutritionistDetailScreen extends StatelessWidget {
-  final NutritionistModel nutritionist;
+  final NutritionistEntity nutritionist;
   final Color bgColor;
   final Color fgColor;
 
