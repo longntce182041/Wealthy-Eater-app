@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter_timezone/flutter_timezone.dart';
 
 import '../../core/network/api_client.dart';
 import '../../core/error/app_error.dart';
@@ -23,55 +24,12 @@ class NotificationProvider with ChangeNotifier {
   }
 
   Future<void> _initLocalNotifications() async {
-    if (kIsWeb) return;
+    if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS)) return;
     tz.initializeTimeZones();
 
     try {
-      final timeZoneName = DateTime.now().timeZoneName;
-      if (timeZoneName.contains('/') || timeZoneName == 'UTC') {
-        tz.setLocalLocation(tz.getLocation(timeZoneName));
-      } else {
-        final offsetHours = DateTime.now().timeZoneOffset.inHours;
-        String locationName = 'UTC';
-        switch (offsetHours) {
-          case 7:
-            locationName = 'Asia/Saigon';
-            break;
-          case 8:
-            locationName = 'Asia/Singapore';
-            break;
-          case 9:
-            locationName = 'Asia/Tokyo';
-            break;
-          case 0:
-            locationName = 'UTC';
-            break;
-          case 1:
-            locationName = 'Europe/Paris';
-            break;
-          case 2:
-            locationName = 'Europe/Kyiv';
-            break;
-          case 3:
-            locationName = 'Europe/Moscow';
-            break;
-          case -5:
-            locationName = 'America/New_York';
-            break;
-          case -6:
-            locationName = 'America/Chicago';
-            break;
-          case -7:
-            locationName = 'America/Denver';
-            break;
-          case -8:
-            locationName = 'America/Los_Angeles';
-            break;
-          default:
-            locationName = 'UTC';
-        }
-        tz.setLocalLocation(tz.getLocation(locationName));
-      }
+      final timeZoneInfo = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(timeZoneInfo.identifier));
     } catch (_) {
       tz.setLocalLocation(tz.UTC);
     }
@@ -182,7 +140,7 @@ class NotificationProvider with ChangeNotifier {
   }
 
   Future<void> _scheduleLocalReminders() async {
-    if (kIsWeb) return;
+    if (kIsWeb || (defaultTargetPlatform != TargetPlatform.android && defaultTargetPlatform != TargetPlatform.iOS)) return;
     await _localNotificationsPlugin.cancelAll();
 
     if (settings == null) return;

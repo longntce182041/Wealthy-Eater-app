@@ -105,10 +105,13 @@ import {
   LogOut,
   UtensilsCrossed
 } from "lucide-react";
+import { useSessionGuard } from "../hooks/useSessionGuard";
+import SessionExpiredModal from "../components/common/SessionExpiredModal";
 
 export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isExpired, handleDismiss } = useSessionGuard();
   const raw = localStorage.getItem('admin_user');
   let user = { email: "admin@wealthyeater.com" };
   
@@ -212,6 +215,9 @@ export default function AdminLayout() {
           <Outlet />
         </div>
       </main>
+
+      {/* Global Session Expired Modal */}
+      <SessionExpiredModal isOpen={isExpired} onDismiss={handleDismiss} />
       
     </div>
   );
