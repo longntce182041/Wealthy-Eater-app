@@ -67,7 +67,7 @@ async function processRecipeIngredients(recipeId, ingredientsInput) {
     return { recipeIngredientDocs, nutrition: { calories: 0, protein: 0, fat: 0, carbs: 0 } };
   }
 
-  const ingredientIds = ingredientsInput.map(i => i.ingredient_id).filter(Boolean);
+  const ingredientIds = ingredientsInput.map(i => i.ingredient_id).filter(id => id && mongoose.Types.ObjectId.isValid(id));
   const ingredientDataList = await Ingredient.find({ _id: { $in: ingredientIds } }).lean();
 
   const ingredientMap = {};
@@ -344,16 +344,7 @@ async function addRecipe(req, res, next) {
       stepsList = recipeStepDocs.map(s => s.instruction);
     }
 
-    // 🌟 ĐỒNG BỘ ĐẦY ĐỦ: Truyền enrichedIngredients thay vì mảng rỗng []
-    const responseData = mapRecipeForAdmin(
-      recipe.toObject(), 
-      savedNutrition, 
-      null, 
-      enrichedIngredients.length, 
-      stepsList.length, 
-      enrichedIngredients, 
-      stepsList
-    );
+    const responseData = mapRecipeForAdmin(recipe.toObject(), savedNutrition, null, ingredients?.length || 0, stepsList.length, [], stepsList);
 
     return res.status(201).json({ success: true, message: 'Tạo công thức thành công!', data: responseData });
   } catch (err) {
@@ -422,16 +413,7 @@ async function updateRecipe(req, res, next) {
       }
     }
 
-    // 🌟 ĐỒNG BỘ ĐẦY ĐỦ: Truyền enrichedIngredients thay vì mảng rỗng []
-    const responseData = mapRecipeForAdmin(
-      recipe.toObject(), 
-      savedNutrition, 
-      null, 
-      enrichedIngredients.length, 
-      stepsList.length, 
-      enrichedIngredients, 
-      stepsList
-    );
+    const responseData = mapRecipeForAdmin(recipe.toObject(), savedNutrition, null, ingredients?.length || 0, stepsList.length, [], stepsList);
 
     return res.json({ success: true, message: 'Cập nhật công thức thành công!', data: responseData });
   } catch (err) {
@@ -452,7 +434,6 @@ async function deleteRecipe(req, res, next) {
       return next(new AppError('Không tìm thấy công thức.', 404));
     }
 
-    // Xóa mềm: Chuyển trạng thái sang 'archived' thay vì xóa vật lý (hard delete)
     recipe.status = 'archived';
     await recipe.save();
     return res.json({ success: true, message: 'Đã xóa mềm công thức thành công.' });
@@ -503,6 +484,7 @@ async function searchAndFilterRecipes(req, res, next) {
 
 /**
  * UC-76: POST /api/admin/recipes/import-excel
+ * 🛠️ ĐÃ FIX HOÀN TOÀN CÁC LỖI CHÍ MẠNG (CastError ID, Ép kiểu chuỗi trống, Thiếu Date)
  */
 async function importRecipesExcel(req, res, next) {
   try {
@@ -519,11 +501,19 @@ async function importRecipesExcel(req, res, next) {
       return next(new AppError('Tệp Excel trống không có dữ liệu.', 400));
     }
 
-    // 2. Thu thập trước tất cả các ID nguyên liệu xuất hiện trong Excel để tìm kiếm hàng loạt (Tránh N+1)
     const uniqueIngredientIds = new Set();
     rows.forEach(row => {
       const rawIngs = row.Ingredients || row.ingredients;
-      if (rawIngs) String(rawIngs).split('|').forEach(item => { const parts = item.split(':'); if (parts[0]) uniqueIngredientIds.add(parts[0].trim()); });
+      if (rawIngs) {
+        String(rawIngs).split('|').forEach(item => {
+          const parts = item.split(':');
+          const ingIdClean = parts[0] ? parts[0].trim() : '';
+          // 🛠️ ĐÃ FIX: Chỉ nạp ID đúng chuẩn Mongoose Hex 24 ký tự để chặn đứng CastError từ xa
+          if (ingIdClean && mongoose.Types.ObjectId.isValid(ingIdClean)) {
+            uniqueIngredientIds.add(ingIdClean);
+          }
+        });
+      }
     });
 
     const ingredientList = await Ingredient.find({ _id: { $in: Array.from(uniqueIngredientIds) } }).lean();
@@ -531,14 +521,13 @@ async function importRecipesExcel(req, res, next) {
     ingredientList.forEach(ing => { ingredientMap[ing._id.toString()] = ing; });
 
     const errorLog = [], recipesToInsert = [], ingredientsToInsert = [], stepsToInsert = [], nutritionsToInsert = [];
+    const now = new Date(); // 🛠️ ĐÃ FIX: Đồng bộ mốc thời gian hệ thống
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i], rowNumber = i + 2, name = row.Name || row.name;
       if (!name) { errorLog.push(`Dòng ${rowNumber}: Thiếu trường Name.`); continue; }
 
-      // 🌟 SỬA LỖI TẠI ĐÂY: Tạo ObjectId thuần, không dùng .toString() để né lỗi ép kiểu string trong MongoDB
       const recipeId = new mongoose.Types.ObjectId();
-
       const rawIngsStr = row.Ingredients || row.ingredients || '';
       const rawIngredients = rawIngsStr ? String(rawIngsStr).split('|') : [];
 
@@ -549,9 +538,16 @@ async function importRecipesExcel(req, res, next) {
         const parts = item.split(':'), ingredientId = parts[0]?.trim();
         if (!ingredientId) continue;
 
+        // 🛠️ ĐÃ FIX: Validate cấu trúc chuỗi ID trong Excel để thông báo lỗi rõ ràng cho Admin thay vì sập code
+        if (!mongoose.Types.ObjectId.isValid(ingredientId)) {
+          errorLog.push(`Dòng ${rowNumber}: ID nguyên liệu '${ingredientId}' không đúng định dạng Mongoose ID.`);
+          hasIngredientError = true;
+          break;
+        }
+
         const quantity = Number(parts[1]) || 0, unit = parts[2]?.trim() || '';
         const ingredientData = ingredientMap[ingredientId];
-        if (!ingredientData) { errorLog.push(`Dòng ${rowNumber}: Không tìm thấy ID '${ingredientId}'.`); hasIngredientError = true; break; }
+        if (!ingredientData) { errorLog.push(`Dòng ${rowNumber}: Không tìm thấy ID nguyên liệu '${ingredientId}' trong hệ thống.`); hasIngredientError = true; break; }
 
         totalCalories += (ingredientData.calories_per_unit || 0) * quantity;
         totalProtein += (ingredientData.protein || 0) * quantity;
@@ -564,34 +560,42 @@ async function importRecipesExcel(req, res, next) {
       if (hasIngredientError) continue;
 
       const rawStepsStr = row.Steps || row.steps || '';
-      const rowStepDocs = (rawStepsStr ? String(rawStepsStr).split('|') : []).map((instruction, index) => ({ recipe_id: recipeId, step_number: index + 1, instruction: instruction.trim() })).filter(s => s.instruction);
+      // 🛠️ ĐÃ FIX: Ép kiểu chuỗi nghiêm ngặt đề phòng trường hợp các bước nấu ăn chứa dữ liệu thô dạng số
+      const rowStepDocs = (rawStepsStr ? String(rawStepsStr).split('|') : [])
+        .map((instruction, index) => ({ recipe_id: recipeId, step_number: index + 1, instruction: String(instruction).trim() }))
+        .filter(s => s.instruction);
 
-      recipesToInsert.push({ _id: recipeId, name: String(name).trim(), description: row.Description || row.description || '', image_url: row.ImageUrl || row.image_url || '', cooking_time: Number(row.CookingTime || row.cooking_time) || 0, base_servings: Number(row.BaseServings || row.base_servings) || 1, status: row.Status || row.status || 'published', level_cooking: row.Level || row.level_cooking || 'medium' });
+      // 🛠️ ĐÃ FIX: Điền thủ công trường createdAt và updatedAt để bù đắp thiếu hụt của lệnh insertMany
+      recipesToInsert.push({ 
+        _id: recipeId, 
+        name: String(name).trim(), 
+        description: row.Description || row.description || '', 
+        image_url: row.ImageUrl || row.image_url || '', 
+        cooking_time: Number(row.CookingTime || row.cooking_time) || 0, 
+        base_servings: Number(row.BaseServings || row.base_servings) || 1, 
+        status: row.Status || row.status || 'published', 
+        level_cooking: row.Level || row.level_cooking || 'medium',
+        createdAt: now,
+        updatedAt: now
+      });
+      
       ingredientsToInsert.push(...rowIngredientDocs);
       stepsToInsert.push(...rowStepDocs);
       nutritionsToInsert.push({ recipe_id: recipeId, calories: Math.round(totalCalories * 10) / 10, protein: Math.round(totalProtein * 10) / 10, fat: Math.round(totalFat * 10) / 10, carbs: Math.round(totalCarbs * 10) / 10 });
     }
 
-    // 4. Trả về toàn bộ log lỗi phát hiện được, không thực hiện lưu bất kỳ bản ghi nào (All-or-Nothing)
+    // 4. Trả về mảng log chi tiết lỗi định dạng dạng mảng qua tham số thứ 4 của AppError
     if (errorLog.length > 0) {
       return next(new AppError('Import thất bại do dữ liệu file Excel chứa lỗi logic.', 422, null, errorLog));
     }
 
     // 5. Thực thi TRUE BULK INSERT đồng loạt vào 4 bảng
-    if (recipesToInsert.length > 0) {
-      await Recipe.insertMany(recipesToInsert);
-    }
-    if (ingredientsToInsert.length > 0) {
-      await RecipeIngredient.insertMany(ingredientsToInsert);
-    }
-    if (stepsToInsert.length > 0) {
-      await RecipeStep.insertMany(stepsToInsert);
-    }
-    if (nutritionsToInsert.length > 0) {
-      await RecipeNutrition.insertMany(nutritionsToInsert);
-    }
+    if (recipesToInsert.length > 0) { await Recipe.insertMany(recipesToInsert); }
+    if (ingredientsToInsert.length > 0) { await RecipeIngredient.insertMany(ingredientsToInsert); }
+    if (stepsToInsert.length > 0) { await RecipeStep.insertMany(stepsToInsert); }
+    if (nutritionsToInsert.length > 0) { await RecipeNutrition.insertMany(nutritionsToInsert); }
 
-    return res.status(201).json({ success: true, message: 'Import thành công!', data: { totalProcessed: rows.length, totalImported: recipesToInsert.length } });
+    return res.status(201).json({ success: true, message: 'Import công thức từ Excel thành công!', data: { totalProcessed: rows.length, totalImported: recipesToInsert.length } });
   } catch (err) {
     console.error('❌ Error Importing Excel Recipes:', err);
     return next(new AppError(err.message || 'Xảy ra lỗi hệ thống khi nhập dữ liệu tệp Excel.', 500));

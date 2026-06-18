@@ -8,9 +8,8 @@
 ///  - Read receipt tracking (local + HTTP + socket).
 library;
 
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
+import 'package:cross_file/cross_file.dart' show XFile;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/network/api_client.dart';
@@ -42,7 +41,7 @@ class ChatProvider extends ChangeNotifier {
   // ── Getters ────────────────────────────────────────────────────────────────
   String? get contractId => _contractId;
 
-  /// Messages are stored in chronological order (oldest first) for display.
+  /// Messages are stored in reverse chronological order (newest first) for display.
   List<ChatMessageModel> get messages => _messages;
   ChatLoadState get loadState => _loadState;
   bool get isSendingText => _isSendingText;
@@ -128,15 +127,15 @@ class ChatProvider extends ChangeNotifier {
         limit: 30,
       );
 
-      // API returns newest-first; reverse for chronological display
-      final chronological = result.messages.reversed.toList();
+      // API returns newest-first; keep it for reverse ListView display
+      final newestFirst = result.messages;
 
       if (isInitial) {
-        _messages = chronological;
+        _messages = newestFirst;
         _loadState = ChatLoadState.loaded;
       } else {
-        // Prepend older messages (they go before the existing ones)
-        _messages = [...chronological, ..._messages];
+        // Append older messages (they go after the existing ones)
+        _messages = [..._messages, ...newestFirst];
       }
 
       _hasMore = result.hasMore;
@@ -188,7 +187,7 @@ class ChatProvider extends ChangeNotifier {
   /// The backend saves it and broadcasts the image message via socket,
   /// so both parties see it in real-time.
   Future<void> sendImageMessage({
-    required File imageFile,
+    required XFile imageFile,
     required String currentUserId,
   }) async {
     if (_contractId == null) return;
@@ -225,7 +224,7 @@ class ChatProvider extends ChangeNotifier {
   void _onNewMessageReceived(ChatMessageModel msg) {
     // Avoid duplicates (e.g. if the socket echoes a message we already added)
     if (_messages.any((m) => m.id == msg.id)) return;
-    _messages = [..._messages, msg];
+    _messages = [msg, ..._messages]; // Prepend since index 0 is newest
     notifyListeners();
   }
 

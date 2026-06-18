@@ -37,6 +37,7 @@ router.use("/api/admin/ingredients", ingredientRoute);
 router.use("/api/admin/micronutrients", micronutrientRoute);
 router.use("/api/admin/recipes", adminRecipeRoute);
 router.use("/api/admin/analytics", analyticsRoute);
+router.use("/api/admin/system-dashboard", systemDashboardRoute);
 
 // ─── NUTRITIONIST ROUTES ────────────────────────────────────────────────────
 router.use("/api/nutritionists", nutritionistRoute);

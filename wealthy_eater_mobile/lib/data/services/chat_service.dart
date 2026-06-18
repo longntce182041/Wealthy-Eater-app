@@ -7,12 +7,13 @@
 /// The [ChatProvider] owns and controls this service's lifecycle.
 library;
 
-import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 
 import 'dart:async';
+import 'package:cross_file/cross_file.dart' show XFile;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../core/network/api_client.dart';
 import '../../core/error/app_error.dart';
@@ -85,13 +86,24 @@ class ChatService {
   /// Uploads a meal image file and returns the persisted image message.
   Future<ChatMessageModel> uploadImage(
     String contractId,
-    File imageFile,
+    XFile imageFile,
   ) async {
-      final formData = FormData.fromMap({
-        'image': await MultipartFile.fromFile(
+      final MultipartFile file;
+      if (kIsWeb) {
+        final bytes = await imageFile.readAsBytes();
+        file = MultipartFile.fromBytes(
+          bytes,
+          filename: imageFile.name,
+        );
+      } else {
+        file = await MultipartFile.fromFile(
           imageFile.path,
           filename: imageFile.path.split('/').last,
-        ),
+        );
+      }
+
+      final formData = FormData.fromMap({
+        'image': file,
       });
 
       // Use dio directly so we can set multipart content-type
