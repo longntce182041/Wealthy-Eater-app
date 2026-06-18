@@ -75,9 +75,12 @@ async function getLikedRecipes(userId, options = {}) {
       .lean(),
     RecipeLike.countDocuments({ user_id: userId }),
   ]);
-
-  // Filter out likes where the recipe was deleted
-  const validLikes = likes.filter((l) => l.recipe_id != null);
+  // Filter out likes where the recipe was deleted, archived, or draft
+  const validLikes = likes.filter((l) => {
+    if (l.recipe_id == null) return false;
+    const status = String(l.recipe_id.status || '').toLowerCase();
+    return status !== 'archived' && status !== 'draft';
+  });
 
   return {
     items: validLikes.map((l) => ({

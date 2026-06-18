@@ -11,8 +11,6 @@
 ///  - [peerInitials]: 2-letter initials for the default avatar.
 library;
 
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -70,8 +68,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _onScroll() {
     // Load more when user scrolls to the top (oldest messages)
-    if (_scrollController.position.pixels <=
-            _scrollController.position.minScrollExtent + 80 &&
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 80 &&
         !_isLoadingMore) {
       _loadMoreMessages();
     }
@@ -107,7 +105,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     final userId = context.read<AuthProvider>().user?.id ?? '';
     await _chatProvider.sendImageMessage(
-          imageFile: File(picked.path),
+          imageFile: picked,
           currentUserId: userId,
         );
     if (mounted) _scrollToBottom();
@@ -116,7 +114,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+        0.0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
@@ -277,12 +275,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         final itemCount = _isLoadingMore ? msgs.length + 1 : msgs.length;
 
         return ListView.builder(
+          reverse: true,
           controller: _scrollController,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           itemCount: itemCount,
           itemBuilder: (context, index) {
-            // Loading indicator at top
-            if (_isLoadingMore && index == 0) {
+            // Loading indicator at top (end of the reversed list)
+            if (_isLoadingMore && index == itemCount - 1) {
               return const Padding(
                 padding: EdgeInsets.all(8),
                 child: Center(
@@ -298,9 +297,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               );
             }
 
-            final msgIndex = _isLoadingMore ? index - 1 : index;
+            final msgIndex = index;
             final msg = msgs[msgIndex];
-            final prevMsg = msgIndex > 0 ? msgs[msgIndex - 1] : null;
+            // The previous chronological message is the older one (next in list)
+            final prevMsg = (msgIndex + 1 < msgs.length) ? msgs[msgIndex + 1] : null;
 
             final showDateSeparator = prevMsg == null ||
                 !_isSameDay(prevMsg.createdAt, msg.createdAt);

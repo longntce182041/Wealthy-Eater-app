@@ -1,5 +1,3 @@
-import 'package:dio/dio.dart';
-
 import '../../core/error/app_error.dart';
 import '../../core/network/api_client.dart';
 import '../models/nutritionist_model.dart';

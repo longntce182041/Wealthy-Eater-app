@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-import '../../features/nutritionist/presentation/pages/expert_registration_step1_page.dart';
-import '../../features/nutritionist/presentation/providers/providers.dart';
 import '../providers/auth_provider.dart';
 import 'nutritionist_register_screen.dart';
 

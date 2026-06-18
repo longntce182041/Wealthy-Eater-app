@@ -317,7 +317,6 @@ class _RecipeFilterBottomSheet extends StatefulWidget {
 }
 
 class _RecipeFilterBottomSheetState extends State<_RecipeFilterBottomSheet> {
-  late String status;
   late String difficulty;
   late int? minTime;
   late int? maxTime;
@@ -334,7 +333,6 @@ class _RecipeFilterBottomSheetState extends State<_RecipeFilterBottomSheet> {
   void initState() {
     super.initState();
     final p = widget.provider;
-    status = p.selectedStatus;
     difficulty = p.selectedDifficulty;
     minTime = p.minTime;
     maxTime = p.maxTime;
@@ -402,19 +400,6 @@ class _RecipeFilterBottomSheetState extends State<_RecipeFilterBottomSheet> {
             ),
             const SizedBox(height: 20),
 
-            // Status
-            Text('Status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              children: [
-                ChoiceChip(label: const Text('All'), selected: status == '', onSelected: (v) => setState(() => status = '')),
-                ChoiceChip(label: const Text('Published'), selected: status.toLowerCase() == 'published', onSelected: (v) => setState(() => status = 'Published')),
-                ChoiceChip(label: const Text('Draft'), selected: status.toLowerCase() == 'draft', onSelected: (v) => setState(() => status = 'Draft')),
-              ],
-            ),
-            const SizedBox(height: 20),
-
             // Difficulty
             Text('Difficulty', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
@@ -469,7 +454,7 @@ class _RecipeFilterBottomSheetState extends State<_RecipeFilterBottomSheet> {
                   child: ElevatedButton(
                     onPressed: () {
                       widget.provider.applyAdvancedFilters(
-                        status: status,
+                        status: '',
                         difficulty: difficulty,
                         newMinTime: int.tryParse(minTimeController.text),
                         newMaxTime: int.tryParse(maxTimeController.text),
