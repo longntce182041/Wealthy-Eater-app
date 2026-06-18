@@ -308,6 +308,7 @@ async function addRecipe(req, res, next) {
     await recipe.save();
 
     let savedNutrition = { calories: 0, protein: 0, fat: 0, carbs: 0 };
+    let enrichedIngredients = []; // Mảng chứa dữ liệu nguyên liệu đầy đủ để trả về Frontend
 
     if (ingredients && Array.isArray(ingredients) && ingredients.length > 0) {
       const processed = await processRecipeIngredients(recipe._id, ingredients);
@@ -315,6 +316,18 @@ async function addRecipe(req, res, next) {
         await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
         const nutritionDoc = await RecipeNutrition.create({ recipe_id: recipe._id, ...processed.nutrition });
         savedNutrition = nutritionDoc.toObject();
+        
+        // Lấy thông tin tên nguyên liệu để trả về đồng bộ
+        const ingIds = processed.recipeIngredientDocs.map(i => i.ingredient_id);
+        const ingsData = await Ingredient.find({ _id: { $in: ingIds } }).lean();
+        const ingMap = {};
+        ingsData.forEach(d => { ingMap[d._id.toString()] = d; });
+        
+        enrichedIngredients = processed.recipeIngredientDocs.map(item => ({
+          ...item,
+          name: ingMap[item.ingredient_id]?.name || "Nguyên liệu ẩn",
+          unit: item.unit || ingMap[item.ingredient_id]?.unit || "g"
+        }));
       }
     } else {
       await RecipeNutrition.create({ recipe_id: recipe._id, calories: 0, protein: 0, fat: 0, carbs: 0 });
@@ -363,6 +376,7 @@ async function updateRecipe(req, res, next) {
     await recipe.save();
 
     let savedNutrition = { calories: 0, protein: 0, fat: 0, carbs: 0 };
+    let enrichedIngredients = [];
 
     if (ingredients && Array.isArray(ingredients)) {
       await RecipeIngredient.deleteMany({ recipe_id: recipeId });
@@ -371,7 +385,18 @@ async function updateRecipe(req, res, next) {
         if (processed.recipeIngredientDocs.length > 0) {
           await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
           const nutDoc = await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { ...processed.nutrition }, { upsert: true, new: true });
-          if (nutDoc) savedNutrition = nutDoc;
+          if (nutDoc) savedNutrition = nutDoc.toObject();
+
+          const ingIds = processed.recipeIngredientDocs.map(i => i.ingredient_id);
+          const ingsData = await Ingredient.find({ _id: { $in: ingIds } }).lean();
+          const ingMap = {};
+          ingsData.forEach(d => { ingMap[d._id.toString()] = d; });
+          
+          enrichedIngredients = processed.recipeIngredientDocs.map(item => ({
+            ...item,
+            name: ingMap[item.ingredient_id]?.name || "Nguyên liệu ẩn",
+            unit: item.unit || ingMap[item.ingredient_id]?.unit || "g"
+          }));
         }
       } else {
         await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { calories: 0, protein: 0, fat: 0, carbs: 0 }, { upsert: true });

@@ -33,9 +33,9 @@ if (process.env.NODE_ENV !== "test") {
 // HMAC signature verification and needs the raw buffer intact.
 app.use((req, res, next) => {
   if (req.path === "/api/webhooks/payos") return next();
-  express.json({ limit: "10kb" })(req, res, next);
+  express.json({ limit: "50mb" })(req, res, next);
 });
-app.use(express.urlencoded({ extended: false, limit: "10kb" }));
+app.use(express.urlencoded({ extended: false, limit: "50mb" }));
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGIN
