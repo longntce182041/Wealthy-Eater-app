@@ -77,13 +77,13 @@ class AuthProvider with ChangeNotifier {
   // Login
   // ---------------------------------------------------------------------------
 
-  Future<void> login(String email, String password, {String? role}) async {
+  Future<void> login(String identifier, String password, {String? role}) async {
     _setLoading();
     try {
       final res = await _api.post(
         '/api/auth/login',
         data: {
-          'email': email.trim(),
+          'identifier': identifier.trim(),
           'password': password,
           'role': role,
         },
@@ -92,10 +92,13 @@ class AuthProvider with ChangeNotifier {
       if (res.statusCode == 200 && res.data['success'] == true) {
         await _handleAuthResponse(res.data['data'] as Map<String, dynamic>);
       } else {
-        _setError('Invalid username or password');
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Invalid username or password');
       }
     } catch (e) {
-      _setError('Invalid username or password');
+      _setError(mapError(e).message);
     }
   }
 
@@ -138,13 +141,14 @@ class AuthProvider with ChangeNotifier {
   // Registration / OTP flows
   // ---------------------------------------------------------------------------
 
-  Future<void> register(String email, String password, String confirmPassword) async {
+  Future<void> register(String identifier, String password, String confirmPassword, {String? role}) async {
     _setLoading();
     try {
       final res = await _api.post('/api/auth/register', data: {
-        'email': email.trim(),
+        'identifier': identifier.trim(),
         'password': password,
         'confirmPassword': confirmPassword,
+        'role': role,
       });
 
       if (res.statusCode == 200 && res.data['success'] == true) {
@@ -153,17 +157,20 @@ class AuthProvider with ChangeNotifier {
         errorMessage = null;
         notifyListeners();
       } else {
-        _setError(res.data['message']?.toString() ?? 'Registration failed');
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Registration failed');
       }
     } catch (e) {
       _setError(mapError(e).message);
     }
   }
 
-  Future<void> verifyOtp(String email, String otp) async {
+  Future<void> verifyOtp(String identifier, String otp) async {
     _setLoading();
     try {
-      final res = await _api.post('/api/auth/verify-otp', data: {'email': email.trim(), 'otp': otp});
+      final res = await _api.post('/api/auth/verify-otp', data: {'identifier': identifier.trim(), 'otp': otp});
 
       if (res.statusCode == 200 && res.data['success'] == true) {
         final data = res.data['data'] as Map<String, dynamic>?;
@@ -175,26 +182,59 @@ class AuthProvider with ChangeNotifier {
           notifyListeners();
         }
       } else {
-        _setError(res.data['message']?.toString() ?? 'Verification failed');
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Verification failed');
       }
     } catch (e) {
       _setError(mapError(e).message);
     }
   }
 
-  Future<void> resendOtp(String email) async {
+  Future<void> resendOtp(String identifier) async {
     _setLoading();
     try {
-      final res = await _api.post('/api/auth/resend-otp', data: {'email': email.trim()});
+      final res = await _api.post('/api/auth/resend-otp', data: {'identifier': identifier.trim()});
       if (res.statusCode == 200 && res.data['success'] == true) {
         state = AuthState.unauthenticated;
         errorMessage = null;
         notifyListeners();
       } else {
-        _setError(res.data['message']?.toString() ?? 'Resend failed');
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Resend failed');
       }
     } catch (e) {
       _setError(mapError(e).message);
+    }
+  }
+
+  Future<bool> linkEmail(String email) async {
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final res = await _api.post('/api/auth/link-email', data: {'email': email.trim().toLowerCase()});
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        final userData = res.data['data'];
+        if (userData is Map<String, dynamic>) {
+          user = UserEntity.fromJson(userData);
+        }
+        notifyListeners();
+        return true;
+      } else {
+        final errObj = res.data['error'];
+        errorMessage = errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Linking email failed';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      errorMessage = mapError(e).message;
+      notifyListeners();
+      return false;
     }
   }
 
@@ -324,6 +364,37 @@ class AuthProvider with ChangeNotifier {
         return true;
       } else {
         errorMessage = res.data['message']?.toString() ?? 'Save profile failed';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      errorMessage = mapError(e).message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Change user password via API.
+  Future<bool> changePassword(String oldPassword, String newPassword) async {
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final res = await _api.post(
+        '/api/auth/change-password',
+        data: {
+          'oldPassword': oldPassword,
+          'newPassword': newPassword,
+        },
+      );
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        final errObj = res.data['error'];
+        errorMessage = errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : (res.data['message']?.toString() ?? 'Đổi mật khẩu thất bại');
         notifyListeners();
         return false;
       }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
+import 'nutritionist_register_screen.dart';
 
 /// Simple nutritionist login screen: only email + password (no Google).
 class NutritionistLoginScreen extends StatefulWidget {
@@ -13,21 +14,27 @@ class NutritionistLoginScreen extends StatefulWidget {
 
 class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
+  final _identifierCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _identifierCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
 
-  String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Email is required';
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-    if (!emailRegex.hasMatch(value.trim())) return 'Enter a valid email address';
+  String? _validateIdentifier(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Email or phone number is required';
+    final trimmed = value.trim();
+    if (trimmed.contains('@')) {
+      final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+      if (!emailRegex.hasMatch(trimmed)) return 'Enter a valid email address';
+    } else {
+      final phoneRegex = RegExp(r'^\+?[0-9]{7,15}$');
+      if (!phoneRegex.hasMatch(trimmed)) return 'Enter a valid phone number';
+    }
     return null;
   }
 
@@ -41,7 +48,7 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final auth = context.read<AuthProvider>();
-    await auth.login(_emailCtrl.text.trim(), _passCtrl.text, role: 'nutritionist');
+    await auth.login(_identifierCtrl.text.trim(), _passCtrl.text, role: 'nutritionist');
 
     if (!mounted) return;
     if (auth.state == AuthState.error) {
@@ -90,12 +97,12 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                       const SizedBox(height: 24),
 
                       TextFormField(
-                        controller: _emailCtrl,
+                        controller: _identifierCtrl,
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
                         autocorrect: false,
-                        validator: _validateEmail,
-                        decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
+                        validator: _validateIdentifier,
+                        decoration: const InputDecoration(labelText: 'Email or Phone Number', prefixIcon: Icon(Icons.login_outlined)),
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -128,7 +135,9 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           TextButton(
-                            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Register not implemented'))),
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const NutritionistRegisterScreen()),
+                            ),
                             child: const Text('Register'),
                           ),
                           TextButton(
