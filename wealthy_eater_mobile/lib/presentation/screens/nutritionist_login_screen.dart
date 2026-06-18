@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../features/nutritionist/presentation/pages/expert_registration_step1_page.dart';
+import '../../features/nutritionist/presentation/providers/providers.dart';
 import '../providers/auth_provider.dart';
 import 'nutritionist_register_screen.dart';
 
@@ -9,7 +11,8 @@ class NutritionistLoginScreen extends StatefulWidget {
   const NutritionistLoginScreen({super.key});
 
   @override
-  State<NutritionistLoginScreen> createState() => _NutritionistLoginScreenState();
+  State<NutritionistLoginScreen> createState() =>
+      _NutritionistLoginScreenState();
 }
 
 class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
@@ -93,7 +96,13 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(height: 12),
-                      Text('Nutritionist sign in', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(
+                        'Nutritionist sign in',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       const SizedBox(height: 24),
 
                       TextFormField(
@@ -115,8 +124,14 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                           labelText: 'Password',
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
-                            icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                         ),
                       ),
@@ -125,7 +140,14 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                       FilledButton(
                         onPressed: isLoading ? null : _doLogin,
                         child: isLoading
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
                             : const Text('Sign In'),
                       ),
 
@@ -141,7 +163,14 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                             child: const Text('Register'),
                           ),
                           TextButton(
-                            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Forgot password not implemented'))),
+                            onPressed: () =>
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Forgot password not implemented',
+                                    ),
+                                  ),
+                                ),
                             child: const Text('Forgot Password?'),
                           ),
                         ],

@@ -1,15 +1,30 @@
 import { useCallback, useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, ChevronLeft, ChevronRight, X, Database } from 'lucide-react';
 import apiClient from '../../services/api'; 
-import { toast } from 'react-toastify';
+import { toast } from 'react-hot-toast'; 
 import { DataTable, DataTableRow, DataTableCell } from '../../components/ui/DataTable';
 import { AdminButton } from '../../components/ui/AdminButton';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Badge } from '../../components/ui/Badge';
 
+const successStyle = {
+    style: {
+        background: '#16a34a', // Màu xanh lá cây đậm
+        color: '#ffffff',      // Chữ trắng
+    },
+    iconTheme: { primary: '#ffffff', secondary: '#16a34a' } 
+};
+
+const errorStyle = {
+    style: {
+        background: '#dc2626', // Màu đỏ hệ thống
+        color: '#ffffff',
+    }
+};
+
 // ==========================================
-// COMPONENT SUB-FORM (ĐÃ SỬA LỖI MÀU CHỮ Ô UNIT)
+// COMPONENT SUB-FORM
 // ==========================================
 const MicronutrientForm = ({ initialData, unitOptions = [], onSubmit, onCancel, isEditing }) => {
     const [formData, setFormData] = useState({ name: '', unit: 'mg', description: '' });
@@ -33,7 +48,7 @@ const MicronutrientForm = ({ initialData, unitOptions = [], onSubmit, onCancel, 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formData.name?.trim()) {
-            toast.error("Name is required");
+            toast.error("Name is required", errorStyle);
             return;
         }
 
@@ -160,7 +175,7 @@ const MicronutrientList = () => {
             }
         } catch (err) {
             console.error(err);
-            toast.error(err.response?.data?.message || "Failed to fetch data");
+            toast.error("Failed to fetch micronutrients database", errorStyle);
         } finally {
             setLoading(false);
         }
@@ -174,10 +189,7 @@ const MicronutrientList = () => {
     }, [fetchMicronutrients]);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            setCurrentPage(1);
-        }, 0);
-        return () => clearTimeout(timer);
+        setCurrentPage(1);
     }, [filters]);
 
     const handlePrevPage = () => { if (currentPage > 1) setCurrentPage(prev => prev - 1); };
@@ -205,6 +217,7 @@ const MicronutrientList = () => {
         setShowModal(true);
     };
 
+    // 🎯 THÔNG BÁO THÊM / SỬA THEO CHUẨN REACT-HOT-TOAST
     const handleFormSubmit = async (data) => {
         try {
             let res;
@@ -213,22 +226,30 @@ const MicronutrientList = () => {
             } else {
                 res = await apiClient.post('/admin/micronutrients/create', data);
             }
-            toast.success(res.data.message || "Action successfully performed");
-            setShowModal(false);
-            fetchMicronutrients();
+            
+            if (res.data && res.data.success) {
+                toast.success(res.data.message || "Saved successfully!", successStyle);
+                setShowModal(false);
+                fetchMicronutrients();
+            }
         } catch (err) {
-            toast.error(err.response?.data?.message || "Action failed");
+            console.error(err);
+            toast.error(err.response?.data?.message || "Action failed due to error", errorStyle);
         }
     };
 
+    // 🎯 THÔNG BÁO XÓA THEO CHUẨN REACT-HOT-TOAST
     const handleDelete = async (id) => {
-        if (!window.confirm("Delete this micronutrient?")) return;
+        if (!window.confirm("Delete this micronutrient permanently?")) return;
         try {
             const res = await apiClient.delete(`/admin/micronutrients/delete/${id}`);
-            toast.success(res.data.message || "Deleted successfully");
-            fetchMicronutrients();
+            if (res.data.success) {
+                toast.success(res.data.message || "Deleted successfully!", successStyle);
+                fetchMicronutrients();
+            }
         } catch (err) {
-            toast.error(err.response?.data?.message || "Error deleting");
+            console.error(err);
+            toast.error(err.response?.data?.message || "Error deleting selected item", errorStyle);
         }
     };
 

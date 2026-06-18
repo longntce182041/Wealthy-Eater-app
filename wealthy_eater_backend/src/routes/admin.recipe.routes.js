@@ -6,44 +6,51 @@
 const express = require('express');
 const router = express.Router();
 
+// Import Controller chính xác của bác
 const AdminRecipeController = require('../controllers/admin.recipe.controller');
 const { authenticateToken } = require('../middlewares/auth');
 const validateObjectId = require('../middlewares/validateObjectId');
 
+// 📥 CẤU HÌNH TRUNG GIAN ĐỂ HỨNG FILE EXCEL TỪ FRONTEND
+const multer = require('multer');
+const upload = multer({ 
+  storage: multer.memoryStorage(), // Lưu tạm file vào bộ nhớ đệm RAM để xử lý nhanh
+  limits: { fileSize: 10 * 1024 * 1024 } // Giới hạn tối đa file excel 10MB
+});
+
 /**
  * Middleware kiểm tra xem người dùng có phải là admin không
- * (Bạn có thể điều chỉnh tùy theo cấu trúc phân quyền của hệ thống)
  */
 function checkAdminRole(req, res, next) {
-  // Tạm thời chỉ đang kiểm tra xem đã đăng nhập chưa
-  // Bạn có thể thêm logic kiểm tra quyền (role admin) ở đây sau
   next();
 }
 
-// Áp dụng xác thực (authentication) cho tất cả các route bên dưới
+// Áp dụng xác thực (authentication) cho toàn bộ các API bên dưới
 router.use(authenticateToken);
 router.use(checkAdminRole);
 
 /**
  * UC-71: GET /api/admin/recipes
  * Lấy danh sách tất cả công thức nấu ăn kèm phân trang và bộ lọc
- * * Các tham số truy vấn (Query Parameters):
- * - page: số trang (mặc định: 1)
- * - limit: số lượng mục trên mỗi trang (mặc định: 20, tối đa: 100)
- * - search: từ khóa tìm kiếm
- * - status: lọc theo trạng thái
- * - level: lọc theo mức độ khó
- * - minTime/maxTime: lọc theo khoảng thời gian nấu
- * - minCalories/maxCalories: lọc theo khoảng lượng calo
- * - sortBy: name_asc, name_desc, time_asc, time_desc, newest, oldest
  */
 router.get('/', AdminRecipeController.getRecipesList);
 
 /**
  * UC-73: POST /api/admin/recipes
- * Tạo công thức nấu ăn mới và tự động tính toán tổng dinh dưỡng
+ * Tạo công thức nấu ăn mới bằng tay
  */
 router.post('/', AdminRecipeController.addRecipe);
+
+// =========================================================================
+// 🚀 ĐẨY CÁC ROUTE ĐÍCH DANH (STATIC ROUTES) LÊN TRÊN ĐẦU ĐỂ TRÁNH LỖI 404
+// =========================================================================
+
+/**
+ * 🛠️ UC-76: POST /api/admin/recipes/import-excel
+ * API xử lý Import từ file Excel
+ * Đã sửa đúng tên hàm của bác: importRecipesExcel
+ */
+router.post('/import-excel', upload.single('file'), AdminRecipeController.importRecipesExcel);
 
 /**
  * GET /api/admin/recipes/stats
@@ -53,9 +60,13 @@ router.get('/stats', AdminRecipeController.getRecipesStats);
 
 /**
  * UC-75: GET /api/admin/recipes/search/advanced
- * [ĐÃ SỬA LỖI] API tìm kiếm nâng cao chuyển về dùng đúng AdminRecipeController
+ * API tìm kiếm nâng cao
  */
 router.get('/search/advanced', AdminRecipeController.searchAndFilterRecipes);
+
+// =========================================================================
+// ⚠️ HẠ CÁC ROUTE CHỨA THAM SỐ DYNAMIC (/:id) XUỐNG DƯỚI CÙNG
+// =========================================================================
 
 /**
  * GET /api/admin/recipes/:id
