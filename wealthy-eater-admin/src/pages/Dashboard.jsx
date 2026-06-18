@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/Badge';
 import { AdminButton } from '../components/ui/AdminButton';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
+import SystemStatsSection from '../components/SystemStatsSection';
 import { 
   ChefHat, 
   CheckCircle2, 
@@ -169,7 +170,8 @@ export default function Dashboard() {
           iconBg="rgba(239, 68, 68, 0.1)"
         />
       </section>
-
+      {/* COMPONENT CON UC56 - System Statistics */}
+      <SystemStatsSection />
       {/* Recipes Table Section */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
