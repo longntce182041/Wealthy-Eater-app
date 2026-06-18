@@ -10,6 +10,7 @@ import RecipeDetail from '../pages/recipes/recipe-detail';
 import AddRecipePage from "../pages/recipes/add-recipe";
 import EditRecipePage from "../pages/recipes/edit-recipes.jsx"; 
 import UserListPage from "../pages/user/user-list.jsx";
+import NutritionistListPage from "../pages/nutritionist/nutritionist-list.jsx";
 import LoginPage from "../pages/Login.jsx"; // File Login.jsx nằm trực tiếp trong pages
 import AdminLayout from "../layouts/AdminLayout.jsx";
 
@@ -54,8 +55,12 @@ export function AppRoutes() {
           <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
             <Route path="ingredients" element={<IngredientsPage />} />
             <Route path="micronutrients" element={<MicronutrientsPage />} />
+            
             {/* 🆕 TRANG QUẢN LÝ THÀNH VIÊN (Đặt tại đường dẫn /users) */}
             <Route path="users" element={<UserListPage />} />
+
+            {/* 🔥 ĐÃ THÊM: TRANG QUẢN LÝ CHUYÊN GIA DINH DƯỠNG Ở ĐÂY */}
+            <Route path="nutritionists" element={<NutritionistListPage />} />
 
             {/* 1. Trang danh sách công thức */}
             <Route path="recipes" element={<RecipesPage />} /> 

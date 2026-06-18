@@ -7,7 +7,8 @@ import {
   BookOpen, 
   LogOut,
   UtensilsCrossed,
-  Users // 🆕 1. Import thêm icon quản lý thành viên từ lucide-react
+  Users,
+  UserCheck
 } from "lucide-react";
 
 export default function AdminLayout() {
@@ -36,7 +37,8 @@ export default function AdminLayout() {
       case '/analytics': return 'Platform Analytics';
       case '/ingredients': return 'Ingredients Management';
       case '/micronutrients': return 'Micronutrients Management';
-      case '/users': return 'Users Management'; // Tiêu đề trang quản lý user
+      case '/users': return 'Users Management'; 
+      case '/nutritionists': return 'Nutritionists Directory';
       case '/recipes': return 'Recipes Management';
       default: return 'Admin Panel';
     }
@@ -48,7 +50,8 @@ export default function AdminLayout() {
     { path: '/analytics', icon: BarChart3, label: 'Platform Analytics' },
     { path: '/ingredients', icon: Database, label: 'Manage Ingredients' },
     { path: '/micronutrients', icon: FlaskConical, label: 'Manage Micronutrients' },
-    { path: '/users', icon: Users, label: 'Manage Users' }, // Đưa mục Users vào đây
+    { path: '/users', icon: Users, label: 'Manage Users' }, 
+    { path: '/nutritionists', icon: UserCheck, label: 'Manage Nutritionists' },
     { path: '/recipes', icon: BookOpen, label: 'Manage Recipes' },
   ];
 
