@@ -119,7 +119,7 @@ class _AppRootState extends State<_AppRoot> {
           }
           return HomeScreen(user: auth.user);
         }
-        return const LoginScreen();
+        return const CustomerLoginScreen();
       },
     );
   }

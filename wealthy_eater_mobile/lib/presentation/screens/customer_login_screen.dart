@@ -5,31 +5,37 @@ import '../providers/auth_provider.dart';
 import '../widgets/custom_elevated_button.dart';
 import '../widgets/custom_text_field.dart';
 import 'nutritionist_login_screen.dart';
-import 'register_screen.dart';
+import 'customer_register_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class CustomerLoginScreen extends StatefulWidget {
+  const CustomerLoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<CustomerLoginScreen> createState() => _CustomerLoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
+  final _identifierCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _identifierCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
 
-  String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Email is required';
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-    if (!emailRegex.hasMatch(value.trim())) return 'Enter a valid email address';
+  String? _validateIdentifier(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Email or phone number is required';
+    final trimmed = value.trim();
+    if (trimmed.contains('@')) {
+      final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+      if (!emailRegex.hasMatch(trimmed)) return 'Enter a valid email address';
+    } else {
+      final phoneRegex = RegExp(r'^\+?[0-9]{7,15}$');
+      if (!phoneRegex.hasMatch(trimmed)) return 'Enter a valid phone number';
+    }
     return null;
   }
 
@@ -43,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final auth = context.read<AuthProvider>();
-    await auth.login(_emailCtrl.text.trim(), _passCtrl.text);
+    await auth.login(_identifierCtrl.text.trim(), _passCtrl.text, role: 'customer');
 
     if (!mounted) return;
     if (auth.state == AuthState.error) {
@@ -90,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             _buildHeader(context),
                             const SizedBox(height: 48),
-                            _buildEmailField(),
+                            _buildIdentifierField(),
                             const SizedBox(height: 20),
                             _buildPasswordField(),
                             const SizedBox(height: 32),
@@ -141,14 +147,14 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildEmailField() {
+  Widget _buildIdentifierField() {
     return CustomTextField(
-      controller: _emailCtrl,
-      labelText: 'Email Address',
-      hintText: 'Enter your email',
+      controller: _identifierCtrl,
+      labelText: 'Email or Phone Number',
+      hintText: 'Enter your email or phone',
       keyboardType: TextInputType.emailAddress,
-      prefixIcon: Icons.email_outlined,
-      validator: _validateEmail,
+      prefixIcon: Icons.login_outlined,
+      validator: _validateIdentifier,
     );
   }
 
@@ -230,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Flexible(
           child: TextButton(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RegisterScreen()),
+              MaterialPageRoute(builder: (_) => const CustomerRegisterScreen()),
             ),
             child: const Text(
               'Create Account',
