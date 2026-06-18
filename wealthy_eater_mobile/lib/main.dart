@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 
 import 'core/config/env_config.dart';
 import 'core/network/api_client.dart';
+import 'core/network/session_expired_notifier.dart';
 import 'core/theme/index.dart';
 import 'data/repositories/index.dart';
 import 'domain/usecases/get_recipe_detail_usecase.dart';
@@ -85,10 +87,29 @@ class _AppRoot extends StatefulWidget {
 
 class _AppRootState extends State<_AppRoot> {
   bool _initialized = false;
+  StreamSubscription<void>? _sessionExpiredSub;
 
   @override
   void initState() {
     super.initState();
+
+    // Listen for hard session expiry from the auth interceptor
+    _sessionExpiredSub =
+        SessionExpiredNotifier.instance.stream.listen((_) {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      auth.logout();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().restoreSession().then((_) {
         if (mounted) {
@@ -106,6 +127,12 @@ class _AppRootState extends State<_AppRoot> {
   }
 
   @override
+  void dispose() {
+    _sessionExpiredSub?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (!_initialized) {
       return const _SplashScreen();
@@ -119,7 +146,7 @@ class _AppRootState extends State<_AppRoot> {
           }
           return HomeScreen(user: auth.user);
         }
-        return const LoginScreen();
+        return const CustomerLoginScreen();
       },
     );
   }

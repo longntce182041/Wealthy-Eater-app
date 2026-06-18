@@ -116,8 +116,14 @@ class RecipeProvider extends ChangeNotifier {
         sortBy:      sortBy,
       );
 
-      // Sync local like state from server-confirmed set
-      recipes = recipes.map((r) => r.copyWith(isLiked: _likedRecipeIds.contains(r.id))).toList();
+      // Filter out archived or draft recipes, then sync local like state
+      recipes = recipes
+          .where((r) {
+            final s = r.status.toLowerCase();
+            return s != 'archived' && s != 'draft';
+          })
+          .map((r) => r.copyWith(isLiked: _likedRecipeIds.contains(r.id)))
+          .toList();
       listState = RecipeViewState.success;
     } catch (e) {
       listState    = RecipeViewState.error;
@@ -272,8 +278,18 @@ class RecipeProvider extends ChangeNotifier {
 
     try {
       final result = await getLikedRecipesUseCase(page: page, limit: 20);
-      likedItems     = result['items'] as List? ?? [];
+      final rawItems = result['items'] as List? ?? [];
       likedMeta      = result['meta']  as Map<String, dynamic>? ?? {};
+
+      // Filter out archived and draft liked recipes
+      likedItems = rawItems.where((item) {
+        final recipe = item['recipe'];
+        if (recipe is Map) {
+          final status = (recipe['status'] ?? '').toString().toLowerCase();
+          return status != 'archived' && status != 'draft';
+        }
+        return false;
+      }).toList();
 
       // Update known liked IDs
       for (final item in likedItems) {
@@ -411,8 +427,19 @@ class RecipeProvider extends ChangeNotifier {
 
     try {
       final result = await getMyReviewsListUseCase(page: page, limit: 20);
-      myReviewsItems     = result['items'] as List? ?? [];
+      final rawItems = result['items'] as List? ?? [];
       myReviewsMeta      = result['meta']  as Map<String, dynamic>? ?? {};
+
+      // Filter out reviews for archived and draft recipes
+      myReviewsItems = rawItems.where((item) {
+        final recipe = item['recipe_id'];
+        if (recipe is Map) {
+          final status = (recipe['status'] ?? '').toString().toLowerCase();
+          return status != 'archived' && status != 'draft';
+        }
+        return false;
+      }).toList();
+
       myReviewsListState = RecipeViewState.success;
     } catch (e) {
       myReviewsListState = RecipeViewState.error;

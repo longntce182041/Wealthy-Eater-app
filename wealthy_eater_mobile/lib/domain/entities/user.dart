@@ -39,7 +39,7 @@ class UserEntity {
       displayName: json['display_name']?.toString(),
       firstName: json['first_name']?.toString(),
       lastName: json['last_name']?.toString(),
-      phoneNumber: json['phone_number']?.toString(),
+      phoneNumber: (json['phone_number'] ?? json['phone'])?.toString(),
       address: json['address']?.toString(),
     );
   }

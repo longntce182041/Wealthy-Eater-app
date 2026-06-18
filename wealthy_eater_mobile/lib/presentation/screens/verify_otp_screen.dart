@@ -4,9 +4,9 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 
 class VerifyOtpScreen extends StatefulWidget {
-  final String email;
+  final String identifier;
 
-  const VerifyOtpScreen({super.key, required this.email});
+  const VerifyOtpScreen({super.key, required this.identifier});
 
   @override
   State<VerifyOtpScreen> createState() => _VerifyOtpScreenState();
@@ -23,7 +23,7 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
 
   Future<void> _verify() async {
     final auth = context.read<AuthProvider>();
-    await auth.verifyOtp(widget.email, _otpCtrl.text.trim());
+    await auth.verifyOtp(widget.identifier, _otpCtrl.text.trim());
     if (!mounted) return;
     if (auth.state == AuthState.error) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(auth.errorMessage ?? 'Verification failed')));
@@ -34,7 +34,7 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
 
   Future<void> _resend() async {
     final auth = context.read<AuthProvider>();
-    await auth.resendOtp(widget.email);
+    await auth.resendOtp(widget.identifier);
     if (!mounted) return;
     if (auth.state == AuthState.error) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(auth.errorMessage ?? 'Resend failed')));
@@ -53,7 +53,7 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Enter the 6-digit code sent to ${widget.email}', textAlign: TextAlign.center),
+              Text('Enter the 6-digit code sent to ${widget.identifier}', textAlign: TextAlign.center),
               const SizedBox(height: 12),
               TextField(controller: _otpCtrl, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'Verification code')),
               const SizedBox(height: 12),

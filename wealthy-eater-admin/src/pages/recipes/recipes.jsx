@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import { toast } from 'react-hot-toast';
-import { Search, MoreHorizontal, Pencil, Trash2, ArchiveRestore } from 'lucide-react';
+import { Search, MoreHorizontal, Pencil, Trash2, ArchiveRestore, Upload } from 'lucide-react';
 import EditRecipePage from './edit-recipes'; 
 import { AdminButton } from '../../components/ui/AdminButton';
 import { LoadingState } from '../../components/ui/LoadingState';
@@ -11,6 +11,8 @@ import { DataTable, DataTableRow, DataTableCell } from '../../components/ui/Data
 
 export default function RecipesPage() {
   const navigate = useNavigate();
+  const fileInputRef = useRef(null); // Ref để kích hoạt input file ẩn
+
   const [user] = useState(() => {
     try {
       const rawUser = localStorage.getItem('admin_user');
@@ -19,10 +21,13 @@ export default function RecipesPage() {
       return null;
     }
   });
+  
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false); // State quản lý loading khi import file
   const [error, setError] = useState('');
-  
+  const [excelErrors, setExcelErrors] = useState([]); // State lưu danh sách log lỗi của file Excel
+
   // 🔍 UC-75: Các State Bộ Lọc Nâng Cao
   const [searchTerm, setSearchTerm] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
@@ -43,6 +48,7 @@ export default function RecipesPage() {
   const fetchRecipes = useCallback(async () => {
     setLoading(true);
     setError('');
+    setExcelErrors([]);
     try {
       const response = await apiClient.get('/admin/recipes');
       if (response.data?.success) {
@@ -72,7 +78,6 @@ export default function RecipesPage() {
 
     try {
       JSON.parse(rawUser); 
-      // Defer execution to avoid "synchronous setState in effect" strict linter warning
       const timeoutId = setTimeout(() => {
         fetchRecipes(); 
       }, 0);
@@ -81,6 +86,50 @@ export default function RecipesPage() {
       handleForceLogout();
     }
   }, [handleForceLogout, fetchRecipes]);
+
+  // 🛠️ UC-76: Hàm xử lý tải và đẩy File Excel lên Server
+  async function handleImportExcel(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Reset log lỗi cũ
+    setError('');
+    setExcelErrors([]);
+    setImporting(true);
+
+    const formData = new FormData();
+    formData.append('file', file); // 'file' trùng với name cấu hình ở middleware upload phía backend của bác
+
+    try {
+      const res = await apiClient.post('/admin/recipes/import-excel', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      if (res.data?.success) {
+        toast.success(`Imported successfully! Total ${res.data.data?.totalImported || 0} recipes.`, {
+          duration: 5000,
+          style: { background: '#16a34a', color: '#fff', borderRadius: '12px' }
+        });
+        fetchRecipes(); // Refresh lại danh sách database
+      }
+    } catch (err) {
+      console.error('❌ Excel Import Error:', err);
+      const serverMessage = err.response?.data?.message || 'Failed to import Excel data.';
+      setError(serverMessage);
+
+      // Bóc tách mảng errorLog (ở tham số thứ 4 AppError backend gán vào hoặc custom ở response)
+      if (err.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+        setExcelErrors(err.response.data.errors);
+      } else if (err.response?.data?.errorLog && Array.isArray(err.response.data.errorLog)) {
+        setExcelErrors(err.response.data.errorLog);
+      }
+      
+      toast.error('Import failed! Check error details section.', { duration: 5000 });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input file để có thể chọn lại cùng file cũ
+    }
+  }
 
   // 🗑️ Hàm Lưu trữ (Archive) công thức
   async function handleDelete(recipeId) {
@@ -105,14 +154,13 @@ export default function RecipesPage() {
   async function handleRestore(recipeId) {
     if (!window.confirm('Do you want to restore this archived recipe?')) return;
     try {
-      // Gửi request PUT/PATCH cập nhật lại status thành draft (hoặc tùy API của bác)
       const res = await apiClient.put(`/admin/recipes/${recipeId}`, { status: 'draft' });
       if (res.data?.success) {
         toast.success('Recipe restored successfully! Status reset to Draft.', {
           duration: 5000,
           icon: '🔄',
           style: {
-            background: '#2563eb', // Màu xanh dương của sự khôi phục hiện đại
+            background: '#2563eb',
             color: '#ffffff',
             padding: '16px 24px',
             fontSize: '16px',
@@ -122,7 +170,7 @@ export default function RecipesPage() {
             boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
           },
         });
-        fetchRecipes(); // Tải lại danh sách
+        fetchRecipes();
       }
     } catch (err) {
       const errorMsg = err.response?.data?.message || err.message || 'Failed to restore recipe';
@@ -132,27 +180,22 @@ export default function RecipesPage() {
 
   // 🔍 UC-75: Logic Real-time Frontend Filtering Nâng Cao
   const filteredRecipes = recipes.filter(recipe => {
-    // 1. Tìm kiếm chuỗi văn bản
     const matchesSearch = recipe.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           recipe.description?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // 2. Lọc theo độ khó & Trạng thái
     const matchesLevel = levelFilter === '' || recipe.levelCooking === levelFilter;
     const matchesStatus = statusFilter === '' || recipe.status === statusFilter;
     
-    // 3. Lọc theo xu hướng ăn kiêng (Giả định trường dữ liệu diet hoặc categories trong DB)
     const matchesDiet = dietFilter === '' || 
                          (recipe.dietaryTrend?.toLowerCase() === dietFilter.toLowerCase()) ||
                          (recipe.description?.toLowerCase().includes(dietFilter.toLowerCase()));
 
-    // 4. Lọc theo khoảng thời gian nấu
     let matchesTime = true;
     const time = Number(recipe.cookingTime) || 0;
     if (timeRange === 'short') matchesTime = time < 15;
     else if (timeRange === 'medium') matchesTime = time >= 15 && time <= 30;
     else if (timeRange === 'long') matchesTime = time > 30;
 
-    // 5. Lọc theo khoảng Calo định lượng
     let matchesCalorie = true;
     const calories = Number(recipe.nutrition?.calories) || 0;
     if (calorieRange === 'low') matchesCalorie = calories < 200;
@@ -166,29 +209,65 @@ export default function RecipesPage() {
 
   return (
     <>
+      {/* Input Excel Ẩn điều khiển bằng Ref */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleImportExcel} 
+        accept=".xlsx, .xls" 
+        className="hidden" 
+      />
+
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight m-0">Recipes Database</h1>
           <p className="text-slate-500 mt-1">Manage and maintain all culinary recipe database entries</p>
         </div>
         <div className="flex gap-3">
+          {/* Nút Import Excel Mới */}
+          <AdminButton 
+            onClick={() => fileInputRef.current?.click()} 
+            variant="outline" 
+            isLoading={importing}
+            className="flex items-center gap-2 border-slate-300 hover:bg-slate-50"
+          >
+            <Upload className="w-4 h-4 text-slate-600" />
+            Import Excel
+          </AdminButton>
+
           <AdminButton onClick={() => navigate('/recipes/add')}>
             + Add New Recipe
           </AdminButton>
+          
           <AdminButton onClick={fetchRecipes} variant="outline" isLoading={loading}>
             Refresh Data
           </AdminButton>
         </div>
       </div>
 
+      {/* Hiển thị Thông Báo Lỗi Chung Hệ Thống */}
       {error && (
-        <div className="flex items-center gap-3 p-4 mb-8 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="8" x2="12" y2="12"></line>
-            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-          </svg>
-          <span className="font-medium">{error}</span>
+        <div className="flex flex-col p-4 mb-8 bg-red-50 border border-red-200 text-red-700 rounded-lg shadow-sm">
+          <div className="flex items-center gap-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span className="font-semibold">{error}</span>
+          </div>
+          
+          {/* 🛠️ BỘ LOG LỖI EXCEL: Liệt kê chi tiết từng dòng sai để Admin theo dõi */}
+          {excelErrors.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-red-200/60 max-h-[220px] overflow-y-auto custom-scrollbar">
+              <p className="text-xs font-bold uppercase tracking-wider text-red-800 mb-1.5">Chi tiết lỗi dòng dữ liệu:</p>
+              <ul className="list-disc pl-5 space-y-1 text-sm text-red-600 font-mono">
+                {excelErrors.map((errLog, index) => (
+                  <li key={index}>{errLog}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
@@ -249,7 +328,6 @@ export default function RecipesPage() {
         </div>
       </section>
 
-      {/* DATATABLE SECTION */}
       {/* DATATABLE SECTION */}
       <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="w-full overflow-x-auto">

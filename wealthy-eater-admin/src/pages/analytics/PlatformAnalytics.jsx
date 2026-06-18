@@ -3,19 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import apiClient from '../../services/api';
 import './platformAnalytics.css';
+import ExpertPerformanceSection from '../../components/ExpertPerformanceSection';
 
 export default function PlatformAnalytics() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // Thiết lập bộ lọc thời gian mặc định (30 ngày gần nhất)
   const [startDate, setStartDate] = useState(() => 
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
 
-  // State lưu trữ dữ liệu trả về từ API UC-57
   const [analyticsData, setAnalyticsData] = useState({
     newCustomers: [],
     dailyActiveUsers: [],
@@ -26,7 +25,6 @@ export default function PlatformAnalytics() {
     setLoading(true);
     setError('');
     try {
-      // Gọi API đồng bộ chính xác theo routing hệ thống mới tinh chỉnh của bạn
       const res = await apiClient.get('/admin/analytics/customer-growth', {
         params: { startDate, endDate }
       });
@@ -52,7 +50,6 @@ export default function PlatformAnalytics() {
   }, [startDate, endDate, navigate]);
 
   useEffect(() => {
-    // Kiểm tra thông tin phiên làm việc của quản trị viên
     const rawUser = localStorage.getItem('admin_user');
     const token = localStorage.getItem('admin_session_jwt_token');
 
@@ -63,14 +60,12 @@ export default function PlatformAnalytics() {
       return;
     }
 
-    // Sử dụng setTimeout để hoãn việc gọi hàm chứa setState đồng bộ (tránh lỗi cascading renders của React Compiler)
     const timeoutId = setTimeout(() => {
       fetchAnalytics();
     }, 0);
     return () => clearTimeout(timeoutId);
   }, [fetchAnalytics, navigate]);
 
-  // Khớp nối dữ liệu từ 3 mảng độc lập thành cấu trúc chuỗi thời gian thống nhất cho biểu đồ
   const mergedData = (analyticsData.newCustomers || []).map((item) => {
     const dauItem = (analyticsData.dailyActiveUsers || []).find((d) => d._id === item._id);
     const healthItem = (analyticsData.healthGoalAchievement || []).find((h) => h._id === item._id);
@@ -163,6 +158,9 @@ export default function PlatformAnalytics() {
           </div>
         </div>
       )}
+
+      {/* 🎯 GẮN COMPONENT CON VÀO ĐÂY ĐỂ HIỂN THỊ TRÊN CÙNG MỘT PLATFORM ANALYTICS */}
+      <ExpertPerformanceSection startDate={startDate} endDate={endDate} />
     </div>
   );
 }

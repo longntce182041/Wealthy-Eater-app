@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/env_config.dart';
+import 'session_expired_notifier.dart';
 
 /// HTTP client wrapping Dio.
 ///
@@ -164,17 +165,22 @@ class _AuthInterceptor extends Interceptor {
             return handler.resolve(retryRes);
           } else {
              await _clearTokens();
+             SessionExpiredNotifier.instance.notifyExpired();
              _rejectQueue(err);
              return handler.next(err);
           }
         } catch (_) {
           await _clearTokens();
+          SessionExpiredNotifier.instance.notifyExpired();
           _rejectQueue(err);
           return handler.next(err);
         } finally {
           _isRefreshing = false;
         }
       } else {
+        // No refresh token at all — hard logout
+        await _clearTokens();
+        SessionExpiredNotifier.instance.notifyExpired();
         _rejectQueue(err);
         return handler.next(err);
       }
