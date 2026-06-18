@@ -20,6 +20,7 @@ const userRecipeRoute = require("./user.recipe.route");
 const mealPlanRoutes = require("./mealPlan.routes");
 const webhookRoute = require("./webhook.routes");
 const analyticsRoute = require("./analytics.route");
+const systemDashboardRoute = require("./systemDashboard.routes");
 // ============================================================================
 // 2. MAPPING API ENDPOINTS (Grouped logically to minimize Git conflicts)
 // ============================================================================
@@ -34,6 +35,7 @@ router.use("/api/admin/ingredients", ingredientRoute);
 router.use("/api/admin/micronutrients", micronutrientRoute);
 router.use("/api/admin/recipes", adminRecipeRoute);
 router.use("/api/admin/analytics", analyticsRoute);
+router.use("/api/admin/system-dashboard", systemDashboardRoute);
 
 // ─── NUTRITIONIST ROUTES ────────────────────────────────────────────────────
 router.use("/api/nutritionists", nutritionistRoute);
