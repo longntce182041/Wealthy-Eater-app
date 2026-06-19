@@ -2,16 +2,19 @@ const Nutritionist = require("../models/Nutritionist");
 const User = require("../models/User");
 const { sendApprovalEmail, sendRejectionEmail } = require("../services/email.service");
 
-// 1. LẤY DANH SÁCH CHUYÊN GIA (Sử dụng Aggregate $lookup để né lỗi lệch kiểu dữ liệu String)
+/**
+ * 1. LẤY DANH SÁCH CHUYÊN GIA
+ * Sử dụng Aggregate $lookup để né lỗi lệch kiểu dữ liệu String giữa các collection
+ */
 async function getNutritionistsList(req, res) {
   try {
     const nutritionists = await Nutritionist.aggregate([
       // Bước 1: Liên kết chéo sang bảng users
       {
         $lookup: {
-          from: "users",          // Tên collection User trong MongoDB của bác
-          localField: "user_id",   // Trường liên kết ở bảng Nutritionist (đang dạng String)
-          foreignField: "_id",    // Trường khóa chính ở bảng User
+          from: "users",          // Tên collection User trong MongoDB
+          localField: "user_id",   // Trường liên kết ở bảng Nutritionist (String)
+          foreignField: "_id",    // Trường khóa chính ở bảng User (String)
           as: "user_info"
         }
       },
@@ -19,16 +22,16 @@ async function getNutritionistsList(req, res) {
       {
         $unwind: {
           path: "$user_info",
-          preserveNullAndEmptyArrays: true // Đảm bảo nếu user bị xóa thì vẫn hiển thị hồ sơ chuyên gia
+          preserveNullAndEmptyArrays: true // Nếu user gốc bị ẩn/xóa, hồ sơ chuyên gia vẫn được giữ lại để đối soát
         }
       },
-      // Bước 3: Sắp xếp hồ sơ mới nhất lên đầu
+      // Bước 3: Sắp xếp hồ sơ đăng ký mới nhất lên đầu lên trên
       {
         $sort: { createdAt: -1 }
       }
     ]);
 
-    // Nếu database trống, trả về mảng rỗng an toàn
+    // Nếu database trống, trả về mảng rỗng an toàn cho Frontend map()
     if (!nutritionists || nutritionists.length === 0) {
       return res.status(200).json({
         success: true,
@@ -36,12 +39,12 @@ async function getNutritionistsList(req, res) {
       });
     }
 
-    // Định dạng lại cấu trúc dữ liệu mapping mượt mà với Frontend
+    // Định dạng cấu trúc dữ liệu mapping mượt mà với UI Frontend
     const formattedData = nutritionists.map(item => {
       return {
         id: item._id,
         email: item.user_info?.email || "N/A (Tài khoản ẩn/đã xóa)",
-        userStatus: item.user_info?.status || "inactive", // Trạng thái block/active của tài khoản User gốc
+        userStatus: item.user_info?.is_active !== false ? "active" : "inactive", // Đồng bộ với trường is_active trong model User của bác
         fullName: item.full_name || "Chưa cập nhật họ tên",
         specialization: item.specialization || "Dinh dưỡng tổng quát",
         professionalTitle: item.professional_title || "Chuyên gia",
@@ -69,7 +72,10 @@ async function getNutritionistsList(req, res) {
   }
 }
 
-// 2. API DUYỆT HỒ SƠ CHUYÊN GIA (APPROVED / REJECTED)
+/**
+ * 2. API DUYỆT NHANH TRẠNG THÁI HỒ SƠ CHUYÊN GIA (APPROVED / REJECTED)
+ * Tích hợp cơ chế tự động nâng/hạ cấp vai trò (role) đồng bộ theo bảng User
+ */
 async function updateApprovalStatus(req, res) {
   try {
     const { id } = req.params;
@@ -79,26 +85,36 @@ async function updateApprovalStatus(req, res) {
     if (!validStatuses.includes(approvalStatus)) {
       return res.status(400).json({
         success: false,
-        message: "Trạng thái duyệt hồ sơ không hợp lệ"
+        message: "Trạng thái duyệt hồ sơ không hợp lệ."
       });
     }
 
+    const finalStatus = approvalStatus.toUpperCase();
+
+    // 1. Cập nhật trạng thái duyệt trong bảng Nutritionist
     const updatedNutritionist = await Nutritionist.findByIdAndUpdate(
       id,
-      { approval_status: approvalStatus },
+      { approval_status: finalStatus },
       { new: true }
     );
 
     if (!updatedNutritionist) {
       return res.status(404).json({
         success: false,
-        message: "Không tìm thấy hồ sơ chuyên gia dinh dưỡng"
+        message: "Không tìm thấy hồ sơ chuyên gia dinh dưỡng."
       });
+    }
+
+    // 2. Đồng bộ phân quyền sang bảng User dựa trên enum ['customer', 'admin', 'nutritionist']
+    if (finalStatus === "APPROVED") {
+      await User.findByIdAndUpdate(updatedNutritionist.user_id, { role: "nutritionist" });
+    } else if (finalStatus === "REJECTED") {
+      await User.findByIdAndUpdate(updatedNutritionist.user_id, { role: "customer" }); // Sửa từ "user" thành "customer" cho khớp enum model User của bác
     }
 
     return res.status(200).json({
       success: true,
-      message: `Đã cập nhật trạng thái duyệt thành: ${approvalStatus}`,
+      message: `Đã cập nhật trạng thái duyệt thành: ${finalStatus}`,
       data: updatedNutritionist
     });
   } catch (error) {
@@ -112,12 +128,13 @@ async function updateApprovalStatus(req, res) {
 }
 
 /**
- * UC-84: Verify Professional Certificates
+ * 3. UC-84: XÁC THỰC VÀ THẨM ĐỊNH CHỨNG CHỈ CHUYÊN MÔN CHUYÊN SÂU
  * PUT /api/admin/nutritionists/:id/verify
+ * Bao gồm cả lý do từ chối (rejectionReason) và gửi mail thông báo tự động cho Expert
  */
 async function verifyNutritionistCertificate(req, res) {
   try {
-    const { id } = req.params; // ID của hồ sơ Nutritionist (dạng String)
+    const { id } = req.params; // ID của hồ sơ bảng Nutritionist
     const { approvalStatus, rejectionReason } = req.body; 
 
     // 1. Kiểm tra trạng thái duyệt đầu vào
@@ -149,40 +166,35 @@ async function verifyNutritionistCertificate(req, res) {
 
     const finalStatus = approvalStatus.toUpperCase();
 
-    // 4. Thực hiện rẽ nhánh Logic nghiệp vụ chuyển đổi trạng thái hệ thống
+    // 4. Rẽ nhánh logic cập nhật trạng thái hệ thống
     if (finalStatus === "APPROVED") {
-      // 🛠️ NẾU DUYỆT THÀNH CÔNG:
       nutritionist.approval_status = "APPROVED";
-      
-      // Chuyển đổi trạng thái tài khoản User sang active và cập nhật vai trò thành nutritionist (nếu cần)
-      user.status = "active";
-      user.role = "nutritionist"; 
+      user.role = "nutritionist"; // Cấp quyền chuyên gia chính thức
     } else {
-      // 🛠️ NẾU TỪ CHỐI DUYỆT:
       nutritionist.approval_status = "REJECTED";
-      
-      // Giữ nguyên trạng thái user hoặc đưa về cấu hình an toàn của dự án bác
-      user.role = "user"; // Không cấp quyền chuyên gia
+      user.role = "customer"; // 🔥 ĐÃ ĐỒNG BỘ: Chuyển về "customer" cho đúng enum mẫu User của bác (thay vì "user")
     }
 
-    // 5. Lưu đồng loạt vào Database
+    // 5. Lưu đồng bộ cả 2 bảng vào Database bằng Promise.all
     await Promise.all([nutritionist.save(), user.save()]);
 
-    // 6. Kích hoạt gửi Email thông báo tự động (Xử lý bất đồng bộ không làm chậm API)
+    // 6. Kích hoạt dịch vụ gửi Email thông báo tự động (chạy background không gây block API)
     const userEmail = user.email;
-    const displayName = nutritionist.full_name || user.name || "Chuyên gia";
+    const displayName = nutritionist.full_name || "Chuyên gia dinh dưỡng";
 
-    if (finalStatus === "APPROVED") {
-      sendApprovalEmail(userEmail, displayName).catch(err => 
-        console.error("❌ Lỗi gửi email phê duyệt:", err)
-      );
-    } else {
-      sendRejectionEmail(userEmail, displayName, rejectionReason).catch(err => 
-        console.error("❌ Lỗi gửi email từ chối:", err)
-      );
+    if (userEmail) {
+      if (finalStatus === "APPROVED") {
+        sendApprovalEmail(userEmail, displayName).catch(err => 
+          console.error("❌ Lỗi gửi email phê duyệt:", err)
+        );
+      } else {
+        sendRejectionEmail(userEmail, displayName, rejectionReason || "Hồ sơ hoặc bằng cấp chuyên môn chưa đạt yêu cầu kiểm định hệ thống.").catch(err => 
+          console.error("❌ Lỗi gửi email từ chối:", err)
+        );
+      }
     }
 
-    // 7. Trả kết quả chuẩn Frontend
+    // 7. Trả kết quả chuẩn dữ liệu về cho client
     return res.status(200).json({
       success: true,
       message: `Đã xác thực chứng chỉ chuyên môn thành công. Trạng thái: ${finalStatus}`,
@@ -190,8 +202,7 @@ async function verifyNutritionistCertificate(req, res) {
         nutritionistId: nutritionist._id,
         userId: user._id,
         approvalStatus: nutritionist.approval_status,
-        userRole: user.role,
-        userStatus: user.status
+        userRole: user.role
       }
     });
 
@@ -204,7 +215,7 @@ async function verifyNutritionistCertificate(req, res) {
     });
   }
 }
-// TÊN HÀM EXPORT PHẢI CHÍNH XÁC LÀ getNutritionistsList ĐỂ KHỚP VỚI FILE ROUTE
+
 module.exports = {
   getNutritionistsList,
   updateApprovalStatus,
