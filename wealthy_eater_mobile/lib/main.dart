@@ -70,6 +70,7 @@ class WealthyEaterApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NutritionistProvider(api: api)),
         ChangeNotifierProvider(create: (_) => ConsultationProvider(api: api)),
         ChangeNotifierProvider(create: (_) => ChatProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => MealPlanProvider(api: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',
