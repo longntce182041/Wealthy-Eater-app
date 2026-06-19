@@ -50,7 +50,11 @@ class WealthyEaterApp extends StatelessWidget {
             deleteReviewUseCase:     DeleteRecipeReviewUseCase(recipeRepository),
             // My Reviews
             getMyReviewsListUseCase: GetMyReviewsListUseCase(recipeRepository),
-          )..loadRecipes(),
+            // S-08: Removed eager ..loadRecipes() here.
+            // loadRecipes is called in _AppRootState.initState after session restore
+            // conditioned on isAuthenticated, preventing a double-fetch and an
+            // unauthenticated network request on app start.
+          ),
         ),
         ChangeNotifierProvider(
           create: (_) => ShoppingListProvider(

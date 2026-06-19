@@ -14,28 +14,20 @@ function generateOtp() {
 }
 
 async function sendSMSViaFirebase(phone, otp) {
-  console.log(`\n=============================================================`);
-  console.log(`[Firebase SMS Mock] Sending OTP ${otp} to phone: ${phone}`);
-  console.log(`=============================================================\n`);
+  // SECURITY: Never log the OTP in plaintext — it would leak into log aggregators.
+  // Log only the masked phone for traceability in development.
+  const maskedPhone = phone.length > 4
+    ? phone.slice(0, -4).replace(/\d/g, '*') + phone.slice(-4)
+    : '****';
+  console.log(`[Firebase SMS Mock] OTP sent to ${maskedPhone}`);
   return Promise.resolve();
 }
 
 async function ensureNutritionistProfile(user) {
-  if (user.role === 'nutritionist') {
-    const Nutritionist = require('../models/Nutritionist');
-    const existing = await Nutritionist.findOne({ user_id: user._id.toString() }).exec();
-    if (!existing) {
-      await Nutritionist.create({
-        user_id: user._id.toString(),
-        full_name: user.email ? user.email.split('@')[0] : (user.phone ? user.phone : 'Nutritionist'),
-        specialization: 'Nutritionist',
-        professional_title: 'Nutritionist',
-        service_fee: 100000,
-        approval_status: 'approval',
-        average_rating: 5.0,
-      });
-    }
-  }
+  // NOTE: This function is intentionally a no-op after the C-10 security fix.
+  // Nutritionist profiles must ONLY be created through the explicit admin-gated
+  // POST /api/nutritionists/register flow, never silently on login.
+  // Keeping the function signature so callers don't need to change.
 }
 
 class RegistrationService {
@@ -45,7 +37,7 @@ class RegistrationService {
     }
 
     const cleanId = identifier.trim();
-    const emailRegex = /^[^@]+@[^@]+\.[^@]+/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isEmail = emailRegex.test(cleanId);
 
     const email = isEmail ? cleanId.toLowerCase() : null;
