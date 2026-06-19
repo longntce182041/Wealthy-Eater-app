@@ -66,4 +66,55 @@ const matchTemplateEndpoint = async (req, res) => {
   }
 };
 
-module.exports = { matchTemplateEndpoint };
+const getMyMealPlanEndpoint = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const plan = await mealPlanService.getMyMealPlan(userId);
+    return res.status(200).json({
+      success: true,
+      data: plan
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+const updateItemWeightEndpoint = async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { weight } = req.body;
+
+    if (weight === undefined || isNaN(weight) || weight <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid weight value"
+      });
+    }
+
+    const updatedItem = await mealPlanService.updateItemWeight(itemId, Number(weight));
+    return res.status(200).json({
+      success: true,
+      data: updatedItem
+    });
+  } catch (error) {
+    if (error.message === "MEAL_PLAN_ITEM_NOT_FOUND") {
+      return res.status(404).json({
+        success: false,
+        error: "Meal plan item not found"
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+module.exports = {
+  matchTemplateEndpoint,
+  getMyMealPlanEndpoint,
+  updateItemWeightEndpoint
+};

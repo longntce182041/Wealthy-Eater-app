@@ -77,6 +77,160 @@ class MealPlanService {
       itemsCount: planItemModels.length,
     };
   }
+
+  async calculateRecipeNutrients(recipeId) {
+    const RecipeIngredient = require("../models/RecipeIngredient");
+    const Ingredient = require("../models/Ingredient");
+
+    const recipeIngredients = await RecipeIngredient.find({ recipe_id: recipeId })
+      .populate({
+        path: "ingredient_id",
+        model: "Ingredient"
+      })
+      .lean();
+
+    let totalWeight = 0;
+    let totalCalories = 0;
+    let totalProtein = 0;
+    let totalFat = 0;
+    let totalCarbs = 0;
+
+    for (const ri of recipeIngredients) {
+      const ing = ri.ingredient_id;
+      if (ing) {
+        const qty = ri.base_quantity; // e.g. 150g
+        totalWeight += qty;
+        
+        // Nutrients are per 100g in database
+        totalCalories += (ing.calories_per_unit * qty) / 100;
+        totalProtein += ((ing.protein || 0) * qty) / 100;
+        totalFat += ((ing.fat || 0) * qty) / 100;
+        totalCarbs += ((ing.carbs || 0) * qty) / 100;
+      }
+    }
+
+    return {
+      base_weight: totalWeight || 100, // fallback if no ingredients
+      calories: Math.round(totalCalories),
+      protein: parseFloat(totalProtein.toFixed(1)),
+      fat: parseFloat(totalFat.toFixed(1)),
+      carbs: parseFloat(totalCarbs.toFixed(1)),
+    };
+  }
+
+  async getMyMealPlan(userId) {
+    const MealPlan = require("../models/MealPlan");
+    const MealPlanItem = require("../models/MealPlanItem");
+
+    // Get the latest meal plan for the user
+    const mealPlan = await MealPlan.findOne({ user_id: userId })
+      .sort({ date: -1 })
+      .lean();
+
+    if (!mealPlan) {
+      return null;
+    }
+
+    const items = await MealPlanItem.find({ meal_plan_id: mealPlan._id })
+      .populate({
+        path: "recipe_id",
+        model: "Recipe"
+      })
+      .lean();
+
+    const enrichedItems = [];
+    for (const item of items) {
+      const recipe = item.recipe_id;
+      let nutrients = { base_weight: 100, calories: 0, protein: 0, fat: 0, carbs: 0 };
+      if (recipe) {
+        nutrients = await this.calculateRecipeNutrients(recipe._id);
+      }
+
+      const customizedGram = item.customized_servings_gram || nutrients.base_weight;
+
+      // Scale nutrients based on customized servings gram vs base weight
+      const scale = customizedGram / nutrients.base_weight;
+
+      enrichedItems.push({
+        _id: item._id,
+        meal_type: item.meal_type,
+        recipe: recipe ? {
+          _id: recipe._id,
+          name: recipe.name,
+          description: recipe.description,
+          image_url: recipe.image_url,
+          cooking_time: recipe.cooking_time,
+        } : null,
+        base_weight: nutrients.base_weight,
+        customized_servings_gram: customizedGram,
+        base_nutrients: {
+          calories: nutrients.calories,
+          protein: nutrients.protein,
+          fat: nutrients.fat,
+          carbs: nutrients.carbs,
+        },
+        customized_nutrients: {
+          calories: Math.round(nutrients.calories * scale),
+          protein: parseFloat((nutrients.protein * scale).toFixed(1)),
+          fat: parseFloat((nutrients.fat * scale).toFixed(1)),
+          carbs: parseFloat((nutrients.carbs * scale).toFixed(1)),
+        }
+      });
+    }
+
+    return {
+      mealPlanId: mealPlan._id,
+      date: mealPlan.date,
+      created_by: mealPlan.created_by,
+      items: enrichedItems,
+    };
+  }
+
+  async updateItemWeight(itemId, weight) {
+    const MealPlanItem = require("../models/MealPlanItem");
+
+    const item = await MealPlanItem.findById(itemId);
+    if (!item) {
+      throw new Error("MEAL_PLAN_ITEM_NOT_FOUND");
+    }
+
+    item.customized_servings_gram = weight;
+    await item.save();
+
+    // Re-fetch and return enriched item
+    const recipeId = item.recipe_id;
+    const nutrients = await this.calculateRecipeNutrients(recipeId);
+    const scale = weight / nutrients.base_weight;
+
+    const Recipe = require("../models/Recipe");
+    const recipe = await Recipe.findById(recipeId).lean();
+
+    return {
+      _id: item._id,
+      meal_type: item.meal_type,
+      recipe: recipe ? {
+        _id: recipe._id,
+        name: recipe.name,
+        description: recipe.description,
+        image_url: recipe.image_url,
+        cooking_time: recipe.cooking_time,
+      } : null,
+      base_weight: nutrients.base_weight,
+      customized_servings_gram: weight,
+      base_nutrients: {
+        calories: nutrients.calories,
+        protein: nutrients.protein,
+        fat: nutrients.fat,
+        carbs: nutrients.carbs,
+      },
+      customized_nutrients: {
+        calories: Math.round(nutrients.calories * scale),
+        protein: parseFloat((nutrients.protein * scale).toFixed(1)),
+        fat: parseFloat((nutrients.fat * scale).toFixed(1)),
+        carbs: parseFloat((nutrients.carbs * scale).toFixed(1)),
+      }
+    };
+  }
 }
 
 module.exports = new MealPlanService();
