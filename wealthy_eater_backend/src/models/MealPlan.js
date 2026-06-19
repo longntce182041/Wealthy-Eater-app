@@ -18,7 +18,13 @@ const MealPlanSchema = new mongoose.Schema({
     type: Date, 
     required: true 
   },
-  created_by: {type: String }
+  created_by: {type: String },
+  status: {
+    type: String,
+    enum: ['DRAFT', 'PUBLISHED'],
+    default: 'DRAFT', // Mới tạo sẽ ở trạng thái nháp
+    required: true
+  }
 });
 
 module.exports = mongoose.model('MealPlan', MealPlanSchema);

@@ -9,7 +9,7 @@ const { sendApprovalEmail, sendRejectionEmail } = require("../services/email.ser
 async function getNutritionistsList(req, res) {
   try {
     const nutritionists = await Nutritionist.aggregate([
-      // Bước 1: Liên kết chéo sang bảng users
+      // Bước 1: Liên kết chéo sang bảng users — dùng pipeline để ép kiểu String → ObjectId
       {
         $lookup: {
           from: "users",          // Tên collection User trong MongoDB
@@ -59,16 +59,12 @@ async function getNutritionistsList(req, res) {
 
     return res.status(200).json({
       success: true,
-      data: formattedData
+      data: formattedData,
+      error: null,
     });
-
   } catch (error) {
-    console.error("❌ Lỗi Aggregate Nutritionist:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Lỗi hệ thống khi bốc tách danh sách chuyên gia",
-      error: error.message
-    });
+    // Delegate to global error handler — never leak internal error.message to client
+    return next(new AppError('Failed to fetch nutritionist list.', 500, 'INTERNAL_SERVER_ERROR'));
   }
 }
 
@@ -79,9 +75,9 @@ async function getNutritionistsList(req, res) {
 async function updateApprovalStatus(req, res) {
   try {
     const { id } = req.params;
-    const { approvalStatus } = req.body; 
+    const { approvalStatus } = req.body;
 
-    const validStatuses = ["pending", "approval", "reject", "PENDING", "APPROVED", "REJECTED"];
+    const validStatuses = ['pending', 'approval', 'reject', 'PENDING', 'APPROVED', 'REJECTED'];
     if (!validStatuses.includes(approvalStatus)) {
       return res.status(400).json({
         success: false,
@@ -118,12 +114,7 @@ async function updateApprovalStatus(req, res) {
       data: updatedNutritionist
     });
   } catch (error) {
-    console.error("Error in updateApprovalStatus:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Lỗi hệ thống khi cập nhật trạng thái duyệt",
-      error: error.message
-    });
+    return next(new AppError('Failed to update approval status.', 500, 'INTERNAL_SERVER_ERROR'));
   }
 }
 
