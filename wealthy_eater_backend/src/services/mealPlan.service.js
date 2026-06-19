@@ -4,6 +4,8 @@ const ConsultationContract = require("../models/ConsultationContract");
 const MealPlan = require("../models/MealPlan");
 const MealPlanItem = require("../models/MealPlanItem");
 const n8nService = require("./n8n.service");
+const User = require('../models/User'); 
+const firebaseConfig = require('../config/firebase');
 
 class MealPlanService {
   async runTemplateMatchPipeline(clientId, nutritionistId) {
@@ -230,6 +232,69 @@ class MealPlanService {
         carbs: parseFloat((nutrients.carbs * scale).toFixed(1)),
       }
     };
+  }
+
+  /**
+   * Cập nhật và lưu lại FCM Token của người dùng vào database
+   */
+  async saveUserFcmToken(userId, fcmToken) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new Error("User context not found.");
+    }
+    user.fcmToken = fcmToken;
+    await user.save();
+    return user;
+  }
+
+  /**
+   * UC-53: Cập nhật trạng thái MealPlan và kích bắn thông báo Firebase
+   */
+  async publishAndNotify(mealPlanId) {
+    const mealPlan = await MealPlan.findById(mealPlanId);
+    if (!mealPlan) {
+      const error = new Error("Meal plan not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (mealPlan.status === 'PUBLISHED') {
+      const error = new Error("Meal plan is already published");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    mealPlan.status = 'PUBLISHED';
+    await mealPlan.save();
+
+    try {
+      // Tìm khách hàng thông qua trường customerId đồng bộ với pipeline của dự án
+      const targetUserId = mealPlan.customerId || mealPlan.user_id;
+      const user = await User.findById(targetUserId);
+      
+      if (user && user.fcmToken) {
+        const message = {
+          notification: {
+            title: "🍳 Thực đơn mới đã sẵn sàng!",
+            body: `Chuyên gia dinh dưỡng đã gửi thực đơn chính thức cho bạn. Vào app xem ngay ní ơi!`
+          },
+          token: user.fcmToken
+        };
+
+        if (firebaseConfig.messaging) {
+          const response = await firebaseConfig.messaging.send(message);
+          console.log(`[Firebase FCM] Đã kích bắn thông báo thật thành công! Message ID: ${response}`);
+        } else {
+          console.log(`[Firebase Mock Sandbox] Đã giả lập bắn thông báo thành công tới User: ${targetUserId}`);
+        }
+      } else {
+        console.warn(`[Firebase FCM] Bỏ qua gửi thông báo vì không tìm thấy fcmToken hợp lệ của User: ${targetUserId}`);
+      }
+    } catch (fcmError) {
+      console.error("[Firebase FCM Error] Lỗi trong quá trình gửi tin nhắn lên thiết bị:", fcmError.message);
+    }
+
+    return mealPlan;
   }
 }
 

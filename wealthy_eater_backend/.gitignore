@@ -58,3 +58,5 @@ uploads/
 
 # Database seed manifests
 scripts/seed-manifest-*.json
+# Firebase service account key file (if used)
+firebase-key.json
