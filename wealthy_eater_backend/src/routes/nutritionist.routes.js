@@ -1,43 +1,42 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const nutritionistController = require("../controllers/nutritionist.controller");
-const { protect, nutritionistOnly } = require("../middlewares/authMiddleware");
-const {
-  uploadNutritionistCertificate,
-} = require("../middlewares/upload.middleware");
+const nutritionistController = require('../controllers/nutritionist.controller');
+const { authenticateToken, authorizeRoles } = require('../middlewares/auth');
+const { uploadNutritionistCertificate } = require('../middlewares/upload.middleware');
 
-// GET /api/nutritionists - Get list of approved nutritionists
-router.get("/", nutritionistController.getNutritionists);
+// GET /api/nutritionists — Public endpoint to list all approved nutritionists for hire
+router.get('/', nutritionistController.getNutritionists);
 
-// GET /api/nutritionists/meal-plan-requests - Get pending requests (UC-13)
+// GET /api/nutritionists/meal-plan-requests — Nutritionist: view pending meal plan requests (UC-13)
 router.get(
-  "/meal-plan-requests",
-  protect,
-  nutritionistOnly,
+  '/meal-plan-requests',
+  authenticateToken,
+  authorizeRoles('nutritionist'),
   nutritionistController.getMealPlanRequests,
 );
 
-// POST /api/nutritionists/meal-plan-requests/:id/respond - Approve/reject request (UC-13)
+// POST /api/nutritionists/meal-plan-requests/:id/respond — Nutritionist: approve/reject request (UC-13)
 router.post(
-  "/meal-plan-requests/:id/respond",
-  protect,
-  nutritionistOnly,
+  '/meal-plan-requests/:id/respond',
+  authenticateToken,
+  authorizeRoles('nutritionist'),
   nutritionistController.respondToMealPlanRequest,
 );
 
-// BE- UC-45 step 1
-// POST /api/nutritionists/register-account - Create user account first
+// BE-UC-45 step 1
+// POST /api/nutritionists/register-account — Public self-registration endpoint for nutritionist applicants.
+// This creates the base User account (role=nutritionist) before the professional profile is submitted.
 router.post(
-  "/register-account",
+  '/register-account',
   nutritionistController.createNutritionistUserAccount,
 );
 
-// BE- UC-45 register expert account
-// Requires authenticated customer account from step 1
-// POST /api/nutritionists/register - Submit nutritionist registration request
+// BE-UC-45 register expert profile
+// POST /api/nutritionists/register — Authenticated nutritionist submits their professional profile
 router.post(
-  "/register",
-  protect,
+  '/register',
+  authenticateToken,
+  authorizeRoles('nutritionist'),
   uploadNutritionistCertificate,
   nutritionistController.registerNutritionist,
 );

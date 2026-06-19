@@ -28,15 +28,32 @@ const PAYOS_CANCEL_URL =
 // ── Helper Functions ──────────────────────────────────────────────────────────
 
 /**
- * Generate a unique numeric order code for PayOS.
- * Combines timestamp with random suffix to minimize collision risk.
- * PayOS requires orderCode to be a positive integer ≤ 9007199254740991.
+ * Generate a unique PayOS order code.
+ * Uses timestamp + random suffix. Must fit in a signed 53-bit integer.
  */
 function buildOrderCode() {
-  // Use last 10 digits of timestamp + 3 random digits → max 13 digits (safe for JS number)
   const ts = Date.now() % 10_000_000_000;
   const rand = Math.floor(Math.random() * 1000);
   return ts * 1000 + rand;
+}
+
+/**
+ * Calculate the contract expiry date based on the package type.
+ * S-10: extracted from two copy-pasted blocks to a single source of truth.
+ *
+ * @param {'1_month'|'3_months'|'6_months'} packageType
+ * @returns {Date}
+ */
+function calculateContractExpiry(packageType) {
+  const expireAt = new Date();
+  if (packageType === '6_months') {
+    expireAt.setMonth(expireAt.getMonth() + 6);
+  } else if (packageType === '3_months') {
+    expireAt.setMonth(expireAt.getMonth() + 3);
+  } else {
+    expireAt.setMonth(expireAt.getMonth() + 1); // default: 1_month
+  }
+  return expireAt;
 }
 
 /**
@@ -475,21 +492,9 @@ class UserConsultationService {
         transaction.consultation_contracts_id_fk,
       ).session(session);
 
-      if (contract && contract.status === "pending_payment") {
-        contract.status = "active";
-
-        // Set expire_at based on package_type safely without mutating `now`
-        const now = new Date();
-        const expireAt = new Date(now.getTime());
-        if (contract.package_type === "6_months") {
-          expireAt.setMonth(expireAt.getMonth() + 6);
-        } else if (contract.package_type === "3_months") {
-          expireAt.setMonth(expireAt.getMonth() + 3);
-        } else {
-          expireAt.setMonth(expireAt.getMonth() + 1);
-        }
-        contract.expire_at = expireAt;
-
+      if (contract && contract.status === 'pending_payment') {
+        contract.status = 'active';
+        contract.expire_at = calculateContractExpiry(contract.package_type);
         await contract.save({ session });
       }
 
@@ -603,19 +608,11 @@ class UserConsultationService {
         transaction.consultation_contracts_id_fk,
       ).session(session);
 
-      if (contract && contract.status === "pending_payment") {
-        contract.status = "active";
-        const expireAt = new Date();
-        if (contract.package_type === "6_months")
-          expireAt.setMonth(expireAt.getMonth() + 6);
-        else if (contract.package_type === "3_months")
-          expireAt.setMonth(expireAt.getMonth() + 3);
-        else expireAt.setMonth(expireAt.getMonth() + 1);
-        contract.expire_at = expireAt;
+      if (contract && contract.status === 'pending_payment') {
+        contract.status = 'active';
+        contract.expire_at = calculateContractExpiry(contract.package_type);
         await contract.save({ session });
-        console.log(
-          `[VerifySync] Contract ${contract._id} activated successfully.`,
-        );
+        console.log(`[VerifySync] Contract ${contract._id} activated successfully.`);
       }
 
       await session.commitTransaction();

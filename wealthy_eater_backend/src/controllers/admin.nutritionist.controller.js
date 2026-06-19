@@ -1,86 +1,86 @@
 const Nutritionist = require("../models/Nutritionist");
 const User = require("../models/User");
 const { sendApprovalEmail, sendRejectionEmail } = require("../services/email.service");
+const AppError = require('../utils/AppError');
 
-// 1. LẤY DANH SÁCH CHUYÊN GIA (Sử dụng Aggregate $lookup để né lỗi lệch kiểu dữ liệu String)
-async function getNutritionistsList(req, res) {
+/**
+ * Escape special regex characters to prevent ReDoS.
+ * Shared with admin.recipe.controller.js.
+ */
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// 1. GET NUTRITIONIST LIST (Aggregate $lookup with pipeline to handle String→ObjectId type mismatch)
+async function getNutritionistsList(req, res, next) {
   try {
     const nutritionists = await Nutritionist.aggregate([
-      // Bước 1: Liên kết chéo sang bảng users
+      // Bước 1: Liên kết chéo sang bảng users — dùng pipeline để ép kiểu String → ObjectId
       {
         $lookup: {
-          from: "users",          // Tên collection User trong MongoDB của bác
-          localField: "user_id",   // Trường liên kết ở bảng Nutritionist (đang dạng String)
-          foreignField: "_id",    // Trường khóa chính ở bảng User
-          as: "user_info"
+          from: 'users',
+          let: { userId: '$user_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: [
+                    '$_id',
+                    { $toObjectId: '$$userId' }
+                  ]
+                }
+              }
+            }
+          ],
+          as: 'user_info'
         }
       },
       // Bước 2: Bóc tách mảng user_info thành một object phẳng
       {
         $unwind: {
-          path: "$user_info",
-          preserveNullAndEmptyArrays: true // Đảm bảo nếu user bị xóa thì vẫn hiển thị hồ sơ chuyên gia
+          path: '$user_info',
+          preserveNullAndEmptyArrays: true
         }
       },
       // Bước 3: Sắp xếp hồ sơ mới nhất lên đầu
-      {
-        $sort: { createdAt: -1 }
-      }
+      { $sort: { createdAt: -1 } }
     ]);
 
-    // Nếu database trống, trả về mảng rỗng an toàn
-    if (!nutritionists || nutritionists.length === 0) {
-      return res.status(200).json({
-        success: true,
-        data: []
-      });
-    }
-
-    // Định dạng lại cấu trúc dữ liệu mapping mượt mà với Frontend
-    const formattedData = nutritionists.map(item => {
-      return {
-        id: item._id,
-        email: item.user_info?.email || "N/A (Tài khoản ẩn/đã xóa)",
-        userStatus: item.user_info?.status || "inactive", // Trạng thái block/active của tài khoản User gốc
-        fullName: item.full_name || "Chưa cập nhật họ tên",
-        specialization: item.specialization || "Dinh dưỡng tổng quát",
-        professionalTitle: item.professional_title || "Chuyên gia",
-        licenseNumber: item.license_number || "Chưa có số giấy phép",
-        certificationUrl: item.certification_url || "",
-        serviceFee: item.service_fee || 0,
-        approvalStatus: item.approval_status || "PENDING",
-        averageRating: item.average_rating || 5.0,
-        createdAt: item.createdAt
-      };
-    });
+    const formattedData = nutritionists.map(item => ({
+      id: item._id,
+      email: item.user_info?.email || 'N/A',
+      userStatus: item.user_info?.status || 'inactive',
+      fullName: item.full_name || 'Chưa cập nhật họ tên',
+      specialization: item.specialization || 'Dinh dưỡng tổng quát',
+      professionalTitle: item.professional_title || 'Chuyên gia',
+      licenseNumber: item.license_number || 'Chưa có số giấy phép',
+      certificationUrl: item.certification_url || '',
+      serviceFee: item.service_fee || 0,
+      approvalStatus: item.approval_status || 'PENDING',
+      averageRating: item.average_rating || 0,
+      createdAt: item.createdAt,
+    }));
 
     return res.status(200).json({
       success: true,
-      data: formattedData
+      data: formattedData,
+      error: null,
     });
-
   } catch (error) {
-    console.error("❌ Lỗi Aggregate Nutritionist:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Lỗi hệ thống khi bốc tách danh sách chuyên gia",
-      error: error.message
-    });
+    // Delegate to global error handler — never leak internal error.message to client
+    return next(new AppError('Failed to fetch nutritionist list.', 500, 'INTERNAL_SERVER_ERROR'));
   }
 }
 
-// 2. API DUYỆT HỒ SƠ CHUYÊN GIA (APPROVED / REJECTED)
-async function updateApprovalStatus(req, res) {
+// 2. UPDATE APPROVAL STATUS (APPROVED / REJECTED)
+async function updateApprovalStatus(req, res, next) {
   try {
     const { id } = req.params;
-    const { approvalStatus } = req.body; 
+    const { approvalStatus } = req.body;
 
-    const validStatuses = ["pending", "approval", "reject", "PENDING", "APPROVED", "REJECTED"];
+    const validStatuses = ['pending', 'approval', 'reject', 'PENDING', 'APPROVED', 'REJECTED'];
     if (!validStatuses.includes(approvalStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: "Trạng thái duyệt hồ sơ không hợp lệ"
-      });
+      return next(new AppError('Trạng thái duyệt hồ sơ không hợp lệ.', 400, 'VALIDATION_ERROR'));
     }
 
     const updatedNutritionist = await Nutritionist.findByIdAndUpdate(
@@ -90,24 +90,17 @@ async function updateApprovalStatus(req, res) {
     );
 
     if (!updatedNutritionist) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy hồ sơ chuyên gia dinh dưỡng"
-      });
+      return next(new AppError('Không tìm thấy hồ sơ chuyên gia dinh dưỡng.', 404, 'NOT_FOUND'));
     }
 
     return res.status(200).json({
       success: true,
       message: `Đã cập nhật trạng thái duyệt thành: ${approvalStatus}`,
-      data: updatedNutritionist
+      data: updatedNutritionist,
+      error: null,
     });
   } catch (error) {
-    console.error("Error in updateApprovalStatus:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Lỗi hệ thống khi cập nhật trạng thái duyệt",
-      error: error.message
-    });
+    return next(new AppError('Failed to update approval status.', 500, 'INTERNAL_SERVER_ERROR'));
   }
 }
 

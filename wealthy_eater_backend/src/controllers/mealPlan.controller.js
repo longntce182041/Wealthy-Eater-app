@@ -66,4 +66,110 @@ const matchTemplateEndpoint = async (req, res) => {
   }
 };
 
-module.exports = { matchTemplateEndpoint };
+const getMyMealPlanEndpoint = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const plan = await mealPlanService.getMyMealPlan(userId);
+    return res.status(200).json({
+      success: true,
+      data: plan
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+const updateItemWeightEndpoint = async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { weight } = req.body;
+
+    if (weight === undefined || isNaN(weight) || weight <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid weight value"
+      });
+    }
+
+    const updatedItem = await mealPlanService.updateItemWeight(itemId, Number(weight));
+    return res.status(200).json({
+      success: true,
+      data: updatedItem
+    });
+  } catch (error) {
+    if (error.message === "MEAL_PLAN_ITEM_NOT_FOUND") {
+      return res.status(404).json({
+        success: false,
+        error: "Meal plan item not found"
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * UC-53 - Publish Final Meal Plan
+ */
+exports.publishMealPlan = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Gọi service xử lý chuyển đổi trạng thái và gửi thông báo
+    const updatedMealPlan = await mealPlanService.publishAndNotify(id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Meal plan published successfully and notification pipeline processed.",
+      data: updatedMealPlan
+    });
+  } catch (error) {
+    console.error("Error in publishMealPlan controller:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Internal Server Error"
+    });
+  }
+};
+
+/**
+ * API Endpoint: Cập nhật FCM Token của người dùng phục vụ bắn thông báo thông suốt
+ */
+const updateFcmTokenEndpoint = async (req, res) => {
+  try {
+    const userId = req.user.id; // Lấy ra từ middleware protect giống getMyMealPlan
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing fcmToken field in request body."
+      });
+    }
+
+    await mealPlanService.saveUserFcmToken(userId, fcmToken);
+
+    return res.status(200).json({
+      success: true,
+      message: "User device FCM token synchronized and saved successfully."
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+module.exports = {
+  matchTemplateEndpoint,
+  getMyMealPlanEndpoint,
+  updateItemWeightEndpoint,
+  publishMealPlan: exports.publishMealPlan,
+  updateFcmTokenEndpoint
+};

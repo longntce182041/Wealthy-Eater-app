@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier, debugPrint, defaultTargetPlatform, TargetPlatform;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -109,6 +109,13 @@ class AuthProvider with ChangeNotifier {
   Future<void> googleSignIn() async {
     _setLoading();
     try {
+      if (!kIsWeb &&
+          defaultTargetPlatform != TargetPlatform.android &&
+          defaultTargetPlatform != TargetPlatform.iOS) {
+        _setError('Google Sign-In is only supported on Android, iOS, and Web. Desktop support is not configured.');
+        return;
+      }
+
       final GoogleSignIn googleSignIn = kIsWeb
           ? GoogleSignIn(clientId: googleClientId)
           : GoogleSignIn();
