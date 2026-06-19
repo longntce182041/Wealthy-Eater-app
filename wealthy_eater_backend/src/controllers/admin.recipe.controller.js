@@ -452,13 +452,21 @@ async function searchAndFilterRecipes(req, res, next) {
     const pageNum = Number(page) || 1, limitNum = Number(limit) || 10, skipNum = (pageNum - 1) * limitNum;
 
     const pipeline = [], matchStage = { status: 'published' };
-    if (search) matchStage.$or = [{ name: { $regex: search, $options: 'i' } }, { description: { $regex: search, $options: 'i' } }];
+    if (search) {
+      const safeSearch = escapeRegex(String(search).trim());
+      matchStage.$or = [
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { description: { $regex: safeSearch, $options: 'i' } },
+      ];
+    }
     if (minTime || maxTime) {
       matchStage.cooking_time = {};
       if (minTime) matchStage.cooking_time.$gte = Number(minTime);
       if (maxTime) matchStage.cooking_time.$lte = Number(maxTime);
     }
-    if (diet_trend) matchStage.diet_trends = { $regex: diet_trend, $options: 'i' };
+    if (diet_trend) {
+      matchStage.diet_trends = { $regex: escapeRegex(String(diet_trend).trim()), $options: 'i' };
+    }
 
     pipeline.push({ $match: matchStage });
     pipeline.push({ $lookup: { from: 'recipenutritions', localField: '_id', foreignField: 'recipe_id', as: 'nutrition_info' } });

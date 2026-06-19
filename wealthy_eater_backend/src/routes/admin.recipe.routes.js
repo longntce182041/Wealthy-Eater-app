@@ -6,28 +6,21 @@
 const express = require('express');
 const router = express.Router();
 
-// Import Controller chính xác của bác
 const AdminRecipeController = require('../controllers/admin.recipe.controller');
-const { authenticateToken } = require('../middlewares/auth');
+const { authenticateToken, authorizeRoles } = require('../middlewares/auth');
 const validateObjectId = require('../middlewares/validateObjectId');
 
-// 📥 CẤU HÌNH TRUNG GIAN ĐỂ HỨNG FILE EXCEL TỪ FRONTEND
+// File upload middleware for Excel import
 const multer = require('multer');
-const upload = multer({ 
-  storage: multer.memoryStorage(), // Lưu tạm file vào bộ nhớ đệm RAM để xử lý nhanh
-  limits: { fileSize: 10 * 1024 * 1024 } // Giới hạn tối đa file excel 10MB
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap
 });
 
-/**
- * Middleware kiểm tra xem người dùng có phải là admin không
- */
-function checkAdminRole(req, res, next) {
-  next();
-}
-
-// Áp dụng xác thực (authentication) cho toàn bộ các API bên dưới
+// Apply JWT authentication + admin-only authorization to ALL recipe admin routes.
+// Replaced the previous no-op checkAdminRole function (fix C-02).
 router.use(authenticateToken);
-router.use(checkAdminRole);
+router.use(authorizeRoles('admin'));
 
 /**
  * UC-71: GET /api/admin/recipes

@@ -80,7 +80,7 @@ class AuthService {
     }
 
     const cleanId = identifier.trim();
-    const emailRegex = /^[^@]+@[^@]+\.[^@]+/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isEmail = emailRegex.test(cleanId);
 
     let user;
@@ -114,22 +114,6 @@ class AuthService {
       throw new AppError(`Access denied: account is not a ${requiredRole}`, 403);
     }
 
-    if (user.role === 'nutritionist') {
-      const Nutritionist = require('../models/Nutritionist');
-      const existing = await Nutritionist.findOne({ user_id: user._id.toString() }).exec();
-      if (!existing) {
-        await Nutritionist.create({
-          user_id: user._id.toString(),
-          full_name: user.email ? user.email.split('@')[0] : (user.phone ? user.phone : 'Nutritionist'),
-          specialization: 'Nutritionist',
-          professional_title: 'Nutritionist',
-          service_fee: 100000,
-          approval_status: 'approval',
-          average_rating: 5.0,
-        });
-      }
-    }
-
     return issueTokens(user);
   }
 
@@ -159,19 +143,25 @@ class AuthService {
       throw new AppError('Google account does not have an email address', 400);
     }
 
-    let user = await UserRepository.findByEmail(email.toLowerCase());
+    // C-09: Atomic find-or-create to eliminate the TOCTOU race condition.
+    // Two simultaneous Google logins for the same new email would previously both
+    // find user===null and race to create, causing an E11000 duplicate key error.
+    // $setOnInsert ensures fields are only written when a new document is inserted.
+    const User = require('../models/User');
+    let user = await User.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      {
+        $setOnInsert: {
+          email: email.toLowerCase(),
+          role: 'customer',
+          is_active: true,
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).exec();
 
-    if (!user) {
-      // Auto-register with only the fields allowed by schema
-      user = await UserRepository.create({
-        email: email.toLowerCase(),
-        role: 'customer',
-        // password_hash left null — Google-only account
-      });
-    } else {
-      if (user.role !== 'customer') {
-        throw new AppError('Access denied: Google login is only available for customer accounts', 403);
-      }
+    if (user.role !== 'customer') {
+      throw new AppError('Access denied: Google login is only available for customer accounts', 403);
     }
 
     return issueTokens(user);
@@ -214,7 +204,7 @@ class AuthService {
       throw new AppError('Email is required', 400, 'VALIDATION_ERROR');
     }
     const cleanEmail = email.toLowerCase().trim();
-    const emailRegex = /^[^@]+@[^@]+\.[^@]+/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       throw new AppError('Invalid email format', 400, 'VALIDATION_ERROR');
     }

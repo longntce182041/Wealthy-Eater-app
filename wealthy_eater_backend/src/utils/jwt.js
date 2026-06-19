@@ -2,14 +2,18 @@ const jwt = require('jsonwebtoken');
 
 // Single source of truth for JWT secrets.
 // Both jwt.js utilities AND auth.js middleware import from here.
-const JWT_ACCESS_SECRET =
-  process.env.JWT_ACCESS_SECRET ||
-  process.env.JWT_SECRET ||
-  'please-set-JWT_ACCESS_SECRET-in-.env';
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
-const JWT_REFRESH_SECRET =
-  process.env.JWT_REFRESH_SECRET ||
-  'please-set-JWT_REFRESH_SECRET-in-.env';
+// C-07: Fail fast at startup if secrets are not configured.
+// This prevents the server from silently using a known-public fallback secret
+// in a misconfigured production deployment.
+if (!JWT_ACCESS_SECRET || !JWT_REFRESH_SECRET) {
+  throw new Error(
+    'FATAL: JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be set in environment variables. ' +
+    'Server startup aborted to prevent insecure operation.'
+  );
+}
 
 const ACCESS_TOKEN_EXPIRY  = process.env.JWT_ACCESS_EXPIRATION  || '15m';
 const REFRESH_TOKEN_EXPIRY = process.env.JWT_REFRESH_EXPIRATION || '7d';
