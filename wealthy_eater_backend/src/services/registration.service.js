@@ -6,7 +6,7 @@ const AppError = require('../utils/AppError');
 const { signAccessToken, signRefreshToken } = require('../utils/jwt');
 const firebaseConfig = require('../config/firebase');
 
-const apiKey = firebaseConfig.clientConfig?.apiKey || "AIzaSyD2_O0KaJRWhygiF_Op15E3-vm0kQTQR4E";
+const apiKey = firebaseConfig.clientConfig?.apiKey || process.env.FIREBASE_API_KEY;
 
 const OTP_TTL_MS = 3 * 60 * 1000; // 3 minutes as requested
 const RESEND_WAIT_MS = 60 * 1000; // 60 seconds

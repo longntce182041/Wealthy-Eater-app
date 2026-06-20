@@ -28,13 +28,13 @@ try {
 }
 
 const clientConfig = {
-  apiKey: "AIzaSyD2_O0KaJRWhygiF_Op15E3-vm0kQTQR4E",
-  authDomain: "wealth-eater-app.firebaseapp.com",
-  projectId: "wealth-eater-app",
-  storageBucket: "wealth-eater-app.firebasestorage.app",
-  messagingSenderId: "966206276554",
-  appId: "1:966206276554:web:035f2ed2058e0d4343c533",
-  measurementId: "G-QQS9JR8GV1"
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID,
+  measurementId: process.env.FIREBASE_MEASUREMENT_ID
 };
 
 module.exports = {
