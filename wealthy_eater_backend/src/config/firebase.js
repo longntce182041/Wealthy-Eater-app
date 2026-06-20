@@ -27,7 +27,18 @@ try {
   console.error('[Firebase Init Error] Thất bại khi khởi tạo cấu hình:', err.message);
 }
 
+const clientConfig = {
+  apiKey: "AIzaSyD2_O0KaJRWhygiF_Op15E3-vm0kQTQR4E",
+  authDomain: "wealth-eater-app.firebaseapp.com",
+  projectId: "wealth-eater-app",
+  storageBucket: "wealth-eater-app.firebasestorage.app",
+  messagingSenderId: "966206276554",
+  appId: "1:966206276554:web:035f2ed2058e0d4343c533",
+  measurementId: "G-QQS9JR8GV1"
+};
+
 module.exports = {
   admin,
-  messaging: firebaseMessaging
+  messaging: firebaseMessaging,
+  clientConfig
 };
