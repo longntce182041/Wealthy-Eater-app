@@ -6,13 +6,14 @@ import '../providers/auth_provider.dart';
 import '../providers/shopping_list_provider.dart';
 import '../providers/notification_provider.dart';
 import 'notification_history_screen.dart';
-import '../widgets/coming_soon_tab.dart';
 import 'nutritionists_tab.dart';
 import 'recipe_likes_tab.dart';
 import 'recipe_list_view.dart';
 import 'recipe_my_reviews_tab.dart';
 import 'shopping_list_tab.dart';
 import 'dashboard_home_tab.dart';
+import 'customer_profile_tab.dart';
+import 'meal_plans_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserEntity? user;
@@ -112,23 +113,13 @@ class _HomeScreenState extends State<HomeScreen> {
             const _RecipeNavTab(),
 
             // ── 2: Meal Plans ──────────────────────────────────────────
-            const ComingSoonTab(
-              icon: Icons.event_note_outlined,
-              title: 'Meal Plans',
-              description:
-                  'AI-powered meal planning and nutrition workflows are coming soon.',
-            ),
+            const MealPlansTab(),
 
             // ── 3: Nutritionists ──────────────────────────────────────
             const NutritionistsTab(),
 
             // ── 4: Profile ─────────────────────────────────────────────
-            const ComingSoonTab(
-              icon: Icons.person_outline,
-              title: 'Profile',
-              description:
-                  'Manage your profile, preferences, and favorite recipes.',
-            ),
+            const CustomerProfileTab(),
           ],
         ),
       ),

@@ -15,9 +15,9 @@ class UserConsultationController {
    * Creates a PayOS checkout link for hiring a nutritionist.
    * Body: { nutritionist_id: String }
    */
-  async hireNutritionist(req, res) {
+  async hireNutritionist(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user.sub || req.user.id;
       const { nutritionist_id, package_type = '1_month' } = req.body;
 
       const checkoutData = await consultationService.createHireCheckout(
@@ -32,9 +32,14 @@ class UserConsultationController {
         error: null
       });
     } catch (error) {
-      console.error('UserConsultationController.hireNutritionist Error:', error.message);
       const statusCode = error.statusCode || error.status || 500;
-      return next(new AppError(error.message || 'Failed to create hire checkout.', statusCode, statusCode === 409 ? 'DUPLICATE_CONTRACT' :                statusCode === 404 ? 'NUTRITIONIST_NOT_FOUND' :                statusCode === 400 ? 'VALIDATION_ERROR' :                statusCode === 502 ? 'PAYMENT_GATEWAY_ERROR' :                'INTERNAL_SERVER_ERROR'));
+      const errorCode =
+        statusCode === 409 ? 'DUPLICATE_CONTRACT' :
+        statusCode === 404 ? 'NUTRITIONIST_NOT_FOUND' :
+        statusCode === 400 ? 'VALIDATION_ERROR' :
+        statusCode === 502 ? 'PAYMENT_GATEWAY_ERROR' :
+        'INTERNAL_SERVER_ERROR';
+      return next(new AppError(error.message || 'Failed to create hire checkout.', statusCode, errorCode));
     }
   }
 
@@ -43,9 +48,9 @@ class UserConsultationController {
    *
    * Returns a single transaction with full contract and nutritionist details.
    */
-  async getTransactionDetail(req, res) {
+  async getTransactionDetail(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user.sub || req.user.id;
       const transactionId = req.params.id;
 
       const transaction = await consultationService.getTransactionDetail(userId, transactionId);
@@ -56,9 +61,9 @@ class UserConsultationController {
         error: null
       });
     } catch (error) {
-      console.error('UserConsultationController.getTransactionDetail Error:', error.message);
       const statusCode = error.statusCode || error.status || 500;
-      return next(new AppError(error.message || 'Failed to fetch transaction detail.', statusCode, statusCode === 404 ? 'TRANSACTION_NOT_FOUND' : 'INTERNAL_SERVER_ERROR'));
+      const errorCode = statusCode === 404 ? 'TRANSACTION_NOT_FOUND' : 'INTERNAL_SERVER_ERROR';
+      return next(new AppError(error.message || 'Failed to fetch transaction detail.', statusCode, errorCode));
     }
   }
 
@@ -67,19 +72,18 @@ class UserConsultationController {
    *
    * Returns the user's currently active consultation contract (if any).
    */
-  async getActiveContract(req, res) {
+  async getActiveContract(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user.sub || req.user.id;
       const activeContract = await consultationService.getActiveContract(userId);
 
       return res.status(200).json({
         success: true,
-        data: activeContract, // Can be null if no active contract
+        data: activeContract,
         error: null
       });
     } catch (error) {
-      console.error('UserConsultationController.getActiveContract Error:', error.message);
-      return next(new AppError('Failed to fetch active contract.', 500)); // TODO: pass errorCode INTERNAL_SERVER_ERROR
+      return next(new AppError('Failed to fetch active contract.', 500, 'INTERNAL_SERVER_ERROR'));
     }
   }
 
@@ -87,26 +91,23 @@ class UserConsultationController {
    * GET /api/user/consultations/payos/urls
    *
    * Returns configured PayOS return and cancel URLs for WebView interception.
+   * Reads from config to keep env access out of the controller.
    */
-  async getPayOSUrls(req, res) {
+  async getPayOSUrls(req, res, next) {
     try {
       const returnUrl = process.env.PAYOS_RETURN_URL;
       const cancelUrl = process.env.PAYOS_CANCEL_URL;
 
       if (!returnUrl || !cancelUrl) {
-        throw new Error('Missing PAYOS_RETURN_URL or PAYOS_CANCEL_URL in environment');
+        return next(new AppError('PayOS URL configuration is missing on the server.', 500, 'CONFIG_ERROR'));
       }
 
       return res.status(200).json({
         success: true,
-        data: {
-          returnUrl,
-          cancelUrl
-        },
+        data: { returnUrl, cancelUrl },
         error: null
       });
     } catch (error) {
-      console.error('UserConsultationController.getPayOSUrls Error:', error.message);
       return next(new AppError(error.message || 'Failed to fetch PayOS URLs.', 500, 'INTERNAL_SERVER_ERROR'));
     }
   }
@@ -117,7 +118,7 @@ class UserConsultationController {
    * PayOS webhook callback — unauthenticated, verified via HMAC signature.
    * Must always return 200 to PayOS to prevent retries (unless payload is invalid).
    */
-  async handlePayOSWebhook(req, res) {
+  async handlePayOSWebhook(req, res, next) {
     try {
       let payload = req.body;
 
@@ -135,8 +136,7 @@ class UserConsultationController {
       });
     } catch (error) {
       console.error('UserConsultationController.handlePayOSWebhook Error:', error.message);
-
-      // Still return 200 for known orders to prevent PayOS retries on non-retryable errors
+      // Still return 200 for non-critical errors to prevent PayOS retry storms
       const statusCode = error.statusCode || 500;
       return next(new AppError(error.message || 'Webhook processing failed.', statusCode >= 500 ? 500 : statusCode, 'WEBHOOK_PROCESSING_ERROR'));
     }
@@ -145,12 +145,12 @@ class UserConsultationController {
   /**
    * ALL /api/webhooks/payos/cancel
    *
-   * Instant sync for when a user clicks cancel on the PayOS page
+   * Instant sync for when a user clicks cancel on the PayOS page.
    */
   async handlePayOSCancel(req, res, next) {
     const orderCode = req.query.orderCode || req.body?.orderCode;
     if (orderCode) {
-      // Fire and forget to update DB instantly
+      // Fire-and-forget to update DB instantly; never block the redirect
       consultationService.handlePayOSCancel(orderCode).catch(err => {
         console.error('handlePayOSCancel background error:', err.message);
       });
@@ -164,11 +164,11 @@ class UserConsultationController {
    * Manual fallback to verify payment status synchronously with PayOS
    * when local webhooks are blocked.
    */
-  async verifyPayment(req, res) {
+  async verifyPayment(req, res, next) {
     try {
       const { order_code } = req.body;
       if (!order_code) {
-        throw new Error('order_code is required');
+        return next(new AppError('order_code is required', 400, 'VALIDATION_ERROR'));
       }
 
       const result = await consultationService.verifyPaymentSync(order_code);
@@ -179,8 +179,7 @@ class UserConsultationController {
         error: null
       });
     } catch (error) {
-      console.error('UserConsultationController.verifyPayment Error:', error.message);
-      return next(new AppError(error.message || 'Failed to verify payment manually.', 400, 'VERIFICATION_ERROR'));
+      return next(new AppError(error.message || 'Failed to verify payment manually.', error.statusCode || 400, 'VERIFICATION_ERROR'));
     }
   }
 
@@ -189,7 +188,7 @@ class UserConsultationController {
    */
   async requestMealPlan(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user.sub || req.user.id;
       const request = await consultationService.requestMealPlan(userId);
 
       return res.status(201).json({
@@ -198,7 +197,6 @@ class UserConsultationController {
         error: null
       });
     } catch (error) {
-      console.error('UserConsultationController.requestMealPlan Error:', error.message);
       const statusCode = error.statusCode || error.status || 500;
       return next(new AppError(error.message || 'Failed to submit meal plan request.', statusCode, 'MEAL_PLAN_REQUEST_ERROR'));
     }
@@ -209,7 +207,7 @@ class UserConsultationController {
    */
   async getMealPlanRequestStatus(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user.sub || req.user.id;
       const statusData = await consultationService.getMealPlanRequestStatus(userId);
 
       return res.status(200).json({
@@ -218,7 +216,6 @@ class UserConsultationController {
         error: null
       });
     } catch (error) {
-      console.error('UserConsultationController.getMealPlanRequestStatus Error:', error.message);
       const statusCode = error.statusCode || error.status || 500;
       return next(new AppError(error.message || 'Failed to get meal plan request status.', statusCode, 'MEAL_PLAN_REQUEST_STATUS_ERROR'));
     }

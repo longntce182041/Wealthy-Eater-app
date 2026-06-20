@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/nutritionist_model.dart';
@@ -345,17 +347,61 @@ class _HireConfirmationSheetState extends State<_HireConfirmationSheet> {
       
       navigator.pop(); // Close bottom sheet — widget becomes unmounted after this!
 
-      // Navigate to payment checkout screen.
-      // NOTE: We do NOT check `mounted` after this push because the bottom sheet
-      // widget is already unmounted (popped above). We use the captured
-      // `navigator`, `scaffoldMessenger`, and `provider` refs instead.
-      final paymentCompleted = await navigator.push<bool>(
-        MaterialPageRoute(
-          builder: (_) => PaymentCheckoutScreen(
-            checkoutUrl: result.checkoutUrl,
+      final isDesktopOrWeb = kIsWeb ||
+          (defaultTargetPlatform != TargetPlatform.android &&
+           defaultTargetPlatform != TargetPlatform.iOS);
+
+      bool paymentCompleted = false;
+
+      if (isDesktopOrWeb) {
+        final uri = Uri.parse(result.checkoutUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          
+          final contextForDialog = navigator.context;
+          if (!contextForDialog.mounted) return;
+          final verify = await showDialog<bool>(
+            context: contextForDialog,
+            barrierDismissible: false,
+            builder: (dialogCtx) => AlertDialog(
+              title: const Text('Payment Verification'),
+              content: const Text(
+                'We have opened the payment gateway in your browser. '
+                'Please complete the payment there.\n\n'
+                'Once you have completed the transaction, click "Verify" to activate your contract.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogCtx, true),
+                  child: const Text('Verify Payment'),
+                ),
+              ],
+            ),
+          );
+          paymentCompleted = verify ?? false;
+        } else {
+          scaffoldMessenger.showSnackBar(
+            const SnackBar(
+              content: Text('Could not open the payment checkout link.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } else {
+        // Mobile flow: embedded webview
+        final completed = await navigator.push<bool>(
+          MaterialPageRoute(
+            builder: (_) => PaymentCheckoutScreen(
+              checkoutUrl: result.checkoutUrl,
+            ),
           ),
-        ),
-      );
+        );
+        paymentCompleted = completed ?? false;
+      }
 
       // ⚠️ Do NOT use `if (!mounted) return` here — widget is unmounted after pop()
       // Instead use captured refs: navigator, scaffoldMessenger, provider.

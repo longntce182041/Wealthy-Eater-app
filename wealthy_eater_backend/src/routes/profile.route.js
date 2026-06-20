@@ -15,4 +15,7 @@ router.post('/weight', authenticateToken, ProfileController.logWeight);
 // GET /api/profile/weight-history
 router.get('/weight-history', authenticateToken, ProfileController.getWeightHistory);
 
+// GET /api/profile/setup-metadata
+router.get('/setup-metadata', authenticateToken, ProfileController.getSetupMetadata);
+
 module.exports = router;

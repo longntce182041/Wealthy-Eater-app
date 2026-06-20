@@ -20,4 +20,10 @@ router.post('/refresh', AuthController.refresh);
 // GET  /api/auth/me             — get current user profile (requires auth)
 router.get('/me', authenticateToken, AuthController.getMe);
 
+// POST /api/auth/change-password — change password (requires auth)
+router.post('/change-password', authenticateToken, AuthController.changePassword);
+
+// POST /api/auth/link-email — link email to phone registered account (requires auth)
+router.post('/link-email', authenticateToken, AuthController.linkEmail);
+
 module.exports = router;

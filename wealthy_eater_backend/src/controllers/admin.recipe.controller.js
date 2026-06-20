@@ -319,6 +319,7 @@ async function addRecipe(req, res, next) {
     await recipe.save();
 
     let savedNutrition = { calories: 0, protein: 0, fat: 0, carbs: 0 };
+    let enrichedIngredients = []; // Mảng chứa dữ liệu nguyên liệu đầy đủ để trả về Frontend
 
     if (ingredients && Array.isArray(ingredients) && ingredients.length > 0) {
       const processed = await processRecipeIngredients(recipe._id, ingredients);
@@ -326,6 +327,18 @@ async function addRecipe(req, res, next) {
         await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
         const nutritionDoc = await RecipeNutrition.create({ recipe_id: recipe._id, ...processed.nutrition });
         savedNutrition = nutritionDoc.toObject();
+        
+        // Lấy thông tin tên nguyên liệu để trả về đồng bộ
+        const ingIds = processed.recipeIngredientDocs.map(i => i.ingredient_id);
+        const ingsData = await Ingredient.find({ _id: { $in: ingIds } }).lean();
+        const ingMap = {};
+        ingsData.forEach(d => { ingMap[d._id.toString()] = d; });
+        
+        enrichedIngredients = processed.recipeIngredientDocs.map(item => ({
+          ...item,
+          name: ingMap[item.ingredient_id]?.name || "Nguyên liệu ẩn",
+          unit: item.unit || ingMap[item.ingredient_id]?.unit || "g"
+        }));
       }
     } else {
       await RecipeNutrition.create({ recipe_id: recipe._id, calories: 0, protein: 0, fat: 0, carbs: 0 });
@@ -384,6 +397,7 @@ async function updateRecipe(req, res, next) {
     await recipe.save();
 
     let savedNutrition = { calories: 0, protein: 0, fat: 0, carbs: 0 };
+    let enrichedIngredients = [];
 
     if (ingredients && Array.isArray(ingredients)) {
       await RecipeIngredient.deleteMany({ recipe_id: recipeId });
@@ -392,7 +406,18 @@ async function updateRecipe(req, res, next) {
         if (processed.recipeIngredientDocs.length > 0) {
           await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
           const nutDoc = await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { ...processed.nutrition }, { upsert: true, new: true });
-          if (nutDoc) savedNutrition = nutDoc;
+          if (nutDoc) savedNutrition = nutDoc.toObject();
+
+          const ingIds = processed.recipeIngredientDocs.map(i => i.ingredient_id);
+          const ingsData = await Ingredient.find({ _id: { $in: ingIds } }).lean();
+          const ingMap = {};
+          ingsData.forEach(d => { ingMap[d._id.toString()] = d; });
+          
+          enrichedIngredients = processed.recipeIngredientDocs.map(item => ({
+            ...item,
+            name: ingMap[item.ingredient_id]?.name || "Nguyên liệu ẩn",
+            unit: item.unit || ingMap[item.ingredient_id]?.unit || "g"
+          }));
         }
       } else {
         await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { calories: 0, protein: 0, fat: 0, carbs: 0 }, { upsert: true });
@@ -448,13 +473,21 @@ async function searchAndFilterRecipes(req, res, next) {
     const pageNum = Number(page) || 1, limitNum = Number(limit) || 10, skipNum = (pageNum - 1) * limitNum;
 
     const pipeline = [], matchStage = { status: 'published' };
-    if (search) matchStage.$or = [{ name: { $regex: search, $options: 'i' } }, { description: { $regex: search, $options: 'i' } }];
+    if (search) {
+      const safeSearch = escapeRegex(String(search).trim());
+      matchStage.$or = [
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { description: { $regex: safeSearch, $options: 'i' } },
+      ];
+    }
     if (minTime || maxTime) {
       matchStage.cooking_time = {};
       if (minTime) matchStage.cooking_time.$gte = Number(minTime);
       if (maxTime) matchStage.cooking_time.$lte = Number(maxTime);
     }
-    if (diet_trend) matchStage.diet_trends = { $regex: diet_trend, $options: 'i' };
+    if (diet_trend) {
+      matchStage.diet_trends = { $regex: escapeRegex(String(diet_trend).trim()), $options: 'i' };
+    }
 
     pipeline.push({ $match: matchStage });
     pipeline.push({ $lookup: { from: 'recipenutritions', localField: '_id', foreignField: 'recipe_id', as: 'nutrition_info' } });

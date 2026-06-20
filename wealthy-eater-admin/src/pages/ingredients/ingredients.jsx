@@ -1,36 +1,50 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import apiClient from '../../services/api';
-import { Trash2, Edit, Plus, X, Image as ImageIcon, Search, ChevronLeft, ChevronRight, FileUp, PackageSearch } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { Trash2, Edit, Plus, X, Image as ImageIcon, Search, ChevronLeft, ChevronRight, FileUp, PackageSearch, UploadCloud } from 'lucide-react';
+
+// 🎯 ĐỔI SANG THƯ VIỆN HOT TOAST Ở ĐÂY
+import { toast } from 'react-hot-toast'; 
+
 import { DataTable, DataTableRow, DataTableCell } from '../../components/ui/DataTable';
 import { AdminButton } from '../../components/ui/AdminButton';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { EmptyState } from '../../components/ui/EmptyState';
 
+// 🎯 ĐỊNH NGHĨA SẴN KHUNG STYLE ĐỂ TÁI SỬ DỤNG CHO ĐẸP VÀ GỌN
+const successStyle = {
+    style: {
+        background: '#16a34a', // Màu xanh lá cây đậm
+        color: '#ffffff',      // Chữ trắng
+    },
+    iconTheme: { primary: '#ffffff', secondary: '#16a34a' } 
+};
+
+const errorStyle = {
+    style: {
+        background: '#dc2626', // Màu đỏ hệ thống
+        color: '#ffffff',
+    }
+};
+
 const IngredientPage = () => {
     const [ingredients, setIngredients] = useState([]);
     const [loading, setLoading] = useState(true);
     const fileInputRef = useRef(null); 
+    const imageInputRef = useRef(null);
 
-    // --- STATE PHÂN TRANG ---
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(0);
     const ITEMS_PER_PAGE = 12;
 
-    // --- STATE MODAL ---
     const [showModal, setShowModal] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [currentId, setCurrentId] = useState(null);
 
-    // --- STATE TÌM KIẾM & LỌC ---
-    const [filters, setFilters] = useState({
-        keyword: '',
-        unit: ''
-    });
+    const [filters, setFilters] = useState({ keyword: '', unit: '' });
 
-    // --- STATE FORM DATA ---
     const [formData, setFormData] = useState({
-        name: '', calories_per_unit: '', protein: '', carbs: '', fats: '', unit: 'gram', ImageUrl: '', description: ''
+        name: '', calories_per_unit: '', protein: '', carbs: '', fat: '', unit: 'gram', description: '',
+        image_file: null, preview_url: ''
     });
 
     const [availableMicros, setAvailableMicros] = useState([]);
@@ -41,49 +55,54 @@ const IngredientPage = () => {
     const blockInvalidChar = (e) => ['e', 'E', '+', '-', ',', '.'].includes(e.key) && e.preventDefault();
 
     const handleNumberChange = (field, value) => {
-        let val = value;
+        let val = value === '' ? '' : Number(value);
         if (val > 10000) val = 10000;
         if (val < 0) val = 0;
         setFormData({ ...formData, [field]: val });
     };
 
-    // Gọi API lấy danh sách
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            // 🎯 SỬA THÔNG BÁO LỖI CHỌN FILE
+            toast.error("Please select a valid image file (PNG, JPG, JPEG)", errorStyle);
+            return;
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            image_file: file,
+            preview_url: URL.createObjectURL(file)
+        }));
+    };
+
     const fetchIngredients = useCallback(async () => {
         try {
             setLoading(true);
             const res = await apiClient.get('/admin/ingredients', {
-                params: {
-                    keyword: filters.keyword,
-                    unit: filters.unit,
-                    page: currentPage,      
-                    limit: ITEMS_PER_PAGE   
-                }
+                params: { keyword: filters.keyword, unit: filters.unit, page: currentPage, limit: ITEMS_PER_PAGE }
             });
             if (res.data.success) {
-                setIngredients(res.data.data.ingredients);
+                setIngredients(res.data.data.ingredients || []);
                 setTotalPages(res.data.data.totalPages || 1);
             }
         } catch (error) {
             console.error(error);
-            toast.error("Failed to fetch data");
+            // 🎯 SỬA THÔNG BÁO LỖI FETCH DATA
+            toast.error("Failed to fetch ingredients database", errorStyle);
         } finally {
             setLoading(false);
         }
     }, [filters.keyword, filters.unit, currentPage]);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchIngredients();
-        }, 500);
+        const timer = setTimeout(() => { fetchIngredients(); }, 500);
         return () => clearTimeout(timer);
     }, [fetchIngredients]);
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setCurrentPage(1);
-        }, 0);
-        return () => clearTimeout(timer);
-    }, [filters]);
+    useEffect(() => { setCurrentPage(1); }, [filters]);
 
     useEffect(() => {
         const fetchMicros = async () => {
@@ -92,9 +111,7 @@ const IngredientPage = () => {
                 if (res.data && res.data.success) {
                     setAvailableMicros(res.data.data?.micronutrients || res.data.data || []);
                 }
-            } catch (err) {
-                console.error('Failed to load micronutrients', err);
-            }
+            } catch (err) { console.error('Failed to load micronutrients', err); }
         };
         fetchMicros();
     }, []);
@@ -105,29 +122,26 @@ const IngredientPage = () => {
     const handleImportExcel = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
         const fileExtension = file.name.split('.').pop().toLowerCase();
         if (fileExtension !== 'xlsx' && fileExtension !== 'xls') {
-            toast.error("Please upload an Excel file (.xlsx or .xls)");
+            // 🎯 SỬA THÔNG BÁO LỖI ĐỊNH DẠNG EXCEL
+            toast.error("Please upload an Excel file (.xlsx or .xls)", errorStyle);
             return;
         }
-
         const dataForm = new FormData();
         dataForm.append('file', file);
-
         try {
             setLoading(true);
-            const res = await apiClient.post('/admin/ingredients/import', dataForm, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            
+            const res = await apiClient.post('/admin/ingredients/import', dataForm, { headers: { 'Content-Type': 'multipart/form-data' } });
             if (res.data.success) {
-                toast.success(res.data.message || "Imported ingredients successfully!");
+                // 🎯 SỬA THÔNG BÁO IMPORT THÀNH CÔNG
+                toast.success(res.data.message || "Imported ingredients successfully!", successStyle);
                 fetchIngredients(); 
             }
         } catch (error) {
             console.error(error);
-            toast.error(error.response?.data?.message || "Failed to import Excel file");
+            // 🎯 SỬA THÔNG BÁO IMPORT THẤT BẠI
+            toast.error(error.response?.data?.message || "Failed to parse and import Excel file", errorStyle);
         } finally {
             setLoading(false);
             if (fileInputRef.current) fileInputRef.current.value = ""; 
@@ -136,7 +150,7 @@ const IngredientPage = () => {
 
     const handleOpenCreate = () => {
         setIsEditing(false);
-        setFormData({ name: '', calories_per_unit: '', protein: '', carbs: '', fats: '', unit: 'gram', ImageUrl: '', description: '' });
+        setFormData({ name: '', calories_per_unit: '', protein: '', carbs: '', fat: '', unit: 'gram', description: '', image_file: null, preview_url: '' });
         setSelectedMicros([]);
         setShowModal(true);
     };
@@ -151,42 +165,45 @@ const IngredientPage = () => {
                 setFormData({
                     name: data.name || '',
                     calories_per_unit: data.calories_per_unit || '',
-                    protein: data.protein || '',
-                    carbs: data.carbs || '',
-                    fats: data.fats || '',
+                    protein: data.protein || 0,
+                    carbs: data.carbs || 0,
+                    fat: data.fat !== undefined ? data.fat : (data.fats || 0),
                     unit: data.unit || 'gram',
-                    ImageUrl: data.ImageUrl || '',
-                    description: data.description || ''
+                    description: data.description || '',
+                    image_file: null,
+                    preview_url: data.image_url || '' 
                 });
-                const micros = (data.micronutrients || []).map(m => ({ 
-                    micronutrientId: m.micronutrientId?._id || m.micronutrientId || m._id || m.id, 
-                    amount: m.amount 
-                }));
+                const micros = (data.micronutrients || [])
+                    .filter(m => m.micronutrientId)
+                    .map(m => ({ 
+                        micronutrientId: m.micronutrientId?._id || m.micronutrientId || m._id || m.id, 
+                        amount: m.amount || 0
+                    }));
                 setSelectedMicros(micros);
-            } else {
-                setFormData({ ...item, ImageUrl: item.ImageUrl || '', description: item.description || '' });
-                setSelectedMicros([]);
             }
         } catch (error) {
             console.error(error);
-            setFormData({ ...item, ImageUrl: item.ImageUrl || '', description: item.description || '' });
-            setSelectedMicros([]);
+            // 🎯 SỬA THÔNG BÁO LỖI TẢI FORM EDIT
+            toast.error("Failed to load details data record", errorStyle);
         }
         setShowModal(true);
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm("Delete this ingredient?")) return;
+        if (!window.confirm("Are you sure you want to delete this ingredient permanently?")) return;
         try {
             const res = await apiClient.delete(`/admin/ingredients/delete/${id}`);
-            toast.success(res.data.message);
-            fetchIngredients();
-        } catch (error) {
-            toast.error(error.response?.data?.message || "Error deleting");
+            if (res.data.success) {
+                // 🎯 SỬA THÔNG BÁO XÓA THÀNH CÔNG
+                toast.success(res.data.message || "Deleted successfully!", successStyle);
+                fetchIngredients();
+            }
+        } catch (error) { 
+            // 🎯 SỬA THÔNG BÁO XÓA THẤT BẠI
+            toast.error(error.response?.data?.message || "Error deleting selected ingredient", errorStyle); 
         }
     };
 
-    // 🎯 Đã sửa lỗi: Dùng apiClient đúng tuyến đường /admin/ingredients để lấy dữ liệu detail thành công
     const handleView = async (id) => {
         try {
             const res = await apiClient.get(`/admin/ingredients/${id}`);
@@ -194,34 +211,60 @@ const IngredientPage = () => {
                 setDetailData(res.data.data);
                 setShowDetail(true);
             }
-        } catch (error) {
-            console.error(error);
-            toast.error('Failed to load detail');
+        } catch (error) { 
+            // 🎯 SỬA THÔNG BÁO LỖI PROFILE CHI TIẾT
+            toast.error('Failed to load ingredient details profile', errorStyle); 
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const payload = { ...formData, micronutrients: selectedMicros };
-            let res;
-            if (isEditing) {
-                res = await apiClient.put(`/admin/ingredients/update/${currentId}`, payload);
-            } else {
-                res = await apiClient.post('/admin/ingredients/create', payload);
+            const cleanMicros = (selectedMicros || [])
+                .filter(m => m && m.micronutrientId && m.micronutrientId.trim() !== '')
+                .map(m => ({
+                    micronutrientId: m.micronutrientId,
+                    amount: Number(m.amount) || 0
+                }));
+
+            const dataForm = new FormData();
+            dataForm.append('name', formData.name ? formData.name.trim() : '');
+            dataForm.append('calories_per_unit', Number(formData.calories_per_unit) || 0);
+            dataForm.append('protein', Number(formData.protein) || 0);
+            dataForm.append('carbs', Number(formData.carbs) || 0);
+            dataForm.append('fat', Number(formData.fat) || 0);
+            dataForm.append('unit', formData.unit || 'gram');
+            dataForm.append('description', formData.description ? formData.description.trim() : '');
+            dataForm.append('micronutrients', JSON.stringify(cleanMicros));
+
+            if (formData.image_file) {
+                dataForm.append('image_file', formData.image_file);
             }
-            toast.success(res.data.message);
-            setShowModal(false);
-            fetchIngredients();
+
+            let res;
+            const config = { headers: { 'Content-Type': 'multipart/form-data' } };
+
+            if (isEditing) {
+                res = await apiClient.put(`/admin/ingredients/update/${currentId}`, dataForm, config);
+            } else {
+                res = await apiClient.post('/admin/ingredients/create', dataForm, config);
+            }
+            
+            if (res.data && res.data.success) {
+                // 🎯 SỬA THÔNG BÁO SUBMIT FORM (LƯU / TẠO) THÀNH CÔNG
+                toast.success(res.data.message || "Saved successfully!", successStyle);
+                setShowModal(false);
+                fetchIngredients();
+            }
         } catch (error) {
-            const serverMessage = error.response?.data?.message;
-            toast.error(serverMessage || "Action failed");
+            console.error('Submit error:', error);
+            // 🎯 SỬA THÔNG BÁO SUBMIT THẤT BẠI
+            toast.error(error.response?.data?.message || "Action failed due to upload validation error", errorStyle);
         }
     };
 
     return (
         <div className="space-y-6">
-            {/* --- TOOLBAR --- */}
             <div className="bg-[var(--card-bg)] p-4 rounded-xl shadow-sm border border-[var(--border)] flex flex-wrap gap-4 items-center justify-between">
                 <div className="flex items-center gap-4 flex-1">
                     <div className="relative flex-1 max-w-md">
@@ -245,38 +288,22 @@ const IngredientPage = () => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleImportExcel} 
-                        accept=".xlsx, .xls" 
-                        className="hidden" 
-                    />
-                    <AdminButton 
-                        variant="secondary" 
-                        onClick={() => fileInputRef.current.click()} 
-                        title="Import ingredients from Excel template file"
-                    >
+                    <input type="file" ref={fileInputRef} onChange={handleImportExcel} accept=".xlsx, .xls" className="hidden" />
+                    <AdminButton variant="secondary" onClick={() => fileInputRef.current.click()} title="Import ingredients from Excel template file">
                         <FileUp className="w-4 h-4" /> Import Excel
                     </AdminButton>
-
                     <AdminButton onClick={handleOpenCreate}>
                         <Plus className="w-4 h-4" /> Add Ingredient
                     </AdminButton>
                 </div>
             </div>
 
-            {/* --- LIST DATATABLE --- */}
             <DataTable 
                 headers={["Ingredient", "Calories / Unit", "Macros (g)", "Actions"]}
                 emptyState={
                     <tr>
                         <td colSpan="4" className="p-0">
-                            {loading ? (
-                                <LoadingState text="Loading ingredients..." />
-                            ) : (
-                                <EmptyState icon={PackageSearch} title="No ingredients found" description="Try adjusting your search filters or add a new ingredient." />
-                            )}
+                            {loading ? <LoadingState text="Loading ingredients..." /> : <EmptyState icon={PackageSearch} title="No ingredients found" description="Try adjusting your search filters or add a new ingredient." />}
                         </td>
                     </tr>
                 }
@@ -286,8 +313,8 @@ const IngredientPage = () => {
                         <DataTableCell>
                             <div className="flex items-center gap-4">
                                 <div className="h-12 w-12 rounded-xl overflow-hidden bg-[var(--bg-muted)] border border-[var(--border)] shrink-0 flex items-center justify-center">
-                                    {item.ImageUrl ? (
-                                        <img src={item.ImageUrl} alt={item.name} className="h-full w-full object-cover" />
+                                    {item.image_url ? (
+                                        <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
                                     ) : (
                                         <ImageIcon className="w-5 h-5 text-[var(--text-muted)]" />
                                     )}
@@ -316,15 +343,13 @@ const IngredientPage = () => {
                                 </div>
                                 <div className="flex flex-col items-center">
                                     <span className="text-xs text-[var(--text-muted)] font-medium">Fats</span>
-                                    <span className="font-semibold text-red-500 dark:text-red-400">{item.fats}g</span>
+                                    <span className="font-semibold text-red-500 dark:text-red-400">{item.fat || 0}g</span>
                                 </div>
                             </div>
                         </DataTableCell>
                         <DataTableCell>
                             <div className="flex items-center gap-2">
-                                <AdminButton variant="ghost" size="sm" onClick={() => handleView(item._id)}>
-                                    View
-                                </AdminButton>
+                                <AdminButton variant="ghost" size="sm" onClick={() => handleView(item._id)}>View</AdminButton>
                                 <AdminButton variant="ghost" size="icon" onClick={() => handleOpenEdit(item)} className="text-[var(--primary)]">
                                     <Edit className="w-4 h-4" />
                                 </AdminButton>
@@ -337,12 +362,9 @@ const IngredientPage = () => {
                 ))}
             </DataTable>
 
-            {/* --- PAGINATION CONTROLS --- */}
             {!loading && ingredients.length > 0 && (
                 <div className="flex items-center justify-between px-2 pb-6">
-                    <span className="text-sm font-medium text-[var(--text-muted)]">
-                        Page {currentPage} of {totalPages}
-                    </span>
+                    <span className="text-sm font-medium text-[var(--text-muted)]">Page {currentPage} of {totalPages}</span>
                     <div className="flex gap-2">
                         <AdminButton variant="outline" size="sm" onClick={handlePrevPage} disabled={currentPage === 1}>
                             <ChevronLeft className="w-4 h-4 mr-1" /> Previous
@@ -354,7 +376,6 @@ const IngredientPage = () => {
                 </div>
             )}
 
-            {/* --- MODAL CREATE / EDIT --- */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[1000] p-4">
                     <div className="bg-[var(--card-bg)] p-6 rounded-2xl w-[500px] max-h-[90vh] overflow-y-auto relative shadow-xl border border-[var(--border)]">
@@ -364,6 +385,30 @@ const IngredientPage = () => {
                         <h3 className="mt-0 mb-6 text-xl font-bold text-[var(--text-h)]">{isEditing ? 'Edit Ingredient' : 'Add New Ingredient'}</h3>
                         
                         <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Ingredient Image</label>
+                                <input type="file" ref={imageInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
+                                
+                                <div 
+                                    onClick={() => imageInputRef.current.click()}
+                                    className="border-2 border-dashed border-[var(--border)] hover:border-[var(--primary)] rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer bg-[var(--bg-main)] transition-colors group"
+                                >
+                                    {formData.preview_url ? (
+                                        <div className="relative w-full h-32 rounded-lg overflow-hidden">
+                                            <img src={formData.preview_url} alt="Preview" className="w-full h-full object-contain" />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-medium transition-opacity">
+                                                Change Image
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <UploadCloud className="w-8 h-8 text-[var(--text-muted)] group-hover:text-[var(--primary)] transition-colors" />
+                                            <span className="text-xs font-medium text-[var(--text-muted)]">Click to upload product photo (Max 5MB)</span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Ingredient Name</label>
                                 <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
@@ -396,13 +441,8 @@ const IngredientPage = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Fats (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.fats} onChange={e => handleNumberChange('fats', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
+                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.fat} onChange={e => handleNumberChange('fat', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Image URL</label>
-                                <input type="text" value={formData.ImageUrl} onChange={e => setFormData({ ...formData, ImageUrl: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" placeholder="https://..." />
                             </div>
                             
                             <div>
@@ -410,7 +450,6 @@ const IngredientPage = () => {
                                 <textarea rows="2" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-y"></textarea>
                             </div>
 
-                            {/* MICRONUTRIENTS SECTION */}
                             <div className="pt-2 border-t border-[var(--border)]">
                                 <label className="block text-sm font-medium text-[var(--text-h)] mb-3">Micronutrients (optional)</label>
                                 <div className="space-y-2 mb-3">
@@ -453,19 +492,14 @@ const IngredientPage = () => {
                             </div>
 
                             <div className="flex gap-3 justify-end pt-4 mt-6 border-t border-[var(--border)]">
-                                <AdminButton type="button" variant="ghost" onClick={() => setShowModal(false)}>
-                                    Cancel
-                                </AdminButton>
-                                <AdminButton type="submit">
-                                    {isEditing ? 'Save Changes' : 'Create Ingredient'}
-                                </AdminButton>
+                                <AdminButton type="button" variant="ghost" onClick={() => setShowModal(false)}>Cancel</AdminButton>
+                                <AdminButton type="submit">{isEditing ? 'Save Changes' : 'Create Ingredient'}</AdminButton>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* --- DETAIL MODAL --- */}
             {showDetail && detailData && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[1100] p-4">
                     <div className="bg-[var(--card-bg)] p-6 rounded-2xl w-[520px] max-h-[90vh] overflow-y-auto relative shadow-xl border border-[var(--border)]">
@@ -498,7 +532,7 @@ const IngredientPage = () => {
                                 </div>
                                 <div className="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg flex-1">
                                     <span className="block text-xs opacity-70 mb-1">Fats</span>
-                                    <span className="font-bold">{detailData.fats}g</span>
+                                    <span className="font-bold">{detailData.fat || 0}g</span>
                                 </div>
                             </div>
                             
@@ -539,9 +573,7 @@ const IngredientPage = () => {
                         </div>
 
                         <div className="flex justify-end mt-6 pt-4 border-t border-[var(--border)]">
-                            <AdminButton variant="secondary" onClick={() => { setShowDetail(false); setDetailData(null); }}>
-                                Close
-                            </AdminButton>
+                            <AdminButton variant="secondary" onClick={() => { setShowDetail(false); setDetailData(null); }}>Close</AdminButton>
                         </div>
                     </div>
                 </div>

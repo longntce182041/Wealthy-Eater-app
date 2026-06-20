@@ -8,7 +8,7 @@ const router = express.Router();
 
 // Import Controller của bác
 const AdminRecipeController = require('../controllers/admin.recipe.controller');
-const { authenticateToken } = require('../middlewares/auth');
+const { authenticateToken, authorizeRoles } = require('../middlewares/auth');
 const validateObjectId = require('../middlewares/validateObjectId');
 
 const { uploadExcel } = require('../config/cloudinary.config');
@@ -23,7 +23,7 @@ function checkAdminRole(req, res, next) {
 
 // Áp dụng xác thực (authentication) cho toàn bộ các API bên dưới
 router.use(authenticateToken);
-router.use(checkAdminRole);
+router.use(authorizeRoles('admin'));
 
 /**
  * UC-71: GET /api/admin/recipes
