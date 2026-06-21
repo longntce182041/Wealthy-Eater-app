@@ -115,6 +115,24 @@ class _AppRootState extends State<_AppRoot> {
       );
     });
 
+    // Reactive logout cleanup: clears all user-specific data from other providers
+    final auth = context.read<AuthProvider>();
+    bool wasAuthenticated = auth.isAuthenticated;
+    auth.addListener(() {
+      if (!mounted) return;
+      final isAuth = auth.isAuthenticated;
+      if (wasAuthenticated && !isAuth) {
+        context.read<RecipeProvider>().reset();
+        context.read<ShoppingListProvider>().reset();
+        context.read<NotificationProvider>().reset();
+        context.read<MealPlanProvider>().reset();
+        context.read<NutritionistProvider>().reset();
+        context.read<ConsultationProvider>().reset();
+        context.read<ChatProvider>().resetChat();
+      }
+      wasAuthenticated = isAuth;
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().restoreSession().then((_) {
         if (mounted) {
@@ -123,9 +141,7 @@ class _AppRootState extends State<_AppRoot> {
           });
         }
         if (mounted && context.read<AuthProvider>().isAuthenticated) {
-          context.read<RecipeProvider>().loadRecipes();
-          context.read<NotificationProvider>().fetchSettings();
-          context.read<NotificationProvider>().fetchHistory();
+          // Data loading has been delegated to HomeScreen and NutritionistDashboardScreen initState
         }
       });
     });

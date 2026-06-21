@@ -22,6 +22,15 @@ class NutritionistDashboardScreen extends StatefulWidget {
 class _NutritionistDashboardScreenState extends State<NutritionistDashboardScreen> {
   int _selectedIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NotificationProvider>().fetchSettings();
+      context.read<NotificationProvider>().fetchHistory();
+    });
+  }
+
   void _selectTab(int index) => setState(() => _selectedIndex = index);
 
   Future<void> _logout() async {

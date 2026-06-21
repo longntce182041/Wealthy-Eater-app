@@ -265,4 +265,14 @@ class ShoppingListProvider extends ChangeNotifier {
     items   = items.map((i) => i.id == itemId ? updated : i).toList();
     grouped = _buildGrouped(items);
   }
+
+  void reset() {
+    viewState   = ShoppingListViewState.initial;
+    errorMessage = null;
+    isAdding    = false;
+    isAddSuccess = false;
+    items       = const [];
+    grouped     = const {};
+    notifyListeners();
+  }
 }

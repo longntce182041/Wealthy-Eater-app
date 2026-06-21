@@ -447,4 +447,39 @@ class RecipeProvider extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  void reset() {
+    listState = RecipeViewState.initial;
+    detailState = RecipeViewState.initial;
+    errorMessage = null;
+
+    searchQuery = '';
+    selectedStatus = '';
+    selectedDifficulty = '';
+    minTime = maxTime = minCalories = maxCalories = null;
+    sortBy = 'name_asc';
+
+    recipes = const [];
+    selectedRecipe = null;
+
+    likedListState = RecipeViewState.initial;
+    likedItems = const [];
+    likedMeta = const {};
+    _likedRecipeIds.clear();
+
+    reviewsState = RecipeViewState.initial;
+    reviewsError = null;
+    currentRecipeReviews = const [];
+    reviewStats = const {};
+    myReviewForCurrentRecipe = null;
+
+    isSubmittingReview = false;
+    reviewSubmitError = null;
+
+    myReviewsListState = RecipeViewState.initial;
+    myReviewsItems = const [];
+    myReviewsMeta = const {};
+
+    notifyListeners();
+  }
 }

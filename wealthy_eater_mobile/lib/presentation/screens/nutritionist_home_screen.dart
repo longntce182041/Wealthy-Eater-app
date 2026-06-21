@@ -700,7 +700,7 @@ class _ProfileTab extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         'No email linked',
-                        style: TextStyle(fontSize: 12, color: Colors.amber[850], fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 12, color: Colors.amber[800], fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),

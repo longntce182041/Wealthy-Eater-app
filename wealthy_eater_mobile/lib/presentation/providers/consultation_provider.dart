@@ -200,4 +200,22 @@ class ConsultationProvider extends ChangeNotifier {
     notifyListeners();
     return success;
   }
+
+  /// Clears all user-specific state on logout to prevent data leakage
+  /// between different accounts.
+  void reset() {
+    _checkoutState = CheckoutState.initial;
+    _checkoutResult = null;
+    _checkoutError = null;
+    _selectedTransaction = null;
+    _isLoadingDetail = false;
+    _detailError = null;
+    _payOSUrls = null;
+    _isLoadingUrls = false;
+    _activeContract = null;
+    _isLoadingActiveContract = false;
+    _mealPlanRequestStatus = null;
+    _isRequestingMealPlan = false;
+    notifyListeners();
+  }
 }
