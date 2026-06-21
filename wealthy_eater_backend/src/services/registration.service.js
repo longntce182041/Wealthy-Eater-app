@@ -107,8 +107,8 @@ class RegistrationService {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isEmail = emailRegex.test(cleanId);
 
-    const email = isEmail ? cleanId.toLowerCase() : null;
-    const phone = !isEmail ? cleanId : null;
+    const email = isEmail ? cleanId.toLowerCase() : undefined;
+    const phone = !isEmail ? cleanId : undefined;
 
     // Check if active user already exists
     const existing = await User.findOne(isEmail ? { email } : { phone }).exec();

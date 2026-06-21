@@ -32,13 +32,16 @@ async function login(req, res, next) {
  */
 async function googleLogin(req, res, next) {
   try {
-    const { idToken } = req.body || {};
-    if (!idToken) {
-      throw new AppError('idToken is required', 400, 'VALIDATION_ERROR');
+    const { idToken, accessToken } = req.body || {};
+    console.log('[DEBUG Backend] googleLogin body:', { idToken: !!idToken, accessToken: !!accessToken });
+    if (!idToken && !accessToken) {
+      throw new AppError('idToken or accessToken is required', 400, 'VALIDATION_ERROR');
     }
-    const result = await AuthService.googleLogin(idToken);
+    const result = await AuthService.googleLogin(idToken, accessToken);
+    console.log('[DEBUG Backend] googleLogin result success for user:', result.user.email);
     return res.json({ success: true, data: result, error: null });
   } catch (err) {
+    console.error('[DEBUG Backend] googleLogin error:', err.message);
     return next(err);
   }
 }

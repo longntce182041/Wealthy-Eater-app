@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/custom_elevated_button.dart';
 import '../widgets/custom_text_field.dart';
+import '../widgets/google_sign_in_button.dart';
 import 'nutritionist_login_screen.dart';
 import 'customer_register_screen.dart';
 
@@ -193,26 +194,9 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
   }
 
   Widget _buildSocialLogin(bool isLoading) {
-    return SizedBox(
-      height: 56,
-      width: double.infinity,
-      child: OutlinedButton(
-        onPressed: isLoading ? null : _doGoogle,
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.g_mobiledata, size: 28),
-            SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                'Continue with Google',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return GoogleSignInButton(
+      onPressed: _doGoogle,
+      isLoading: isLoading,
     );
   }
 

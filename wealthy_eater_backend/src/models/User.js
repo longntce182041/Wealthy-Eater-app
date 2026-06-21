@@ -6,8 +6,8 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: () => new mongoose.Types.ObjectId().toString(),
     },
-    email:                  { type: String, unique: true, sparse: true, lowercase: true, trim: true, default: null },
-    phone:                  { type: String, unique: true, sparse: true, trim: true, default: null },
+    email:                  { type: String, unique: true, sparse: true, lowercase: true, trim: true },
+    phone:                  { type: String, unique: true, sparse: true, trim: true },
     password_hash:          { type: String, default: null },
     role: {
       type: String,
@@ -20,9 +20,8 @@ const UserSchema = new mongoose.Schema(
     is_active:              { type: Boolean, default: true },
     reset_password_token:   { type: String, default: null },
     reset_password_expires: { type: Date, default: null },
-    created_at:             { type: Date, default: Date.now },
     fcmToken:               { type: String, default: null },
-
+    googleId:               { type: String, default: null },
     created_at:             { type: Date, default: Date.now },
   },
   { versionKey: false }
