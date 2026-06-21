@@ -13,6 +13,9 @@ const RecipeStep = require('../models/RecipeStep');
 const RecipeReview = require('../models/RecipeReview');
 const Ingredient = require('../models/Ingredient');
 
+
+const { uploadBase64ToCloudinary } = require('../config/cloudinary.config');
+
 /**
  * Escapa caracteres especiais para regex seguro
  */
@@ -289,6 +292,7 @@ async function getRecipeDetail(req, res, next) {
 
 /**
  * UC-73: POST /api/admin/recipes
+ * ☁️ ĐÃ MÓC CLOUDINARY XỬ LÝ CHUỖI BASE64 ẢNH TỪ FRONTEND
  */
 async function addRecipe(req, res, next) {
   try {
@@ -298,8 +302,15 @@ async function addRecipe(req, res, next) {
       return next(new AppError('Tên công thức là bắt buộc.', 400));
     }
 
+    // 🔥 Xử lý ảnh: Nếu có gửi ảnh dạng base64, đẩy lên Cloudinary lấy URL sạch lưu DB
+    let finalImageUrl = image_url || '';
+    if (image_url && image_url.startsWith('data:image')) {
+      finalImageUrl = await uploadBase64ToCloudinary(image_url);
+    }
+
     const recipe = new Recipe({
-      name, description, image_url,
+      name, description, 
+      image_url: finalImageUrl, // Lưu URL từ Cloudinary
       cooking_time: Number(cooking_time) || 0,
       base_servings: Number(base_servings) || 1,
       status: status || 'draft',
@@ -355,6 +366,7 @@ async function addRecipe(req, res, next) {
 
 /**
  * UC-74: PUT /api/admin/recipes/:id
+ * ☁️ ĐÃ MÓC CLOUDINARY XỬ LÝ CHUỖI BASE64 KHI UPDATE CÔNG THỨC
  */
 async function updateRecipe(req, res, next) {
   try {
@@ -368,7 +380,16 @@ async function updateRecipe(req, res, next) {
 
     if (name) recipe.name = name;
     if (description !== undefined) recipe.description = description;
-    if (image_url !== undefined) recipe.image_url = image_url;
+    
+    // 🔥 Xử lý ảnh khi cập nhật: Nếu frontend thay ảnh mới bằng base64 thì upload lên Cloudinary
+    if (image_url !== undefined) {
+      if (image_url && image_url.startsWith('data:image')) {
+        recipe.image_url = await uploadBase64ToCloudinary(image_url);
+      } else {
+        recipe.image_url = image_url;
+      }
+    }
+    
     if (cooking_time !== undefined) recipe.cooking_time = Number(cooking_time);
     if (base_servings !== undefined) recipe.base_servings = Number(base_servings);
     if (status) recipe.status = status;
@@ -492,7 +513,6 @@ async function searchAndFilterRecipes(req, res, next) {
 
 /**
  * UC-76: POST /api/admin/recipes/import-excel
- * 🛠️ ĐÃ FIX HOÀN TOÀN CÁC LỖI CHÍ MẠNG (CastError ID, Ép kiểu chuỗi trống, Thiếu Date)
  */
 async function importRecipesExcel(req, res, next) {
   try {
@@ -516,7 +536,6 @@ async function importRecipesExcel(req, res, next) {
         String(rawIngs).split('|').forEach(item => {
           const parts = item.split(':');
           const ingIdClean = parts[0] ? parts[0].trim() : '';
-          // 🛠️ ĐÃ FIX: Chỉ nạp ID đúng chuẩn Mongoose Hex 24 ký tự để chặn đứng CastError từ xa
           if (ingIdClean && mongoose.Types.ObjectId.isValid(ingIdClean)) {
             uniqueIngredientIds.add(ingIdClean);
           }
@@ -529,7 +548,7 @@ async function importRecipesExcel(req, res, next) {
     ingredientList.forEach(ing => { ingredientMap[ing._id.toString()] = ing; });
 
     const errorLog = [], recipesToInsert = [], ingredientsToInsert = [], stepsToInsert = [], nutritionsToInsert = [];
-    const now = new Date(); // 🛠️ ĐÃ FIX: Đồng bộ mốc thời gian hệ thống
+    const now = new Date(); 
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i], rowNumber = i + 2, name = row.Name || row.name;
@@ -546,7 +565,6 @@ async function importRecipesExcel(req, res, next) {
         const parts = item.split(':'), ingredientId = parts[0]?.trim();
         if (!ingredientId) continue;
 
-        // 🛠️ ĐÃ FIX: Validate cấu trúc chuỗi ID trong Excel để thông báo lỗi rõ ràng cho Admin thay vì sập code
         if (!mongoose.Types.ObjectId.isValid(ingredientId)) {
           errorLog.push(`Dòng ${rowNumber}: ID nguyên liệu '${ingredientId}' không đúng định dạng Mongoose ID.`);
           hasIngredientError = true;
@@ -568,12 +586,10 @@ async function importRecipesExcel(req, res, next) {
       if (hasIngredientError) continue;
 
       const rawStepsStr = row.Steps || row.steps || '';
-      // 🛠️ ĐÃ FIX: Ép kiểu chuỗi nghiêm ngặt đề phòng trường hợp các bước nấu ăn chứa dữ liệu thô dạng số
       const rowStepDocs = (rawStepsStr ? String(rawStepsStr).split('|') : [])
         .map((instruction, index) => ({ recipe_id: recipeId, step_number: index + 1, instruction: String(instruction).trim() }))
         .filter(s => s.instruction);
 
-      // 🛠️ ĐÃ FIX: Điền thủ công trường createdAt và updatedAt để bù đắp thiếu hụt của lệnh insertMany
       recipesToInsert.push({ 
         _id: recipeId, 
         name: String(name).trim(), 
@@ -592,12 +608,10 @@ async function importRecipesExcel(req, res, next) {
       nutritionsToInsert.push({ recipe_id: recipeId, calories: Math.round(totalCalories * 10) / 10, protein: Math.round(totalProtein * 10) / 10, fat: Math.round(totalFat * 10) / 10, carbs: Math.round(totalCarbs * 10) / 10 });
     }
 
-    // 4. Trả về mảng log chi tiết lỗi định dạng dạng mảng qua tham số thứ 4 của AppError
     if (errorLog.length > 0) {
       return next(new AppError('Import thất bại do dữ liệu file Excel chứa lỗi logic.', 422, null, errorLog));
     }
 
-    // 5. Thực thi TRUE BULK INSERT đồng loạt vào 4 bảng
     if (recipesToInsert.length > 0) { await Recipe.insertMany(recipesToInsert); }
     if (ingredientsToInsert.length > 0) { await RecipeIngredient.insertMany(ingredientsToInsert); }
     if (stepsToInsert.length > 0) { await RecipeStep.insertMany(stepsToInsert); }
