@@ -21,10 +21,24 @@ enum AuthState { initial, loading, authenticated, unauthenticated, error }
 class AuthProvider with ChangeNotifier {
   final ApiClient _api;
   final FlutterSecureStorage _storage;
+  late final GoogleSignIn _googleSignIn;
 
   AuthProvider({required ApiClient api, FlutterSecureStorage? storage})
       : _api = api,
-        _storage = storage ?? const FlutterSecureStorage();
+        _storage = storage ?? const FlutterSecureStorage() {
+    _googleSignIn = kIsWeb
+        ? GoogleSignIn(clientId: googleClientId)
+        : GoogleSignIn();
+
+    if (kIsWeb) {
+      _googleSignIn.onCurrentUserChanged.listen((GoogleSignInAccount? account) async {
+        if (account != null) {
+          debugPrint('[DEBUG Frontend] googleSignIn.onCurrentUserChanged triggered for ${account.email}');
+          await _handleGoogleSignInAccount(account);
+        }
+      });
+    }
+  }
 
   AuthState state = AuthState.initial;
   String? errorMessage;
@@ -106,39 +120,60 @@ class AuthProvider with ChangeNotifier {
   // Google Sign-In
   // ---------------------------------------------------------------------------
 
-  Future<void> googleSignIn() async {
+  Future<void> _handleGoogleSignInAccount(GoogleSignInAccount account) async {
     _setLoading();
     try {
-      if (!kIsWeb &&
-          defaultTargetPlatform != TargetPlatform.android &&
+      final authentication = await account.authentication;
+      final idToken = authentication.idToken;
+      final accessToken = authentication.accessToken;
+      debugPrint('[DEBUG Frontend] googleSignIn credentials: idToken=${idToken != null ? "EXISTS" : "NULL"}, accessToken=${accessToken != null ? "EXISTS" : "NULL"}');
+      if (idToken == null && accessToken == null) {
+        _setError('Failed to retrieve Google credentials');
+        return;
+      }
+
+      debugPrint('[DEBUG Frontend] Posting tokens to backend /api/auth/google...');
+      final res = await _api.post('/api/auth/google', data: {
+        'idToken': idToken,
+        'accessToken': accessToken,
+      });
+      debugPrint('[DEBUG Frontend] Backend response statusCode: ${res.statusCode}');
+      debugPrint('[DEBUG Frontend] Backend response data: ${res.data}');
+
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        await _handleAuthResponse(res.data['data'] as Map<String, dynamic>);
+      } else {
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Google login failed');
+      }
+    } catch (e) {
+      _setError(mapError(e).message);
+    }
+  }
+
+  Future<void> googleSignIn() async {
+    if (kIsWeb) {
+      // On Web, the official Google Sign-In button handles user interactive flows.
+      return;
+    }
+
+    _setLoading();
+    try {
+      if (defaultTargetPlatform != TargetPlatform.android &&
           defaultTargetPlatform != TargetPlatform.iOS) {
         _setError('Google Sign-In is only supported on Android, iOS, and Web. Desktop support is not configured.');
         return;
       }
 
-      final GoogleSignIn googleSignIn = kIsWeb
-          ? GoogleSignIn(clientId: googleClientId)
-          : GoogleSignIn();
-
-      final account = await googleSignIn.signIn();
+      final account = await _googleSignIn.signIn();
       if (account == null) {
         _setError('Google sign-in was cancelled');
         return;
       }
 
-      final idToken = (await account.authentication).idToken;
-      if (idToken == null) {
-        _setError('Failed to retrieve Google ID token');
-        return;
-      }
-
-      final res = await _api.post('/api/auth/google', data: {'idToken': idToken});
-
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        await _handleAuthResponse(res.data['data'] as Map<String, dynamic>);
-      } else {
-        _setError(res.data['message']?.toString() ?? 'Google login failed');
-      }
+      await _handleGoogleSignInAccount(account);
     } catch (e) {
       _setError(mapError(e).message);
     }
@@ -251,6 +286,11 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> logout() async {
     await _clearSession();
+    if (kIsWeb || defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
+    }
     state = AuthState.unauthenticated;
     notifyListeners();
   }

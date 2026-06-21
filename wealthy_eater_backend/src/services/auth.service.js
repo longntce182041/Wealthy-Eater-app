@@ -119,7 +119,7 @@ class AuthService {
 
   // ── Google Sign-In ─────────────────────────────────────────────────────────
 
-  static async googleLogin(idToken) {
+  static async googleLogin(idToken, accessToken) {
     if (!GOOGLE_CLIENT_ID) {
       throw new AppError('Google login is not configured on this server', 500);
     }
@@ -127,41 +127,69 @@ class AuthService {
     const client = new OAuth2Client(GOOGLE_CLIENT_ID);
     let googlePayload;
 
-    try {
-      const ticket = await client.verifyIdToken({
-        idToken,
-        audience: GOOGLE_CLIENT_ID,
-      });
-      googlePayload = ticket.getPayload();
-    } catch {
-      throw new AppError('Invalid or expired Google ID token', 401);
+    if (idToken) {
+      console.log('[DEBUG Backend] Verifying idToken...');
+      try {
+        const ticket = await client.verifyIdToken({
+          idToken,
+          audience: GOOGLE_CLIENT_ID,
+        });
+        googlePayload = ticket.getPayload();
+      } catch (err) {
+        console.error('[DEBUG Backend] verifyIdToken failed:', err.message);
+        throw new AppError('Invalid or expired Google ID token', 401);
+      }
+    } else if (accessToken) {
+      console.log('[DEBUG Backend] Verifying accessToken...');
+      try {
+        const tokenInfo = await client.getTokenInfo(accessToken);
+        googlePayload = {
+          email: tokenInfo.email,
+          sub: tokenInfo.sub,
+        };
+      } catch (err) {
+        console.error('[DEBUG Backend] getTokenInfo failed:', err.message);
+        throw new AppError('Invalid or expired Google access token', 401);
+      }
+    } else {
+      throw new AppError('Either idToken or accessToken is required', 400);
     }
 
-    const { email } = googlePayload;
+    console.log('[DEBUG Backend] Resolved googlePayload:', googlePayload);
+
+    const { email, sub: googleId } = googlePayload;
 
     if (!email) {
       throw new AppError('Google account does not have an email address', 400);
     }
 
-    // C-09: Atomic find-or-create to eliminate the TOCTOU race condition.
-    // Two simultaneous Google logins for the same new email would previously both
-    // find user===null and race to create, causing an E11000 duplicate key error.
-    // $setOnInsert ensures fields are only written when a new document is inserted.
     const User = require('../models/User');
-    let user = await User.findOneAndUpdate(
-      { email: email.toLowerCase() },
-      {
-        $setOnInsert: {
+    let user = await User.findOne({ email: email.toLowerCase() }).exec();
+
+    if (user) {
+      let isModified = false;
+      if (!user.googleId) {
+        user.googleId = googleId;
+        isModified = true;
+      }
+      if (!user.is_active) {
+        user.is_active = true;
+        isModified = true;
+      }
+      if (isModified) {
+        await user.save();
+      }
+    } else {
+      user = await User.findOne({ googleId }).exec();
+      if (!user) {
+        user = new User({
           email: email.toLowerCase(),
+          googleId,
           role: 'customer',
           is_active: true,
-        }
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).exec();
-
-    if (user.role !== 'customer') {
-      throw new AppError('Access denied: Google login is only available for customer accounts', 403);
+        });
+        await user.save();
+      }
     }
 
     return issueTokens(user);
