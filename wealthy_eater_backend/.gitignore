@@ -51,7 +51,7 @@ Thumbs.db
 *.sw?
 
 # Markdown files
-*.md
+*GEMINI.md
 
 # Uploaded Media
 uploads/
