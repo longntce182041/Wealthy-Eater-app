@@ -803,8 +803,8 @@ class _WeightHistoryChart extends StatelessWidget {
 
     // Map logs to FlSpots
     final List<FlSpot> spots = [];
-    double minWeight = 150.0;
-    double maxWeight = 30.0;
+    double minWeight = (history[0]['weight'] as num).toDouble();
+    double maxWeight = minWeight;
 
     for (int i = 0; i < history.length; i++) {
       final double w = (history[i]['weight'] as num).toDouble();

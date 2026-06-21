@@ -232,4 +232,16 @@ class NotificationProvider with ChangeNotifier {
       matchDateTimeComponents: DateTimeComponents.time,
     );
   }
+
+  void reset() {
+    settings = null;
+    history = [];
+    unreadCount = 0;
+    isLoading = false;
+    errorMessage = null;
+    if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+      _localNotificationsPlugin.cancelAll();
+    }
+    notifyListeners();
+  }
 }

@@ -5,6 +5,7 @@ import '../../domain/entities/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/shopping_list_provider.dart';
 import '../providers/notification_provider.dart';
+import '../providers/recipe_provider.dart';
 import 'notification_history_screen.dart';
 import 'nutritionists_tab.dart';
 import 'recipe_likes_tab.dart';
@@ -26,6 +27,17 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RecipeProvider>().loadRecipes();
+      context.read<NotificationProvider>().fetchSettings();
+      context.read<NotificationProvider>().fetchHistory();
+      context.read<ShoppingListProvider>().loadList();
+    });
+  }
 
   void _selectTab(int index) => setState(() => _selectedIndex = index);
 
@@ -189,14 +201,6 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    // Pre-load shopping list when the Recipe navtab is first opened
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final shoppingProvider =
-          context.read<ShoppingListProvider>();
-      if (shoppingProvider.viewState == ShoppingListViewState.initial) {
-        shoppingProvider.loadList();
-      }
-    });
   }
 
   @override

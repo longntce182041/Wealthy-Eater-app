@@ -70,4 +70,16 @@ class NutritionistProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  /// Clears all user-specific state on logout to prevent data leakage
+  /// between different accounts.
+  void reset() {
+    _nutritionists = [];
+    _isLoading = false;
+    _error = null;
+    _mealPlanRequests = [];
+    _isLoadingRequests = false;
+    _requestsError = null;
+    notifyListeners();
+  }
 }

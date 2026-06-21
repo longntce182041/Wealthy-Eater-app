@@ -69,4 +69,12 @@ class MealPlanProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  void reset() {
+    state = MealPlanState.initial;
+    errorMessage = null;
+    mealPlan = null;
+    items = [];
+    notifyListeners();
+  }
 }
