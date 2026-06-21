@@ -9,6 +9,7 @@ import '../providers/nutritionist_provider.dart';
 import '../widgets/coming_soon_tab.dart';
 import 'chat_screen.dart';
 import 'notification_history_screen.dart';
+import 'client_audit_screen.dart'; // Đã bổ sung import màn hình đối chiếu của ní
 
 class NutritionistDashboardScreen extends StatefulWidget {
   final UserEntity? user;
@@ -37,6 +38,7 @@ class _NutritionistDashboardScreenState extends State<NutritionistDashboardScree
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Sign out'),
         content: const Text('Are you sure you want to sign out?'),
         actions: [
@@ -348,6 +350,23 @@ class _NutritionistClientsTabState extends State<_NutritionistClientsTab> {
                       ],
                     ),
                   ),
+                  
+                  // 📊 ĐÂY LÀ PHẦN TÍNH NĂNG CỦA NÍ (UC-54)
+                  IconButton(
+                    icon: Icon(Icons.analytics_outlined, color: Theme.of(context).colorScheme.primary, size: 24),
+                    tooltip: 'Đối chiếu dinh dưỡng',
+                    onPressed: () {
+                      // Lấy ra chính xác ID của khách hàng để truyền cho API Backend đối chiếu
+                      final actualClientId = userMap?['_id']?.toString() ?? '';
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ClientAuditScreen(clientId: actualClientId),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 4),
                   const Icon(Icons.chat_bubble_outline,
                       color: Colors.grey, size: 20),
                 ],
