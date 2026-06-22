@@ -40,7 +40,9 @@ function adminOnly(req, res, next) {
     return res.status(401).json({ message: "Not authenticated" });
   }
   if (req.user.role !== "admin") {
-    return res.status(403).json({ message: "Forbidden: Admin access required" });
+    return res
+      .status(403)
+      .json({ message: "Forbidden: Admin access required" });
   }
   return next();
 }
@@ -50,9 +52,52 @@ function nutritionistOnly(req, res, next) {
     return res.status(401).json({ message: "Not authenticated" });
   }
   if (req.user.role !== "nutritionist") {
-    return res.status(403).json({ message: "Forbidden: Nutritionist access required" });
+    return res
+      .status(403)
+      .json({ message: "Forbidden: Nutritionist access required" });
   }
   return next();
 }
 
-module.exports = { protect, authorize, adminOnly, nutritionistOnly };
+function enforceRole(allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    if (allowedRoles.length && !allowedRoles.includes(req.user.role)) {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: insufficient permissions" });
+    }
+    return next();
+  };
+}
+
+function verifyToken(req, res, next) {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  if (!token) {
+    return res.status(401).json({ message: "Authentication token missing" });
+  }
+
+  try {
+    const payload = jwt.verify(token, JWT_ACCESS_SECRET);
+    req.user = {
+      ...payload,
+      id: payload.id || payload.sub || payload.userId,
+    };
+    return next();
+  } catch (err) {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
+}
+
+module.exports = {
+  protect,
+  authorize,
+  adminOnly,
+  nutritionistOnly,
+  enforceRole,
+  verifyToken,
+};
