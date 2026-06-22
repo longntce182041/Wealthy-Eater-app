@@ -15,6 +15,8 @@ import '../../domain/entities/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import 'chat_screen.dart';
+import 'change_password_screen.dart';
+
 
 class NutritionistHomeScreen extends StatefulWidget {
   final UserEntity? user;
@@ -403,11 +405,11 @@ class _ClientCard extends StatelessWidget {
   Map<String, dynamic>? get _user =>
       contract['user_id'] is Map ? contract['user_id'] as Map<String, dynamic> : null;
 
-  String get _userEmail => _user?['email']?.toString() ?? 'Client';
+  String get _userName => _user?['fullName']?.toString() ?? _user?['email']?.toString() ?? _user?['phone']?.toString() ?? 'Client';
   String get _userInitials {
-    final email = _userEmail;
-    if (email.isEmpty) return '?';
-    return email[0].toUpperCase();
+    final name = _userName;
+    if (name.isEmpty) return '?';
+    return name[0].toUpperCase();
   }
 
   String get _packageType {
@@ -426,7 +428,7 @@ class _ClientCard extends StatelessWidget {
           MaterialPageRoute(
             builder: (_) => ChatScreen(
               contractId: _contractId,
-              peerName: _userEmail,
+              peerName: _userName,
               peerInitials: _userInitials,
             ),
           ),
@@ -509,7 +511,7 @@ class _ClientCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _userEmail,
+                    _userName,
                     style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
@@ -564,24 +566,224 @@ class _ProfileTab extends StatelessWidget {
   final UserEntity? user;
   const _ProfileTab({this.user});
 
+  void _showLinkEmailDialog(BuildContext context) {
+    final emailController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        bool isLoading = false;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Link & Verify Email'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Link your email address to this account to enable email sign-in.',
+                      style: TextStyle(fontSize: 14, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Email Address',
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) return 'Email is required';
+                        final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                        if (!emailRegex.hasMatch(value.trim())) return 'Enter a valid email address';
+                        return null;
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isLoading ? null : () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setState(() => isLoading = true);
+                          final auth = dialogCtx.read<AuthProvider>();
+                          final success = await auth.linkEmail(emailController.text.trim());
+                          if (dialogCtx.mounted) {
+                            Navigator.pop(dialogCtx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(success
+                                    ? 'Email linked successfully!'
+                                    : (auth.errorMessage ?? 'Failed to link email')),
+                              ),
+                            );
+                          }
+                        },
+                  child: isLoading
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Link Email'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.person_outline_rounded,
-              size: 64, color: AppColors.textTertiary),
-          const SizedBox(height: 16),
-          Text(
-            user?.email ?? '',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+    final fullName = user?.fullName ?? 'Nutritionist';
+    final email = user?.email ?? '';
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+      children: [
+        // Avatar and Basic Info
+        Center(
+          child: Column(
+            children: [
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.primary, width: 2),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  fullName.isNotEmpty ? fullName[0].toUpperCase() : 'N',
+                  style: const TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                fullName,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              if (email.isEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.amber),
+                      const SizedBox(width: 6),
+                      Text(
+                        'No email linked',
+                        style: TextStyle(fontSize: 12, color: Colors.amber[800], fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: () => _showLinkEmailDialog(context),
+                  icon: const Icon(Icons.link_outlined, size: 18),
+                  label: const Text('Link & Verify Email'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 4),
+                Text(
+                  email,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.verified, size: 16, color: AppColors.primary),
+                    SizedBox(width: 6),
+                    Text(
+                      'Certified Nutritionist',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          const Text('Profile settings coming soon.',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
-        ],
-      ),
+        ),
+        const SizedBox(height: 40),
+
+        // Action Section
+        const Text(
+          'Account Security',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 0,
+          borderOnForeground: false,
+          color: Colors.white,
+          child: ListTile(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            leading: const Icon(Icons.lock_outline, color: AppColors.primary),
+            title: const Text('Change Password', style: TextStyle(fontWeight: FontWeight.w600)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

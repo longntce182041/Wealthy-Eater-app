@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 
 import 'core/config/env_config.dart';
 import 'core/network/api_client.dart';
+import 'core/network/session_expired_notifier.dart';
 import 'core/theme/index.dart';
 import 'data/repositories/index.dart';
 import 'domain/usecases/get_recipe_detail_usecase.dart';
@@ -48,7 +50,11 @@ class WealthyEaterApp extends StatelessWidget {
             deleteReviewUseCase:     DeleteRecipeReviewUseCase(recipeRepository),
             // My Reviews
             getMyReviewsListUseCase: GetMyReviewsListUseCase(recipeRepository),
-          )..loadRecipes(),
+            // S-08: Removed eager ..loadRecipes() here.
+            // loadRecipes is called in _AppRootState.initState after session restore
+            // conditioned on isAuthenticated, preventing a double-fetch and an
+            // unauthenticated network request on app start.
+          ),
         ),
         ChangeNotifierProvider(
           create: (_) => ShoppingListProvider(
@@ -64,6 +70,7 @@ class WealthyEaterApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NutritionistProvider(api: api)),
         ChangeNotifierProvider(create: (_) => ConsultationProvider(api: api)),
         ChangeNotifierProvider(create: (_) => ChatProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => MealPlanProvider(api: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',
@@ -85,10 +92,47 @@ class _AppRoot extends StatefulWidget {
 
 class _AppRootState extends State<_AppRoot> {
   bool _initialized = false;
+  StreamSubscription<void>? _sessionExpiredSub;
 
   @override
   void initState() {
     super.initState();
+
+    // Listen for hard session expiry from the auth interceptor
+    _sessionExpiredSub =
+        SessionExpiredNotifier.instance.stream.listen((_) {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      auth.logout();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    });
+
+    // Reactive logout cleanup: clears all user-specific data from other providers
+    final auth = context.read<AuthProvider>();
+    bool wasAuthenticated = auth.isAuthenticated;
+    auth.addListener(() {
+      if (!mounted) return;
+      final isAuth = auth.isAuthenticated;
+      if (wasAuthenticated && !isAuth) {
+        context.read<RecipeProvider>().reset();
+        context.read<ShoppingListProvider>().reset();
+        context.read<NotificationProvider>().reset();
+        context.read<MealPlanProvider>().reset();
+        context.read<NutritionistProvider>().reset();
+        context.read<ConsultationProvider>().reset();
+        context.read<ChatProvider>().resetChat();
+      }
+      wasAuthenticated = isAuth;
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().restoreSession().then((_) {
         if (mounted) {
@@ -97,12 +141,16 @@ class _AppRootState extends State<_AppRoot> {
           });
         }
         if (mounted && context.read<AuthProvider>().isAuthenticated) {
-          context.read<RecipeProvider>().loadRecipes();
-          context.read<NotificationProvider>().fetchSettings();
-          context.read<NotificationProvider>().fetchHistory();
+          // Data loading has been delegated to HomeScreen and NutritionistDashboardScreen initState
         }
       });
     });
+  }
+
+  @override
+  void dispose() {
+    _sessionExpiredSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -119,7 +167,7 @@ class _AppRootState extends State<_AppRoot> {
           }
           return HomeScreen(user: auth.user);
         }
-        return const LoginScreen();
+        return const CustomerLoginScreen();
       },
     );
   }

@@ -6,20 +6,20 @@ const AppError = require('../utils/AppError');
 
 /**
  * POST /api/auth/login
- * Body: { email, password }
+ * Body: { identifier, email, password, role }
  */
 async function login(req, res, next) {
   try {
-    const { email, password, role } = req.body || {};
-    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
-      throw new AppError('Email and password must be valid strings', 400, 'VALIDATION_ERROR');
+    const { identifier, email, password, role } = req.body || {};
+    const targetId = identifier || email;
+    if (!targetId || !password || typeof targetId !== 'string' || typeof password !== 'string') {
+      throw new AppError('Identifier and password must be valid strings', 400, 'VALIDATION_ERROR');
     }
     if (password.length > 128) {
       throw new AppError('Password is too long', 400, 'VALIDATION_ERROR');
     }
-    const cleanEmail = email.trim().toLowerCase();
     const targetRole = typeof role === "string" && role ? role : "customer";
-    const result = await AuthService.login(cleanEmail, password, targetRole);
+    const result = await AuthService.login(targetId, password, targetRole);
     return res.json({ success: true, data: result, error: null });
   } catch (err) {
     return next(err);
@@ -32,13 +32,16 @@ async function login(req, res, next) {
  */
 async function googleLogin(req, res, next) {
   try {
-    const { idToken } = req.body || {};
-    if (!idToken) {
-      throw new AppError('idToken is required', 400, 'VALIDATION_ERROR');
+    const { idToken, accessToken } = req.body || {};
+    console.log('[DEBUG Backend] googleLogin body:', { idToken: !!idToken, accessToken: !!accessToken });
+    if (!idToken && !accessToken) {
+      throw new AppError('idToken or accessToken is required', 400, 'VALIDATION_ERROR');
     }
-    const result = await AuthService.googleLogin(idToken);
+    const result = await AuthService.googleLogin(idToken, accessToken);
+    console.log('[DEBUG Backend] googleLogin result success for user:', result.user.email);
     return res.json({ success: true, data: result, error: null });
   } catch (err) {
+    console.error('[DEBUG Backend] googleLogin error:', err.message);
     return next(err);
   }
 }
@@ -82,19 +85,19 @@ async function getMe(req, res, next) {
 
 /**
  * POST /api/auth/register
- * Body: { email, password }
+ * Body: { identifier, email, password, role }
  */
 async function register(req, res, next) {
   try {
-    const { email, password } = req.body || {};
-    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
-      throw new AppError('Email and password are required', 400, 'VALIDATION_ERROR');
+    const { identifier, email, password, role } = req.body || {};
+    const targetId = identifier || email;
+    if (!targetId || !password || typeof targetId !== 'string' || typeof password !== 'string') {
+      throw new AppError('Identifier and password are required', 400, 'VALIDATION_ERROR');
     }
     if (password.length < 6 || password.length > 128) {
       throw new AppError('Password must be between 6 and 128 characters', 400, 'VALIDATION_ERROR');
     }
-    const cleanEmail = email.trim().toLowerCase();
-    const result = await RegistrationService.startRegistration(cleanEmail, password);
+    const result = await RegistrationService.startRegistration(targetId, password, role);
     return res.json({ success: true, data: result.data || result, error: null });
   } catch (err) {
     return next(err);
@@ -103,32 +106,76 @@ async function register(req, res, next) {
 
 /**
  * POST /api/auth/verify-otp
- * Body: { email, otp }
+ * Body: { identifier, email, otp }
  */
 async function verifyOtp(req, res, next) {
   try {
-    const { email, otp } = req.body || {};
-    if (!email || !otp) {
-      throw new AppError('Email and OTP are required', 400, 'VALIDATION_ERROR');
+    const { identifier, email, otp } = req.body || {};
+    const targetId = identifier || email;
+    if (!targetId || !otp) {
+      throw new AppError('Identifier and OTP are required', 400, 'VALIDATION_ERROR');
     }
-    const result = await RegistrationService.verifyOtp(email, otp);
+    const result = await RegistrationService.verifyOtp(targetId, otp);
     return res.json({ success: true, data: result.data || result, error: null });
   } catch (err) {
     return next(err);
   }
 }
+
 /**
  * POST /api/auth/resend-otp
- * Body: { email }
+ * Body: { identifier, email }
  */
 async function resendOtp(req, res, next) {
   try {
-    const { email } = req.body || {};
-    if (!email) {
-      throw new AppError('Email is required', 400, 'VALIDATION_ERROR');
+    const { identifier, email } = req.body || {};
+    const targetId = identifier || email;
+    if (!targetId) {
+      throw new AppError('Identifier is required', 400, 'VALIDATION_ERROR');
     }
-    const result = await RegistrationService.resendOtp(email);
+    const result = await RegistrationService.resendOtp(targetId);
     return res.json({ success: true, data: result.data || result, error: null });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * POST /api/auth/change-password
+ * Body: { oldPassword, newPassword }
+ * Requires authentication
+ */
+async function changePassword(req, res, next) {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
+    }
+    const { oldPassword, newPassword } = req.body || {};
+    if (!oldPassword || !newPassword || typeof oldPassword !== 'string' || typeof newPassword !== 'string') {
+      throw new AppError('Current password and new password are required', 400, 'VALIDATION_ERROR');
+    }
+    const result = await AuthService.changePassword(userId, oldPassword, newPassword);
+    return res.json({ success: true, data: result, error: null });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * POST /api/auth/link-email
+ * Body: { email }
+ * Requires authentication
+ */
+async function linkEmail(req, res, next) {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
+    }
+    const { email } = req.body || {};
+    const result = await AuthService.linkEmail(userId, email);
+    return res.json({ success: true, data: result, error: null });
   } catch (err) {
     return next(err);
   }
@@ -142,4 +189,6 @@ module.exports = {
   register,
   verifyOtp,
   resendOtp,
+  changePassword,
+  linkEmail,
 };

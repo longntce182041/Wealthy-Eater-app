@@ -253,10 +253,19 @@ class ChatService {
       .populate({
         path: 'user_id',
         model: 'User',
-        select: '_id email role',
+        select: '_id email phone role',
       })
       .sort({ create_at: -1 })
       .lean();
+
+    // Fetch customer profiles to enrich response with customer's full name
+    const customerUserIds = contracts.map(c => c.user_id?._id || c.user_id).filter(Boolean);
+    const UserProfile = require('../models/UserProfile');
+    const profiles = await UserProfile.find({ user_id: { $in: customerUserIds } }).select('user_id full_name').lean();
+    const profileMap = {};
+    for (const p of profiles) {
+      profileMap[p.user_id] = p.full_name;
+    }
 
     // Count unread messages for all contracts in a single query to prevent N+1
     const contractIds = contracts.map(c => c._id);
@@ -282,10 +291,21 @@ class ChatService {
       unreadMap[item._id.toString()] = item.count;
     }
 
-    const contractsWithUnread = contracts.map(contract => ({
-      ...contract,
-      unread_count: unreadMap[contract._id.toString()] || 0,
-    }));
+    const contractsWithUnread = contracts.map(contract => {
+      const u = contract.user_id;
+      let fullName = 'Client';
+      if (u) {
+        fullName = profileMap[u._id] || (u.email ? u.email.split('@')[0] : (u.phone ? u.phone : 'Client'));
+      }
+      return {
+        ...contract,
+        user_id: u ? {
+          ...u,
+          fullName,
+        } : null,
+        unread_count: unreadMap[contract._id.toString()] || 0,
+      };
+    });
 
     return contractsWithUnread;
   }

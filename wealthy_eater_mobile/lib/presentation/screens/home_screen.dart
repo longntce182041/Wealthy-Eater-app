@@ -5,8 +5,8 @@ import '../../domain/entities/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/shopping_list_provider.dart';
 import '../providers/notification_provider.dart';
+import '../providers/recipe_provider.dart';
 import 'notification_history_screen.dart';
-import '../widgets/coming_soon_tab.dart';
 import 'nutritionists_tab.dart';
 import 'recipe_likes_tab.dart';
 import 'recipe_list_view.dart';
@@ -14,6 +14,7 @@ import 'recipe_my_reviews_tab.dart';
 import 'shopping_list_tab.dart';
 import 'dashboard_home_tab.dart';
 import 'customer_profile_tab.dart';
+import 'meal_plans_tab.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserEntity? user;
@@ -26,6 +27,17 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<RecipeProvider>().loadRecipes();
+      context.read<NotificationProvider>().fetchSettings();
+      context.read<NotificationProvider>().fetchHistory();
+      context.read<ShoppingListProvider>().loadList();
+    });
+  }
 
   void _selectTab(int index) => setState(() => _selectedIndex = index);
 
@@ -113,12 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const _RecipeNavTab(),
 
             // ── 2: Meal Plans ──────────────────────────────────────────
-            const ComingSoonTab(
-              icon: Icons.event_note_outlined,
-              title: 'Meal Plans',
-              description:
-                  'AI-powered meal planning and nutrition workflows are coming soon.',
-            ),
+            const MealPlansTab(),
 
             // ── 3: Nutritionists ──────────────────────────────────────
             const NutritionistsTab(),
@@ -194,14 +201,6 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    // Pre-load shopping list when the Recipe navtab is first opened
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final shoppingProvider =
-          context.read<ShoppingListProvider>();
-      if (shoppingProvider.viewState == ShoppingListViewState.initial) {
-        shoppingProvider.loadList();
-      }
-    });
   }
 
   @override

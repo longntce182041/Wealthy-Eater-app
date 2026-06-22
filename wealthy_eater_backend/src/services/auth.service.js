@@ -11,40 +11,93 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 /** Builds the standardised user response object sent to clients. */
 function formatUser(user) {
   return {
-    id:    user._id.toString(),
+    id: user._id.toString(),
     email: user.email,
-    role:  user.role,
+    role: user.role,
   };
 }
 
 /** Issues both access and refresh tokens for a user. */
 function issueTokens(user) {
   const payload = {
-    sub:   user._id.toString(),
+    sub: user._id.toString(),
     email: user.email,
-    role:  user.role,
+    role: user.role,
   };
   return {
-    accessToken:  signAccessToken(payload),
+    accessToken: signAccessToken(payload),
     refreshToken: signRefreshToken({ sub: user._id.toString() }),
-    user:         formatUser(user),
+    user: formatUser(user),
   };
 }
 
 // ─── AuthService ─────────────────────────────────────────────────────────────
 
 class AuthService {
-  // ── Email / Password Login ─────────────────────────────────────────────────
+  // ── Change Password (Authenticated) ────────────────────────────────────────
 
-  static async login(email, password, requiredRole = 'customer') {
-    if (!email || !password) {
-      throw new AppError('Email and password are required', 400);
+  static async changePassword(userId, oldPassword, newPassword) {
+    if (!userId || !oldPassword || !newPassword) {
+      throw new AppError('All fields are required', 400, 'VALIDATION_ERROR');
+    }
+    if (newPassword.length < 6 || newPassword.length > 128) {
+      throw new AppError('New password must be between 6 and 128 characters', 400, 'VALIDATION_ERROR');
     }
 
-    const user = await UserRepository.findByEmail(email.toLowerCase().trim());
+    const user = await UserRepository.findById(userId);
+    if (!user) {
+      throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    }
+
+    const hash = user.password_hash;
+    if (!hash) {
+      throw new AppError('This account does not have a password set', 400, 'VALIDATION_ERROR');
+    }
+
+    const matched = await bcrypt.compare(oldPassword, hash);
+    if (!matched) {
+      throw new AppError('Incorrect current password', 400, 'VALIDATION_ERROR');
+    }
+
+    if (oldPassword === newPassword) {
+      throw new AppError('New password cannot be the same as current password', 400, 'VALIDATION_ERROR');
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    user.password_hash = newHash;
+    user.reset_password_token = null;
+    user.reset_password_expires = null;
+    await user.save();
+
+    return { success: true, message: 'Password changed successfully' };
+  }
+
+  // ── Email / Password Login ─────────────────────────────────────────────────
+
+  static async login(identifier, password, requiredRole = 'customer') {
+    if (!identifier || !password) {
+      throw new AppError('Identifier and password are required', 400);
+    }
+
+    const cleanId = identifier.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmail = emailRegex.test(cleanId);
+
+    let user;
+    if (isEmail) {
+      user = await UserRepository.findByEmail(cleanId.toLowerCase());
+    } else {
+      const User = require('../models/User');
+      user = await User.findOne({ phone: cleanId }).exec();
+    }
+
     if (!user) {
       // Generic message to prevent user enumeration
-      throw new AppError('Invalid email or password', 401);
+      throw new AppError('Invalid credentials', 401);
+    }
+
+    if (user.is_active === false) {
+      throw new AppError('Account is not verified. Please verify your account before logging in.', 401, 'UNVERIFIED_ACCOUNT');
     }
 
     const hash = user.password_hash;
@@ -54,7 +107,7 @@ class AuthService {
 
     const matched = await bcrypt.compare(password, hash);
     if (!matched) {
-      throw new AppError('Invalid email or password', 401);
+      throw new AppError('Invalid credentials', 401);
     }
 
     if (user.role !== requiredRole) {
@@ -66,7 +119,7 @@ class AuthService {
 
   // ── Google Sign-In ─────────────────────────────────────────────────────────
 
-  static async googleLogin(idToken) {
+  static async googleLogin(idToken, accessToken) {
     if (!GOOGLE_CLIENT_ID) {
       throw new AppError('Google login is not configured on this server', 500);
     }
@@ -74,34 +127,68 @@ class AuthService {
     const client = new OAuth2Client(GOOGLE_CLIENT_ID);
     let googlePayload;
 
-    try {
-      const ticket = await client.verifyIdToken({
-        idToken,
-        audience: GOOGLE_CLIENT_ID,
-      });
-      googlePayload = ticket.getPayload();
-    } catch {
-      throw new AppError('Invalid or expired Google ID token', 401);
+    if (idToken) {
+      console.log('[DEBUG Backend] Verifying idToken...');
+      try {
+        const ticket = await client.verifyIdToken({
+          idToken,
+          audience: GOOGLE_CLIENT_ID,
+        });
+        googlePayload = ticket.getPayload();
+      } catch (err) {
+        console.error('[DEBUG Backend] verifyIdToken failed:', err.message);
+        throw new AppError('Invalid or expired Google ID token', 401);
+      }
+    } else if (accessToken) {
+      console.log('[DEBUG Backend] Verifying accessToken...');
+      try {
+        const tokenInfo = await client.getTokenInfo(accessToken);
+        googlePayload = {
+          email: tokenInfo.email,
+          sub: tokenInfo.sub,
+        };
+      } catch (err) {
+        console.error('[DEBUG Backend] getTokenInfo failed:', err.message);
+        throw new AppError('Invalid or expired Google access token', 401);
+      }
+    } else {
+      throw new AppError('Either idToken or accessToken is required', 400);
     }
 
-    const { email } = googlePayload;
+    console.log('[DEBUG Backend] Resolved googlePayload:', googlePayload);
+
+    const { email, sub: googleId } = googlePayload;
 
     if (!email) {
       throw new AppError('Google account does not have an email address', 400);
     }
 
-    let user = await UserRepository.findByEmail(email.toLowerCase());
+    const User = require('../models/User');
+    let user = await User.findOne({ email: email.toLowerCase() }).exec();
 
-    if (!user) {
-      // Auto-register with only the fields allowed by schema
-      user = await UserRepository.create({
-        email: email.toLowerCase(),
-        role:  'customer',
-        // password_hash left null — Google-only account
-      });
+    if (user) {
+      let isModified = false;
+      if (!user.googleId) {
+        user.googleId = googleId;
+        isModified = true;
+      }
+      if (!user.is_active) {
+        user.is_active = true;
+        isModified = true;
+      }
+      if (isModified) {
+        await user.save();
+      }
     } else {
-      if (user.role !== 'customer') {
-        throw new AppError('Access denied: Google login is only available for customer accounts', 403);
+      user = await User.findOne({ googleId }).exec();
+      if (!user) {
+        user = new User({
+          email: email.toLowerCase(),
+          googleId,
+          role: 'customer',
+          is_active: true,
+        });
+        await user.save();
       }
     }
 
@@ -125,9 +212,9 @@ class AuthService {
 
     return {
       accessToken: signAccessToken({
-        sub:   user._id.toString(),
+        sub: user._id.toString(),
         email: user.email,
-        role:  user.role,
+        role: user.role,
       }),
     };
   }
@@ -137,6 +224,33 @@ class AuthService {
   static async getMe(userId) {
     const user = await UserRepository.findById(userId);
     if (!user) throw new AppError('User not found', 404);
+    return formatUser(user);
+  }
+
+  static async linkEmail(userId, email) {
+    if (!userId || !email) {
+      throw new AppError('Email is required', 400, 'VALIDATION_ERROR');
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      throw new AppError('Invalid email format', 400, 'VALIDATION_ERROR');
+    }
+
+    const user = await UserRepository.findById(userId);
+    if (!user) {
+      throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    }
+
+    const User = require('../models/User');
+    const existing = await User.findOne({ email: cleanEmail }).exec();
+    if (existing && existing._id.toString() !== userId) {
+      throw new AppError('This email is already in use by another account', 409, 'ALREADY_REGISTERED');
+    }
+
+    user.email = cleanEmail;
+    await user.save();
+
     return formatUser(user);
   }
 }

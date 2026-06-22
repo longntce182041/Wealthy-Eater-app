@@ -5,8 +5,8 @@
  * Currently supports 'chat' uploads stored in the 'WealthyEater/chat' folder.
  *
  * Constraints:
- *  - Max file size: 10 MB
- *  - Allowed formats: JPEG, PNG, WebP, GIF
+ * - Max file size: 10 MB
+ * - Allowed formats: JPEG, PNG, WebP, GIF
  */
 
 const multer = require('multer');
@@ -86,7 +86,33 @@ const avatarUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
 });
 
+// 🆕 ── Cấu hình bổ sung phục vụ Recipe & Excel ───────────────────────────────
 
+/**
+ * Helper hỗ trợ upload một chuỗi ảnh Base64 từ Frontend lên Cloudinary nhằm giải quyết lỗi 413 Payload Too Large
+ * @param {String} base64Str Chuỗi ảnh base64 từ frontend gửi lên
+ * @returns {Promise<String>} Trả về đường dẫn URL của ảnh sau khi upload thành công
+ */
+const uploadBase64ToCloudinary = async (base64Str) => {
+  if (!base64Str || !base64Str.startsWith('data:image')) return base64Str;
+  
+  try {
+    const uploadResponse = await cloudinary.uploader.upload(base64Str, {
+      folder: 'WealthyEater/recipes', // Đưa vào cụm thư mục gốc chung WealthyEater
+      resource_type: 'image'
+    });
+    return uploadResponse.secure_url;
+  } catch (error) {
+    console.error('❌ Cloudinary Upload Base64 Error:', error);
+    throw new AppError('Không thể tải hình ảnh công thức lên Cloudinary.', 502);
+  }
+};
+
+// Cấu hình lưu tạm file Excel vào RAM để làm sạch payload trung gian
+const uploadExcel = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // Giới hạn file excel 10MB
+});
 
 /**
  * Trích xuất public_id từ URL Cloudinary để dọn dẹp file cũ (tránh leak storage)
@@ -179,10 +205,13 @@ function uploadNutritionistCertificate(file, certificateUrl) {
   });
 }
 
+// 🔥 Cập nhật xuất bản đầy đủ hàm ra bên ngoài
 module.exports = {
   cloudinary,
   chatUpload,
   avatarUpload,
+  uploadExcel,               // 🆕 Xuất bản cho route Excel nhận diện
+  uploadBase64ToCloudinary,  // 🆕 Xuất bản cho controller xử lý chuỗi ảnh
   extractCloudinaryPublicId,
   uploadNutritionistCertificate
 };

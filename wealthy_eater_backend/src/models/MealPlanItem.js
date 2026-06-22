@@ -18,6 +18,10 @@ const MealPlanItemSchema = new mongoose.Schema({
   meal_type: { 
     type: String, 
     required: true 
+  },
+  customized_servings_gram: {
+    type: Number,
+    default: null
   }
 });
 

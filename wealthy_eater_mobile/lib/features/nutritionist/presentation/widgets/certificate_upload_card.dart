@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Widget for uploading certification (file or URL)
 /// Supports PDF, JPG, PNG files or certificate URL
@@ -35,6 +36,7 @@ class _CertificateUploadCardState extends State<CertificateUploadCard> {
     super.initState();
     _selectedFile = widget.selectedFile;
     _selectedUrl = widget.selectedUrl;
+    _showUrlInput = kIsWeb || widget.selectedUrl != null;
   }
 
   Future<void> _pickFile() async {
@@ -119,12 +121,35 @@ class _CertificateUploadCardState extends State<CertificateUploadCard> {
         const SizedBox(height: 12),
 
         // File Upload Section
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
+        if (kIsWeb)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              border: Border.all(color: Colors.amber.shade300),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.amber.shade800),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'File upload is not supported on Web. Please use the URL option below.',
+                    style: TextStyle(fontSize: 14, color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
             children: [
               if (_selectedFile != null)
                 Padding(

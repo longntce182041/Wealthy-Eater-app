@@ -1,33 +1,29 @@
 /**
- * Admin Recipe Routes - UC-71: View List Recipes & UC-73: Add Recipes
+ * Admin Recipe Routes - UC-71 to UC-76
  * Các route quản lý công thức nấu ăn trong trang quản trị
  */
 
 const express = require('express');
 const router = express.Router();
 
-// Import Controller chính xác của bác
+// Import Controller của bác
 const AdminRecipeController = require('../controllers/admin.recipe.controller');
-const { authenticateToken } = require('../middlewares/auth');
+const { authenticateToken, authorizeRoles } = require('../middlewares/auth');
 const validateObjectId = require('../middlewares/validateObjectId');
 
-// 📥 CẤU HÌNH TRUNG GIAN ĐỂ HỨNG FILE EXCEL TỪ FRONTEND
-const multer = require('multer');
-const upload = multer({ 
-  storage: multer.memoryStorage(), // Lưu tạm file vào bộ nhớ đệm RAM để xử lý nhanh
-  limits: { fileSize: 10 * 1024 * 1024 } // Giới hạn tối đa file excel 10MB
-});
+const { uploadExcel } = require('../config/cloudinary.config');
 
 /**
  * Middleware kiểm tra xem người dùng có phải là admin không
  */
 function checkAdminRole(req, res, next) {
+  // Bác bổ sung logic check role thực tế ở đây nếu cần (vd: if(req.user.role !== 'admin')...)
   next();
 }
 
 // Áp dụng xác thực (authentication) cho toàn bộ các API bên dưới
 router.use(authenticateToken);
-router.use(checkAdminRole);
+router.use(authorizeRoles('admin'));
 
 /**
  * UC-71: GET /api/admin/recipes
@@ -37,7 +33,7 @@ router.get('/', AdminRecipeController.getRecipesList);
 
 /**
  * UC-73: POST /api/admin/recipes
- * Tạo công thức nấu ăn mới bằng tay
+ * Tạo công thức nấu ăn mới bằng tay (Đã được controller tự động bắt base64 để up Cloudinary)
  */
 router.post('/', AdminRecipeController.addRecipe);
 
@@ -48,9 +44,9 @@ router.post('/', AdminRecipeController.addRecipe);
 /**
  * 🛠️ UC-76: POST /api/admin/recipes/import-excel
  * API xử lý Import từ file Excel
- * Đã sửa đúng tên hàm của bác: importRecipesExcel
+ * Đã áp dụng middleware uploadExcel đồng bộ từ config
  */
-router.post('/import-excel', upload.single('file'), AdminRecipeController.importRecipesExcel);
+router.post('/import-excel', uploadExcel.single('file'), AdminRecipeController.importRecipesExcel);
 
 /**
  * GET /api/admin/recipes/stats

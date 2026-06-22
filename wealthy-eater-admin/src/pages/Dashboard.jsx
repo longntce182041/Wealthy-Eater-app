@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/Badge';
 import { AdminButton } from '../components/ui/AdminButton';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
+import SystemStatsSection from '../components/SystemStatsSection';
 import { 
   ChefHat, 
   CheckCircle2, 
@@ -16,7 +17,8 @@ import {
   Eye, 
   Trash2, 
   SearchX,
-  AlertCircle
+  AlertCircle,
+  Users // 🆕 Thêm Icon quản lý thành viên
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -29,12 +31,15 @@ export default function Dashboard() {
       return null;
     }
   });
+  
+  // 🆕 Đồng bộ state thống kê, bổ sung trường totalUsers mặc định
   const [stats, setStats] = useState({
     totalRecipes: 0,
     publishedRecipes: 0,
     draftRecipes: 0,
     totalReviews: 0,
     averageRating: 0,
+    totalUsers: 0, // Giá trị khởi tạo
     topRecipe: null
   });
   const [recipes, setRecipes] = useState([]);
@@ -66,7 +71,7 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       
-      // 2. NẾU BACKEND BÁO TOKEN HẾT HẠN (401) HOẶC SAI LỖI -> ĐÁ VỀ LOGIN LUÔN
+      // NẾU BACKEND BÁO TOKEN HẾT HẠN (401) HOẶC SAI LỖI -> ĐÁ VỀ LOGIN LUÔN
       if (err.response?.status === 401 || err.response?.data?.message?.includes('expired')) {
         alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!');
         handleForceLogout();
@@ -80,7 +85,7 @@ export default function Dashboard() {
   }, [handleForceLogout]);
 
   useEffect(() => {
-    // 1. Kiểm tra nghiêm ngặt CẢ Thông tin User và Token bảo mật
+    // Kiểm tra nghiêm ngặt CẢ Thông tin User và Token bảo mật
     const rawUser = localStorage.getItem('admin_user');
     const token = localStorage.getItem('admin_session_jwt_token');
 
@@ -162,14 +167,16 @@ export default function Dashboard() {
           icon={<FileEdit className="w-5 h-5 text-amber-600 dark:text-amber-400" />} 
           iconBg="rgba(245, 158, 11, 0.1)"
         />
+        {/* 🆕 THẺ THÀNH VIÊN ĐÃ ĐỒNG BỘ: Hiển thị tổng số tài khoản thay cho rating trung bình */}
         <StatCard 
-          title="Average Rating" 
-          value={loading ? '...' : `${stats.averageRating} ★`} 
-          icon={<Star className="w-5 h-5 text-red-500 dark:text-red-400" />} 
-          iconBg="rgba(239, 68, 68, 0.1)"
+          title="Total Users" 
+          value={loading ? '...' : (stats.totalUsers || 0)} 
+          icon={<Users className="w-5 h-5 text-sky-600 dark:text-sky-400" />} 
+          iconBg="rgba(14, 165, 233, 0.1)"
         />
       </section>
-
+      {/* COMPONENT CON UC56 - System Statistics */}
+      <SystemStatsSection />
       {/* Recipes Table Section */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">

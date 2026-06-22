@@ -21,8 +21,20 @@ function buildFilter(query) {
     ];
   }
 
+  // Mobile users cannot see archived or draft recipes
+  filter.status = { $nin: ['archived', 'draft'] };
+
   if (query.status) {
-    filter.status = { $regex: `^${escapeRegex(String(query.status).trim())}$`, $options: 'i' };
+    const queryStatus = String(query.status).trim().toLowerCase();
+    if (queryStatus === 'archived' || queryStatus === 'draft') {
+      filter.status = '____non_existent_status____';
+    } else {
+      filter.status = {
+        $regex: `^${escapeRegex(String(query.status).trim())}$`,
+        $options: 'i',
+        $nin: ['archived', 'draft']
+      };
+    }
   }
 
   if (query.level) {

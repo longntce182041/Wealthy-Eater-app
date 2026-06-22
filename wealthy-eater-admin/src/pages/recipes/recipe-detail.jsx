@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import apiClient from '../../services/api';
+import apiClient from '../../services/api'; 
 import { LoadingState } from '../../components/ui/LoadingState';
 
 export default function RecipeDetail() {
@@ -34,8 +34,8 @@ export default function RecipeDetail() {
     fetchDetail();
   }, [id]);
 
-  if (loading) return <LoadingState text="Loading recipe info..." />;
-  if (error) return <div className="error-banner m-5">{error}</div>;
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>Loading recipe info...</div>;
+  if (error) return <div className="error-banner" style={{ margin: '20px' }}>{error}</div>;
   if (!recipe) return null;
 
   // ==========================================
@@ -54,15 +54,7 @@ export default function RecipeDetail() {
     stepsArray = rawSteps.split(separator).filter(s => s.trim() !== '');
   }
 
-//   // FALLBACK DỮ LIỆU MẪU: Nếu món cũ chưa có bước nấu, tự tạo dữ liệu mẫu hiển thị trực quan
-//   if (stepsArray.length === 0) {
-//     stepsArray = [
-//       "Chuẩn bị và sơ chế sạch các nguyên liệu cơ bản cho món ăn.",
-//       "Bật bếp nóng, phi thơm hành tỏi băm nhỏ với một chút dầu ăn.",
-//       "Cho các nguyên liệu chính vào xào chín đều, nêm nếm gia vị vừa vị.",
-//       "Trình bày món ăn ra đĩa hoàn chỉnh, thưởng thức khi còn nóng."
-//     ];
-//   }
+  
 
   // ==========================================
   // 👉 XỬ LÝ ĐỘNG CHO DINH DƯỠNG (NUTRITION)
@@ -93,61 +85,61 @@ export default function RecipeDetail() {
   }
 
   return (
-    <div className="py-1 px-0.5 text-slate-900">
-      <div className="mb-6">
-        <button onClick={() => navigate('/recipes')} className="btn-secondary">
+    <div style={{ padding: '4px 2px', color: '#f8fafc' }}>
+      <div style={{ marginBottom: '24px' }}>
+        <button onClick={() => navigate('/recipes')} className="btn-primary" style={{ background: '#334155' }}>
           ← Back to List
         </button>
       </div>
 
-      <div className="grid grid-cols-[1fr_2fr] gap-6 items-start">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px', alignItems: 'start' }}>
         
         {/* LEFT COLUMN */}
-        <div className="flex flex-col gap-6">
-          <div className="p-5 text-center bg-white rounded-xl shadow-sm border border-slate-200">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div className="table-card" style={{ padding: '20px', textAlign: 'center' }}>
             {recipe.imageUrl ? (
-              <img src={recipe.imageUrl} alt={recipe.name} className="w-full h-[220px] object-cover rounded-xl mb-4" />
+              <img src={recipe.imageUrl} alt={recipe.name} style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '12px', marginBottom: '16px' }} />
             ) : (
-              <div className="w-full h-[220px] bg-slate-100 rounded-xl flex items-center justify-center text-5xl mb-4">🍳</div>
+              <div style={{ width: '100%', height: '220px', background: '#1e293b', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px', marginBottom: '16px' }}>🍳</div>
             )}
-            <h2 className="text-xl font-extrabold text-slate-900 m-0">{recipe.name}</h2>
-            <div className="flex justify-center gap-2 mt-4">
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#fff' }}>{recipe.name}</h2>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
               <span className={`badge ${recipe.levelCooking || 'medium'}`}>{recipe.levelCooking || 'medium'}</span>
-              <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700">⏱️ {recipe.cookingTime || 30} mins</span>
+              <span className="badge" style={{ background: '#1e293b' }}>⏱️ {recipe.cookingTime || 30} mins</span>
             </div>
           </div>
 
           {/* NUTRITION BOX */}
-          <div className="p-5 bg-white rounded-xl shadow-sm border border-slate-200">
-            <h4 className="text-xs text-slate-500 font-bold mb-4 uppercase">NUTRITIONAL PROFILE</h4>
-            <div className="bg-slate-50 p-4 rounded-lg text-center mb-5 border border-slate-200">
-              <span className="text-[11px] text-primary font-bold block">TOTAL ENERGY</span>
-              <strong className="text-2xl text-primary">{calories} kcal</strong>
+          <div className="table-card" style={{ padding: '20px' }}>
+            <h4 style={{ fontSize: '12px', color: '#64748b', fontWeight: 700, marginBottom: '15px' }}>NUTRITIONAL PROFILE</h4>
+            <div style={{ background: 'rgba(56, 189, 248, 0.08)', padding: '16px', borderRadius: '10px', textAlign: 'center', marginBottom: '20px', border: '1px solid rgba(56, 189, 248, 0.15)' }}>
+              <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700, display: 'block' }}>TOTAL ENERGY</span>
+              <strong style={{ fontSize: '28px', color: '#38bdf8' }}>{calories} kcal</strong>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <div className="flex justify-between text-[13px]">
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                   <span>Carbs</span><strong>{carbs}g</strong>
                 </div>
-                <div className="w-full h-1.5 bg-slate-100 rounded-full mt-1.5">
-                  <div style={{ width: `${Math.min((carbs / (carbs + protein + fat || 1)) * 100, 100)}%` }} className="h-full bg-amber-500 rounded-full"></div>
+                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', marginTop: '5px' }}>
+                  <div style={{ width: `${Math.min((carbs / (carbs + protein + fat || 1)) * 100, 100)}%`, height: '100%', background: '#f59e0b', borderRadius: '3px' }}></div>
                 </div>
               </div>
               <div>
-                <div className="flex justify-between text-[13px]">
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                   <span>Protein</span><strong>{protein}g</strong>
                 </div>
-                <div className="w-full h-1.5 bg-slate-100 rounded-full mt-1.5">
-                  <div style={{ width: `${Math.min((protein / (carbs + protein + fat || 1)) * 100, 100)}%` }} className="h-full bg-primary rounded-full"></div>
+                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', marginTop: '5px' }}>
+                  <div style={{ width: `${Math.min((protein / (carbs + protein + fat || 1)) * 100, 100)}%`, height: '100%', background: '#10b981', borderRadius: '3px' }}></div>
                 </div>
               </div>
               <div>
-                <div className="flex justify-between text-[13px]">
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                   <span>Fat</span><strong>{fat}g</strong>
                 </div>
-                <div className="w-full h-1.5 bg-slate-100 rounded-full mt-1.5">
-                  <div style={{ width: `${Math.min((fat / (carbs + protein + fat || 1)) * 100, 100)}%` }} className="h-full bg-red-500 rounded-full"></div>
+                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', marginTop: '5px' }}>
+                  <div style={{ width: `${Math.min((fat / (carbs + protein + fat || 1)) * 100, 100)}%`, height: '100%', background: '#ef4444', borderRadius: '3px' }}></div>
                 </div>
               </div>
             </div>
@@ -155,30 +147,30 @@ export default function RecipeDetail() {
         </div>
 
         {/* RIGHT COLUMN */}
-        <div className="flex flex-col gap-6">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* INGREDIENTS */}
-          <div className="p-[22px] bg-white rounded-xl shadow-sm border border-slate-200">
-            <h3 className="text-base font-bold text-slate-900 mb-4 m-0">🛒 Ingredients</h3>
-            <div className="grid grid-cols-2 gap-2.5">
+          <div className="table-card" style={{ padding: '22px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#fff', marginBottom: '16px' }}>🛒 Ingredients</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               {ingredientsArray.map((ing, i) => (
-                <div key={i} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex justify-between items-center">
-                  <span className="text-sm">{ing.name}</span>
-                  <span className="text-primary font-semibold text-sm">{ing.amount || ing.base_quantity || 0} {ing.unit || 'g'}</span>
+                <div key={i} style={{ background: '#1e293b', padding: '10px', borderRadius: '8px', border: '1px solid #334155', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{ing.name}</span>
+                  <span style={{ color: '#38bdf8', fontWeight: 600 }}>{ing.amount || ing.base_quantity || 0} {ing.unit || 'g'}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* COOKING STEPS */}
-          <div className="p-[22px] bg-white rounded-xl shadow-sm border border-slate-200">
-            <h3 className="text-base font-bold text-slate-900 mb-4 m-0">👨‍🍳 Preparation Steps</h3>
-            <div className="flex flex-col gap-3.5">
+          <div className="table-card" style={{ padding: '22px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#fff', marginBottom: '16px' }}>👨‍🍳 Preparation Steps</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {stepsArray.map((step, idx) => (
-                <div key={idx} className="flex gap-4 bg-slate-50 p-4 rounded-lg border-l-4 border-l-primary shadow-sm">
-                  <div className="bg-primary text-white min-w-[24px] h-[24px] rounded-full text-center text-xs leading-[24px] font-bold">
+                <div key={idx} style={{ display: 'flex', gap: '15px', background: '#1e293b', padding: '15px', borderRadius: '10px', borderLeft: '4px solid #10b981' }}>
+                  <div style={{ background: '#10b981', color: '#fff', minWidth: '24px', height: '24px', borderRadius: '50%', textAlign: 'center', fontSize: '12px', lineHeight: '24px', fontWeight: 'bold' }}>
                     {idx + 1}
                   </div>
-                  <div className="text-sm leading-relaxed text-slate-600">
+                  <div style={{ fontSize: '14px', lineHeight: '1.6', color: '#cbd5e1' }}>
                     {typeof step === 'object' ? step.instruction : step}
                   </div>
                 </div>

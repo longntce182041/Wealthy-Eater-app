@@ -29,4 +29,4 @@ lerna-debug.log*
 *.sw?
 
 # Markdown files
-*.md
+*GEMINI.md

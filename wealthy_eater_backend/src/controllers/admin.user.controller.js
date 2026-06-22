@@ -1,8 +1,7 @@
 /**
  * Admin User Controller - UC-77: View List User
- * API lấy danh sách người dùng hỗ trợ phân trang dữ liệu nâng cao, tìm kiếm và lọc theo vai trò/trạng thái
+ * API lấy danh sách người dùng hỗ trợ phân trang, tìm kiếm và lọc theo vai trò/trạng thái.
  */
-
 
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
@@ -11,31 +10,31 @@ const UserDietary = require('../models/UserDietary');
 const AppError = require('../utils/AppError');
 
 /**
- * Escapa caracteres especiais para regex seguro (Hàm helper bảo vệ hệ thống khỏi Regex Injection)
+ * Escape special regex characters to prevent ReDoS (Regex Injection protection).
+ * @param {string} value
+ * @returns {string}
  */
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
- * Constrói filtro MongoDB baseado em query parameters
+ * Build a MongoDB filter object from query parameters.
+ * @param {object} query
+ * @returns {object}
  */
 function buildUserFilter(query) {
   const filter = {};
 
-  // Tìm kiếm theo từ khóa (khớp một phần Email, không phân biệt hoa thường)
   if (query.search) {
     const searchTerm = escapeRegex(String(query.search).trim());
     filter.email = { $regex: searchTerm, $options: 'i' };
   }
 
-  // Lọc nhanh theo Vai trò (customer, admin, nutritionist)
   if (query.role) {
     filter.role = String(query.role).trim();
   }
 
-  // Lọc hiển thị nhanh theo Trạng thái tài khoản (active, blocked, v.v.)
-  // Lưu ý: Trường này sẽ hoạt động khi bạn cập nhật thêm trường 'status' vào UserSchema của mình
   if (query.status) {
     filter.status = String(query.status).trim();
   }
@@ -44,18 +43,20 @@ function buildUserFilter(query) {
 }
 
 /**
- * Helper: Mapeia dữ liệu tổng hợp của một người dùng để trả về phía giao diện Admin Dashboard
+ * Map a user document and its related profile/dietary data into the admin response shape.
+ * @param {object} user
+ * @param {object|null} profile
+ * @param {object|null} dietary
+ * @returns {object}
  */
 function mapUserForAdmin(user, profile, dietary) {
   return {
     id: user._id,
     email: user.email,
     role: user.role,
-    status: user.status || 'active', // Trả về mặc định nếu schema chưa cập nhật trường này
-    createdAt: user.created_at || new Date(),
-    // Thông tin bổ sung từ bảng UserProfile
+    status: user.status || 'active',
+    createdAt: user.created_at || user.createdAt || new Date(),
     profile: profile ? {
-      fullName: profile.full_name || 'New User',
       age: profile.age,
       gender: profile.gender,
       height: profile.height,
@@ -63,177 +64,119 @@ function mapUserForAdmin(user, profile, dietary) {
       bmi: profile.bmi || null,
       tdee: profile.tdee || null,
       bmr: profile.bmr || null,
-      healthGoal: profile.health_goal || '',
-      activityLevel: dietary?.activity_level || null,
-      dietPreferences: dietary?.diet_preferences || []
+      healthGoal: profile.health_goal || profile.healthGoal || '',
+      activityLevel: profile.dietary_references?.activity_level || null,
+      dietPreferences: profile.dietary_references?.diet_preferences || [],
     } : null,
-    // Thông tin bổ sung từ bảng UserDietary
     dietary: dietary ? {
       medicalConditionId: dietary.medical_condition_id || null,
       allergies: dietary.allergies || [],
       dislikeIngredients: dietary.dislike_ingredients || [],
       cookingSkillLevel: dietary.cooking_skill_level || '',
-      availableCookingTime: dietary.available_cooking_time || 0
-    } : null
+      availableCookingTime: dietary.available_cooking_time || 0,
+    } : null,
   };
 }
 
 /**
  * UC-77: GET /api/admin/users
- * Lấy danh sách người dùng phân trang và lọc nâng cao
- * * Query Parameters:
- * - page: Số trang hiện tại (Mặc định: 1)
- * - limit: Số lượng bản ghi trên một trang (Mặc định: 10, Tối đa: 100)
- * - search: Từ khóa tìm kiếm theo email người dùng
- * - role: Bộ lọc theo vai trò ('customer', 'admin', 'nutritionist')
- * - status: Bộ lọc theo trạng thái tài khoản ('active', 'blocked')
- * - sortBy: Tiêu chí sắp xếp ('newest', 'oldest', 'email_asc', 'email_desc')
+ * Returns a paginated, searchable, filterable list of all users.
+ *
+ * P-03 fix: Always paginate — the unbounded User.find() mode has been removed
+ * to prevent OOM on large datasets. Default page=1 / limit=20, capped at 200.
  */
 async function getUsersList(req, res, next) {
   try {
-    // 1. Xây dựng bộ lọc tìm kiếm dữ liệu từ query params
     const filter = buildUserFilter(req.query || {});
 
-    // 2. Thiết lập tiêu chí sắp xếp dữ liệu (Sử dụng trường created_at trong cấu trúc Model của bạn)
-    let sortObj = { created_at: -1 }; // Mặc định: Tài khoản mới tạo lên đầu
+    let sortObj = { created_at: -1 };
     const sortBy = req.query.sortBy || 'newest';
-
     switch (sortBy) {
-      case 'email_asc':
-        sortObj = { email: 1 };
-        break;
-      case 'email_desc':
-        sortObj = { email: -1 };
-        break;
-      case 'oldest':
-        sortObj = { created_at: 1 };
-        break;
+      case 'email_asc':  sortObj = { email: 1 };           break;
+      case 'email_desc': sortObj = { email: -1 };          break;
+      case 'oldest':     sortObj = { created_at: 1 };      break;
       case 'newest':
-      default:
-        sortObj = { created_at: -1 };
-        break;
+      default:           sortObj = { created_at: -1, _id: -1 }; break;
     }
 
-    // 3. Xử lý thuật toán Phân trang an toàn
-    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
-    const skip = (page - 1) * limit;
+    const page  = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 200);
+    const skip  = (page - 1) * limit;
 
-    // 4. Thực thi song song: Đếm tổng số bản ghi và truy vấn tập dữ liệu phân trang (O(1) database trip)
     const [users, total] = await Promise.all([
-      User.find(filter)
-        .sort(sortObj)
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(filter)
+      User.find(filter).sort(sortObj).skip(skip).limit(limit).lean(),
+      User.countDocuments(filter),
     ]);
 
-    // Trường hợp không tìm thấy người dùng nào thỏa mãn bộ lọc
-    if (users.length === 0) {
+    if (!users || users.length === 0) {
       return res.json({
         success: true,
         message: 'Không tìm thấy người dùng nào phù hợp.',
         data: [],
-        meta: {
-          page,
-          limit,
-          total,
-          totalPages: 0,
-          hasNextPage: false,
-          hasPrevPage: false
-        }
+        error: null,
+        meta: { total: 0, page, limit, totalPages: 0, hasNextPage: false, hasPrevPage: false },
       });
     }
 
-    // 5. Giải quyết bài toán N+1: Thu thập tất cả user_id của trang hiện tại để gom cụm truy vấn 1 lần duy nhất
-    const userIds = users.map(user => user._id);
-
-    // Truy vấn hàng loạt dữ liệu Hồ sơ (Profile) và Chế độ ăn (Dietary) của danh sách người dùng tương ứng
+    // Resolve N+1: batch-fetch all related profile and dietary docs in two queries
+    const userIds = users.map(u => u._id);
     const [profiles, dietaries] = await Promise.all([
       UserProfile.find({ user_id: { $in: userIds } }).lean(),
-      UserDietary.find({ user_id: { $in: userIds } }).lean()
+      UserDietary.find({ user_id: { $in: userIds } }).lean(),
     ]);
 
-    // Tạo bản đồ ánh xạ nhanh (Lookup Maps) bằng Object Key để tăng tốc độ gộp dữ liệu xuống độ phức tạp O(1)
     const profileMap = {};
-    profiles.forEach(p => {
-      profileMap[p.user_id] = p;
-    });
+    profiles.forEach(p => { const uid = p.user_id?.toString(); if (uid) profileMap[uid] = p; });
 
     const dietaryMap = {};
-    dietaries.forEach(d => {
-      dietaryMap[d.user_id] = d;
+    dietaries.forEach(d => { const uid = d.user_id?.toString(); if (uid) dietaryMap[uid] = d; });
+
+    const data = users.map(u => {
+      const uid = u._id.toString();
+      return mapUserForAdmin(u, profileMap[uid] || null, dietaryMap[uid] || null);
     });
 
-    // 6. Gộp dữ liệu hoàn chỉnh từ 3 bảng thông qua hàm Helper
-    const data = users.map(user =>
-      mapUserForAdmin(
-        user,
-        profileMap[user._id] || null,
-        dietaryMap[user._id] || null
-      )
-    );
-
-    // Tính toán siêu dữ liệu phân trang (Meta Pagination)
     const totalPages = Math.ceil(total / limit);
-    const hasNextPage = page < totalPages;
-    const hasPrevPage = page > 1;
-
-    // 7. Trả kết quả định dạng chuẩn JSON về Client
     return res.json({
       success: true,
       message: 'Tải danh sách người dùng thành công!',
       data,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages,
-        hasNextPage,
-        hasPrevPage
-      }
+      error: null,
+      meta: { page, limit, total, totalPages, hasNextPage: page < totalPages, hasPrevPage: page > 1 },
     });
-
   } catch (err) {
-    console.error('❌ Error fetching admin users list:', err);
-    return next(new AppError(err.message || 'Xảy ra lỗi hệ thống khi tải danh sách người dùng.', 500));
+    return next(new AppError(err.message || 'Failed to load user list.', 500, 'INTERNAL_SERVER_ERROR'));
   }
 }
 
 const DEFAULT_PASSWORD = process.env.DEFAULT_USER_PASSWORD || 'ChangeMe123!';
 const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
 
+/**
+ * POST /api/admin/users — Create a new user.
+ */
 async function createUser(req, res, next) {
   try {
-    console.log('createUser called');
-    console.log('req.body:', req.body);
-
     const { email, password, role = 'customer', status = 'active' } = req.body || {};
 
     if (!email || typeof email !== 'string') {
-      return next(new AppError('Email is required.', 400));
+      return next(new AppError('Email is required.', 400, 'VALIDATION_ERROR'));
     }
     const normalizedEmail = String(email).trim().toLowerCase();
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(normalizedEmail)) {
-      return next(new AppError('Invalid email format.', 400));
+      return next(new AppError('Invalid email format.', 400, 'VALIDATION_ERROR'));
     }
 
-    // Double-check DB connection
-    if (!User.db || !User.db.readyState) {
-      console.error('MongoDB not connected or readyState:', User.db && User.db.readyState);
-      return next(new AppError('Database not ready.', 500));
-    }
-
-    // Check duplicate
     const existing = await User.findOne({ email: normalizedEmail }).lean();
     if (existing) {
-      return next(new AppError('Email already exists.', 409));
+      return next(new AppError('Email already exists.', 409, 'ALREADY_REGISTERED'));
     }
 
-    const rawPassword = password && String(password).trim().length >= 6 ? String(password).trim() : DEFAULT_PASSWORD;
+    const rawPassword = password && String(password).trim().length >= 6
+      ? String(password).trim()
+      : DEFAULT_PASSWORD;
 
     const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
     const passwordHash = await bcrypt.hash(rawPassword, salt);
@@ -243,48 +186,34 @@ async function createUser(req, res, next) {
       password_hash: passwordHash,
       role,
       created_at: new Date(),
-      status
+      status,
     });
 
     let savedUser;
     try {
       savedUser = await newUser.save();
     } catch (saveErr) {
-      // Handle duplicate key race and validation errors
-      console.error('Error saving user:', saveErr);
       if (saveErr.code === 11000) {
-        return next(new AppError('Email already exists.', 409));
+        return next(new AppError('Email already exists.', 409, 'ALREADY_REGISTERED'));
       }
       if (saveErr.name === 'ValidationError') {
-        return next(new AppError(saveErr.message, 400));
+        return next(new AppError(saveErr.message, 400, 'VALIDATION_ERROR'));
       }
       throw saveErr;
     }
 
-    // Create profile and dietary records but isolate errors so user creation still succeeds
+    // Create an empty profile for the new user; isolate errors so user creation still succeeds
     try {
       await UserProfile.create({
         user_id: savedUser._id,
-        full_name: 'New User',
-        age: 18,
-        gender: 'other',
-        height: 170,
-        weight: 70,
+        age: null,
+        gender: null,
+        height: null,
+        weight: null,
+        dietary_references: { activity_level: null, diet_preferences: [], allergies: [] },
       });
     } catch (profileErr) {
-      console.error('Warning: failed to create UserProfile for', savedUser._id, profileErr);
-    }
-    try {
-      await UserDietary.create({
-        user_id: savedUser._id,
-        medical_condition_id: null,
-        allergies: [],
-        dislike_ingredients: [],
-        activity_level: null,
-        diet_preferences: [],
-      });
-    } catch (dietaryErr) {
-      console.error('Warning: failed to create UserDietary for', savedUser._id, dietaryErr);
+      console.warn('Warning: failed to create UserProfile for', savedUser._id, profileErr.message);
     }
 
     return res.status(201).json({
@@ -295,17 +224,16 @@ async function createUser(req, res, next) {
         email: savedUser.email,
         role: savedUser.role,
         status: savedUser.status,
-        createdAt: savedUser.created_at
-      }
+        createdAt: savedUser.created_at,
+      },
+      error: null,
     });
-
   } catch (err) {
-    console.error('❌ Error creating user full stack:', err);
-    return next(new AppError('Server error while creating user.', 500));
+    return next(new AppError(err.message || 'Server error while creating user.', 500, 'INTERNAL_SERVER_ERROR'));
   }
 }
 
 module.exports = {
   getUsersList,
-  createUser
+  createUser,
 };

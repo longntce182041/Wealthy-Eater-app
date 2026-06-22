@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier, debugPrint, defaultTargetPlatform, TargetPlatform;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -21,10 +21,24 @@ enum AuthState { initial, loading, authenticated, unauthenticated, error }
 class AuthProvider with ChangeNotifier {
   final ApiClient _api;
   final FlutterSecureStorage _storage;
+  late final GoogleSignIn _googleSignIn;
 
   AuthProvider({required ApiClient api, FlutterSecureStorage? storage})
       : _api = api,
-        _storage = storage ?? const FlutterSecureStorage();
+        _storage = storage ?? const FlutterSecureStorage() {
+    _googleSignIn = kIsWeb
+        ? GoogleSignIn(clientId: googleClientId)
+        : GoogleSignIn();
+
+    if (kIsWeb) {
+      _googleSignIn.onCurrentUserChanged.listen((GoogleSignInAccount? account) async {
+        if (account != null) {
+          debugPrint('[DEBUG Frontend] googleSignIn.onCurrentUserChanged triggered for ${account.email}');
+          await _handleGoogleSignInAccount(account);
+        }
+      });
+    }
+  }
 
   AuthState state = AuthState.initial;
   String? errorMessage;
@@ -77,13 +91,13 @@ class AuthProvider with ChangeNotifier {
   // Login
   // ---------------------------------------------------------------------------
 
-  Future<void> login(String email, String password, {String? role}) async {
+  Future<void> login(String identifier, String password, {String? role}) async {
     _setLoading();
     try {
       final res = await _api.post(
         '/api/auth/login',
         data: {
-          'email': email.trim(),
+          'identifier': identifier.trim(),
           'password': password,
           'role': role,
         },
@@ -92,10 +106,13 @@ class AuthProvider with ChangeNotifier {
       if (res.statusCode == 200 && res.data['success'] == true) {
         await _handleAuthResponse(res.data['data'] as Map<String, dynamic>);
       } else {
-        _setError('Invalid username or password');
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Invalid username or password');
       }
     } catch (e) {
-      _setError('Invalid username or password');
+      _setError(mapError(e).message);
     }
   }
 
@@ -103,32 +120,60 @@ class AuthProvider with ChangeNotifier {
   // Google Sign-In
   // ---------------------------------------------------------------------------
 
-  Future<void> googleSignIn() async {
+  Future<void> _handleGoogleSignInAccount(GoogleSignInAccount account) async {
     _setLoading();
     try {
-      final GoogleSignIn googleSignIn = kIsWeb
-          ? GoogleSignIn(clientId: googleClientId)
-          : GoogleSignIn();
+      final authentication = await account.authentication;
+      final idToken = authentication.idToken;
+      final accessToken = authentication.accessToken;
+      debugPrint('[DEBUG Frontend] googleSignIn credentials: idToken=${idToken != null ? "EXISTS" : "NULL"}, accessToken=${accessToken != null ? "EXISTS" : "NULL"}');
+      if (idToken == null && accessToken == null) {
+        _setError('Failed to retrieve Google credentials');
+        return;
+      }
 
-      final account = await googleSignIn.signIn();
+      debugPrint('[DEBUG Frontend] Posting tokens to backend /api/auth/google...');
+      final res = await _api.post('/api/auth/google', data: {
+        'idToken': idToken,
+        'accessToken': accessToken,
+      });
+      debugPrint('[DEBUG Frontend] Backend response statusCode: ${res.statusCode}');
+      debugPrint('[DEBUG Frontend] Backend response data: ${res.data}');
+
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        await _handleAuthResponse(res.data['data'] as Map<String, dynamic>);
+      } else {
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Google login failed');
+      }
+    } catch (e) {
+      _setError(mapError(e).message);
+    }
+  }
+
+  Future<void> googleSignIn() async {
+    if (kIsWeb) {
+      // On Web, the official Google Sign-In button handles user interactive flows.
+      return;
+    }
+
+    _setLoading();
+    try {
+      if (defaultTargetPlatform != TargetPlatform.android &&
+          defaultTargetPlatform != TargetPlatform.iOS) {
+        _setError('Google Sign-In is only supported on Android, iOS, and Web. Desktop support is not configured.');
+        return;
+      }
+
+      final account = await _googleSignIn.signIn();
       if (account == null) {
         _setError('Google sign-in was cancelled');
         return;
       }
 
-      final idToken = (await account.authentication).idToken;
-      if (idToken == null) {
-        _setError('Failed to retrieve Google ID token');
-        return;
-      }
-
-      final res = await _api.post('/api/auth/google', data: {'idToken': idToken});
-
-      if (res.statusCode == 200 && res.data['success'] == true) {
-        await _handleAuthResponse(res.data['data'] as Map<String, dynamic>);
-      } else {
-        _setError(res.data['message']?.toString() ?? 'Google login failed');
-      }
+      await _handleGoogleSignInAccount(account);
     } catch (e) {
       _setError(mapError(e).message);
     }
@@ -138,13 +183,14 @@ class AuthProvider with ChangeNotifier {
   // Registration / OTP flows
   // ---------------------------------------------------------------------------
 
-  Future<void> register(String email, String password, String confirmPassword) async {
+  Future<void> register(String identifier, String password, String confirmPassword, {String? role}) async {
     _setLoading();
     try {
       final res = await _api.post('/api/auth/register', data: {
-        'email': email.trim(),
+        'identifier': identifier.trim(),
         'password': password,
         'confirmPassword': confirmPassword,
+        'role': role,
       });
 
       if (res.statusCode == 200 && res.data['success'] == true) {
@@ -153,17 +199,20 @@ class AuthProvider with ChangeNotifier {
         errorMessage = null;
         notifyListeners();
       } else {
-        _setError(res.data['message']?.toString() ?? 'Registration failed');
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Registration failed');
       }
     } catch (e) {
       _setError(mapError(e).message);
     }
   }
 
-  Future<void> verifyOtp(String email, String otp) async {
+  Future<void> verifyOtp(String identifier, String otp) async {
     _setLoading();
     try {
-      final res = await _api.post('/api/auth/verify-otp', data: {'email': email.trim(), 'otp': otp});
+      final res = await _api.post('/api/auth/verify-otp', data: {'identifier': identifier.trim(), 'otp': otp});
 
       if (res.statusCode == 200 && res.data['success'] == true) {
         final data = res.data['data'] as Map<String, dynamic>?;
@@ -175,26 +224,59 @@ class AuthProvider with ChangeNotifier {
           notifyListeners();
         }
       } else {
-        _setError(res.data['message']?.toString() ?? 'Verification failed');
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Verification failed');
       }
     } catch (e) {
       _setError(mapError(e).message);
     }
   }
 
-  Future<void> resendOtp(String email) async {
+  Future<void> resendOtp(String identifier) async {
     _setLoading();
     try {
-      final res = await _api.post('/api/auth/resend-otp', data: {'email': email.trim()});
+      final res = await _api.post('/api/auth/resend-otp', data: {'identifier': identifier.trim()});
       if (res.statusCode == 200 && res.data['success'] == true) {
         state = AuthState.unauthenticated;
         errorMessage = null;
         notifyListeners();
       } else {
-        _setError(res.data['message']?.toString() ?? 'Resend failed');
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Resend failed');
       }
     } catch (e) {
       _setError(mapError(e).message);
+    }
+  }
+
+  Future<bool> linkEmail(String email) async {
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final res = await _api.post('/api/auth/link-email', data: {'email': email.trim().toLowerCase()});
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        final userData = res.data['data'];
+        if (userData is Map<String, dynamic>) {
+          user = UserEntity.fromJson(userData);
+        }
+        notifyListeners();
+        return true;
+      } else {
+        final errObj = res.data['error'];
+        errorMessage = errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Linking email failed';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      errorMessage = mapError(e).message;
+      notifyListeners();
+      return false;
     }
   }
 
@@ -204,6 +286,11 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> logout() async {
     await _clearSession();
+    if (kIsWeb || defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
+    }
     state = AuthState.unauthenticated;
     notifyListeners();
   }
@@ -324,6 +411,37 @@ class AuthProvider with ChangeNotifier {
         return true;
       } else {
         errorMessage = res.data['message']?.toString() ?? 'Save profile failed';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      errorMessage = mapError(e).message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Change user password via API.
+  Future<bool> changePassword(String oldPassword, String newPassword) async {
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final res = await _api.post(
+        '/api/auth/change-password',
+        data: {
+          'oldPassword': oldPassword,
+          'newPassword': newPassword,
+        },
+      );
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        final errObj = res.data['error'];
+        errorMessage = errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : (res.data['message']?.toString() ?? 'Đổi mật khẩu thất bại');
         notifyListeners();
         return false;
       }

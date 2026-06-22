@@ -30,11 +30,10 @@ venv/
 .env
 .env.*
 # Tránh quét các file tự sinh của flutter build local
-wealthy_eater_mobile/macos/
-wealthy_eater_mobile/windows/
+# (Already handled by subproject .gitignores, do not ignore the entire platform directories)
 
 # Agent Skills
 .agent
 
 # Markdown files
-*.md
+*GEMINI.md
