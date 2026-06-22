@@ -243,7 +243,7 @@ class ChatService {
       .lean();
 
     if (!nutritionist) {
-      throw new AppError('Nutritionist profile not found for this account.', 404);
+      return [];
     }
 
     const contracts = await ConsultationContract.find({

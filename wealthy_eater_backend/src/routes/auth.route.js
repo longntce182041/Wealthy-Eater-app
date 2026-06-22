@@ -26,4 +26,12 @@ router.post('/change-password', authenticateToken, AuthController.changePassword
 // POST /api/auth/link-email — link email to phone registered account (requires auth)
 router.post('/link-email', authenticateToken, AuthController.linkEmail);
 
+// Forget Password flow (Public)
+router.post('/forget-password', AuthController.forgetPassword);
+router.post('/reset-password', AuthController.resetPassword);
+
+// Profile Linking flow (Authenticated)
+router.post('/link-request', authenticateToken, AuthController.linkRequest);
+router.post('/link-verify', authenticateToken, AuthController.linkVerify);
+
 module.exports = router;

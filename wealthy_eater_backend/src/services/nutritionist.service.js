@@ -166,6 +166,99 @@ class NutritionistService {
   }
 
   /**
+   * Get a nutritionist's profile by user ID
+   */
+  async getNutritionistProfileByUserId(userId) {
+    try {
+      const nutritionist = await Nutritionist.findOne({ user_id: userId })
+        .populate("user_id", "email phone")
+        .lean();
+      return nutritionist;
+    } catch (error) {
+      console.error("Error fetching nutritionist profile:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update or create a nutritionist's profile by user ID
+   */
+  async updateNutritionistProfileByUserId(userId, data, file) {
+    try {
+      let nutritionist = await Nutritionist.findOne({ user_id: userId });
+
+      const professionalTitle = data.professionalTitle || data.professional_title;
+      const licenseNumber = data.licenseNumber || data.license_number;
+      const serviceFee = data.serviceFee !== undefined ? Number(data.serviceFee) : (data.service_fee !== undefined ? Number(data.service_fee) : undefined);
+      const certificateUrl = data.certificateUrl || data.certification_url;
+      const fullName = data.fullName || data.full_name;
+      const specialization = data.specialization;
+
+      if (!nutritionist) {
+        // Create new profile (registration)
+        if (!professionalTitle) throw new AppError("Professional title is required", 400);
+        if (!licenseNumber) throw new AppError("License number is required", 400);
+        if (serviceFee === undefined || serviceFee <= 0) throw new AppError("Service fee must be greater than zero", 400);
+        if (!file && !certificateUrl) throw new AppError("Certificate file or URL is required", 400);
+
+        const duplicateLicense = await Nutritionist.findOne({ license_number: licenseNumber }).lean();
+        if (duplicateLicense) {
+          throw new AppError("License number already exists", 409);
+        }
+
+        const certificate = await uploadNutritionistCertificate(file, certificateUrl);
+
+        nutritionist = await Nutritionist.create({
+          user_id: userId,
+          professional_title: professionalTitle,
+          license_number: licenseNumber,
+          certification_url: certificate.url,
+          certificate_public_id: certificate.publicId,
+          service_fee: serviceFee,
+          full_name: fullName || "",
+          specialization: specialization || "",
+          approval_status: "PENDING",
+          average_rating: 5.0,
+        });
+      } else {
+        // Update existing profile
+        if (professionalTitle !== undefined) nutritionist.professional_title = professionalTitle;
+        if (serviceFee !== undefined) {
+          if (serviceFee <= 0) throw new AppError("Service fee must be greater than zero", 400);
+          nutritionist.service_fee = serviceFee;
+        }
+        if (fullName !== undefined) nutritionist.full_name = fullName;
+        if (specialization !== undefined) nutritionist.specialization = specialization;
+
+        if (licenseNumber !== undefined && licenseNumber !== nutritionist.license_number) {
+          if (!licenseNumber) throw new AppError("License number cannot be empty", 400);
+          const duplicateLicense = await Nutritionist.findOne({
+            license_number: licenseNumber,
+            user_id: { $ne: userId },
+          }).lean();
+          if (duplicateLicense) {
+            throw new AppError("License number already exists", 409);
+          }
+          nutritionist.license_number = licenseNumber;
+        }
+
+        if (file || certificateUrl) {
+          const certificate = await uploadNutritionistCertificate(file, certificateUrl);
+          nutritionist.certification_url = certificate.url;
+          nutritionist.certificate_public_id = certificate.publicId;
+        }
+
+        await nutritionist.save();
+      }
+
+      return nutritionist;
+    } catch (error) {
+      console.error("Error updating nutritionist profile:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Get pending meal plan requests for a nutritionist.
    */
   async getMealPlanRequests(nutritionistUserId) {
@@ -174,7 +267,7 @@ class NutritionistService {
       .lean();
 
     if (!nutritionist) {
-      throw new AppError("Nutritionist profile not found for this account.", 404);
+      return [];
     }
 
     const MealPlanRequest = require("../models/MealPlanRequest");

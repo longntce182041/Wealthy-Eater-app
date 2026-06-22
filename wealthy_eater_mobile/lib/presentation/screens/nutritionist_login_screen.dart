@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import 'nutritionist_register_screen.dart';
+import 'forget_password_screen.dart';
 
 /// Simple nutritionist login screen: only email + password (no Google).
 class NutritionistLoginScreen extends StatefulWidget {
@@ -154,22 +155,27 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const NutritionistRegisterScreen()),
+                          Flexible(
+                            child: TextButton(
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const NutritionistRegisterScreen()),
+                              ),
+                              child: const Text(
+                                'Register',
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            child: const Text('Register'),
                           ),
-                          TextButton(
-                            onPressed: () =>
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Forgot password not implemented',
-                                    ),
-                                  ),
-                                ),
-                            child: const Text('Forgot Password?'),
+                          Flexible(
+                            child: TextButton(
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const ForgetPasswordScreen()),
+                              ),
+                              child: const Text(
+                                'Forgot Password?',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ),
                         ],
                       ),
