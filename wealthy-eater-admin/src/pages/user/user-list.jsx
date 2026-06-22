@@ -7,7 +7,11 @@ import {
   Search, 
   SearchX, 
   AlertCircle, 
-  UserPlus
+  UserPlus,
+  X,
+  Mail,
+  Shield,
+  ToggleLeft
 } from 'lucide-react';
 
 export default function UserListPage() {
@@ -25,9 +29,15 @@ export default function UserListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // 🔍 Bộ lọc tìm kiếm ngay tại Frontend (Giống hệt trang Recipes)
+  // 🔍 Bộ lọc tìm kiếm tại Frontend
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+
+  // ⚡ STATES QUẢN LÝ FORM CREATE USER (UC-78)
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formData, setFormData] = useState({ email: '', password: '', role: 'customer', status: 'active' });
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [formError, setFormError] = useState('');
 
   const handleForceLogout = useCallback(() => {
     localStorage.removeItem('admin_user');
@@ -40,12 +50,10 @@ export default function UserListPage() {
     setLoading(true);
     setError('');
     try {
-      // Gọi API không truyền page/limit để Backend kích hoạt chế độ "Trả về All giống Recipes"
       const response = await apiClient.get('/admin/users');
       
       console.log("Dữ liệu nhận từ Backend đồng bộ:", response.data);
 
-      // Bóc tách dữ liệu chuẩn chỉnh dựa trên cấu trúc Backend mới cập nhật
       if (response.data?.success && Array.isArray(response.data.data)) {
         setUsers(response.data.data);
       } else if (Array.isArray(response.data?.data)) {
@@ -59,7 +67,6 @@ export default function UserListPage() {
 
     } catch (err) {
       console.error('Error fetching users:', err);
-      // Chỉ logout khi ĐÚNG lỗi 401 hoặc token hết hạn (Giống trang Recipes)
       if (err.response?.status === 401 || err.response?.data?.message?.includes('expired')) {
         alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!');
         handleForceLogout();
@@ -86,6 +93,33 @@ export default function UserListPage() {
     return () => clearTimeout(timeoutId);
   }, [handleForceLogout, fetchUsers]);
 
+  // 🔥 XỬ LÝ SUBMIT FORM TẠO USER (UC-78)
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setSubmitLoading(true);
+    setFormError('');
+
+    try {
+      const response = await apiClient.post('/admin/users', formData);
+      if (response.data?.success) {
+        alert('Tạo tài khoản người dùng mới thành công!');
+        setIsModalOpen(false); // Đóng drawer
+        setFormData({ email: '', password: '', role: 'customer', status: 'active' }); // Reset form dữ liệu sạch
+        fetchUsers(); // Tải lại danh sách để cập nhật tài khoản mới lên bảng
+      }
+    } catch (err) {
+      console.error('Error creating user:', err);
+      if (err.response?.status === 401 || err.response?.data?.message?.includes('expired')) {
+        alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!');
+        handleForceLogout();
+        return;
+      }
+      setFormError(err?.response?.data?.message || 'Lỗi hệ thống khi tiến hành tạo người dùng.');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
   // 🔍 Logic lọc dữ liệu thời gian thực (Real-time Frontend Filtering)
   const filteredUsers = users.filter(userItem => {
     const matchesSearch = userItem.email?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -96,7 +130,7 @@ export default function UserListPage() {
   if (!user) return null;
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-6 relative overflow-hidden">
       {/* Tiêu đề & Đếm tổng số lượng thành viên */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -109,14 +143,16 @@ export default function UserListPage() {
           <button 
             onClick={fetchUsers} 
             disabled={loading}
-            className="flex items-center px-4 py-2.5 text-sm font-medium bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-60"
+            className="flex items-center px-4 py-2.5 text-sm font-medium bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-60 cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh Data
           </button>
+          
+          {/* Nút trigger mở Form Tạo User (UC-78) */}
           <button 
-            onClick={() => alert('Feature coming soon!')}
-            className="flex items-center px-4 py-2.5 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center px-4 py-2.5 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm border-none cursor-pointer"
           >
             <UserPlus className="w-4 h-4 mr-2" />
             Add New User
@@ -239,6 +275,138 @@ export default function UserListPage() {
           </table>
         </div>
       </div>
+
+      {/* --- 🔥 SLIDE-OVER DRAWER (UC-78: CREATE USER FORM) --- */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Background overlay làm mờ */}
+          <div 
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+            onClick={() => !submitLoading && setIsModalOpen(false)}
+          />
+
+          {/* Form Panel Trượt Cánh Phải */}
+          <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between border-l border-slate-100 style={{ animation: 'slideIn 0.2s ease-out forwards' }}">
+            
+            {/* Header Form Drawer */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900 m-0 flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-emerald-600" /> Create New User Account
+                </h3>
+                <p className="text-slate-500 text-xs mt-1">Cấp tài khoản hệ thống cho Quản trị viên, Chuyên gia hoặc Khách hàng.</p>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                disabled={submitLoading}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/50 bg-transparent border-none cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form Fields Dữ Liệu */}
+            <form onSubmit={handleCreateUser} className="flex-1 p-6 space-y-5 overflow-y-auto">
+              {formError && (
+                <div className="p-3 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" /> {formError}
+                </div>
+              )}
+
+              {/* Email Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                  <Mail className="w-3.5 h-3.5 text-slate-400" /> Email Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="name@wealthyeater.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 font-medium"
+                />
+              </div>
+
+              {/* Password Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                  <Shield className="w-3.5 h-3.5 text-slate-400" /> Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="Leave empty to use system default"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
+                />
+                <p className="text-[11px] text-slate-400 italic m-0">
+                  Hệ thống tự động sử dụng mật khẩu cấu hình mặc định nếu để trống (tối thiểu 6 ký tự).
+                </p>
+              </div>
+
+              {/* Role Select Options */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                  <Shield className="w-3.5 h-3.5 text-slate-400" /> System Role (Quyền hạn)
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['customer', 'nutritionist', 'admin'].map((roleOpt) => (
+                    <button
+                      key={roleOpt}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, role: roleOpt })}
+                      className={`py-2 text-xs font-bold rounded-lg border capitalize cursor-pointer transition-all ${
+                        formData.role === roleOpt
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {roleOpt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                  <ToggleLeft className="w-3.5 h-3.5 text-slate-400" /> Initial Status
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="active">Active (Kích hoạt ngay)</option>
+                  <option value="suspended">Suspended (Tạm khóa đăng nhập)</option>
+                </select>
+              </div>
+            </form>
+
+            {/* Footer Buttons */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center gap-3">
+              <button
+                type="button"
+                disabled={submitLoading}
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 py-2.5 text-sm font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitLoading}
+                onClick={handleCreateUser}
+                className="flex-1 py-2.5 text-sm font-semibold bg-emerald-600 text-white border-none rounded-lg hover:bg-emerald-700 cursor-pointer disabled:opacity-60 transition-colors"
+              >
+                {submitLoading ? 'Creating...' : 'Confirm Create'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
