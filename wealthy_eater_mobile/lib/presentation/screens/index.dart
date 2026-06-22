@@ -18,3 +18,4 @@ export 'notification_history_screen.dart';
 export 'chat_screen.dart';
 export 'change_password_screen.dart';
 export 'client_audit_screen.dart';
+export 'forget_password_screen.dart';

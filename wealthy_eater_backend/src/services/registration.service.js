@@ -98,6 +98,15 @@ async function ensureNutritionistProfile(user) {
 }
 
 class RegistrationService {
+  static async sendSMSViaFirebase(phone) {
+    return sendSMSViaFirebase(phone);
+  }
+
+  static async verifyFirebaseOtp(sessionInfo, otp) {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=${apiKey}`;
+    return postRequest(url, { sessionInfo, code: otp });
+  }
+
   static async startRegistration(identifier, password, role = 'customer') {
     if (!identifier || !password) {
       throw new AppError('Identifier and password are required', 400, 'VALIDATION_ERROR');

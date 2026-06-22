@@ -162,13 +162,6 @@ const updateFcmTokenEndpoint = async (req, res) => {
   }
 };
 
-module.exports = {
-  matchTemplateEndpoint,
-  getMyMealPlanEndpoint,
-  updateItemWeightEndpoint,
-  publishMealPlan: exports.publishMealPlan,
-  updateFcmTokenEndpoint,
-};
 const triggerMealGenerationPipeline = async (req, res, next) => {
   try {
     const { clientId } = req.body;

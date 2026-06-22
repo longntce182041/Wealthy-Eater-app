@@ -19,7 +19,11 @@ const authenticateToken = (req, res, next) => {
   }
 
   try {
-    req.user = verifyAccessToken(token);
+    const payload = verifyAccessToken(token);
+    req.user = {
+      ...payload,
+      id: payload.id || payload.sub || payload.userId,
+    };
     next();
   } catch (err) {
     const isExpired = err.name === "TokenExpiredError";

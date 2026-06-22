@@ -452,6 +452,118 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> forgetPassword(String identifier) async {
+    _setLoading();
+    try {
+      final res = await _api.post(
+        '/api/auth/forget-password',
+        data: {'identifier': identifier.trim()},
+      );
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        state = AuthState.unauthenticated;
+        errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Failed to request password reset');
+        return false;
+      }
+    } catch (e) {
+      _setError(mapError(e).message);
+      return false;
+    }
+  }
+
+  Future<bool> resetPassword(String identifier, String otp, String newPassword) async {
+    _setLoading();
+    try {
+      final res = await _api.post(
+        '/api/auth/reset-password',
+        data: {
+          'identifier': identifier.trim(),
+          'otp': otp.trim(),
+          'newPassword': newPassword,
+        },
+      );
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        state = AuthState.unauthenticated;
+        errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        final errObj = res.data['error'];
+        _setError(errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Reset password failed');
+        return false;
+      }
+    } catch (e) {
+      _setError(mapError(e).message);
+      return false;
+    }
+  }
+
+  Future<bool> linkRequest(String identifier) async {
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final res = await _api.post(
+        '/api/auth/link-request',
+        data: {'identifier': identifier.trim()},
+      );
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        final errObj = res.data['error'];
+        errorMessage = errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Request linking failed';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      errorMessage = mapError(e).message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> linkVerify(String otp) async {
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final res = await _api.post(
+        '/api/auth/link-verify',
+        data: {'otp': otp.trim()},
+      );
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        final userData = res.data['data'];
+        if (userData is Map<String, dynamic>) {
+          user = UserEntity.fromJson(userData);
+        }
+        errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        final errObj = res.data['error'];
+        errorMessage = errObj != null && errObj['message'] != null
+            ? errObj['message'].toString()
+            : 'Verify linking failed';
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      errorMessage = mapError(e).message;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> _clearSession() async {
     _accessToken = null;
     user = null;
