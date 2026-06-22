@@ -41,4 +41,21 @@ router.post(
   nutritionistController.registerNutritionist,
 );
 
+// GET /api/nutritionists/profile/me — Authenticated nutritionist views their professional profile
+router.get(
+  '/profile/me',
+  authenticateToken,
+  authorizeRoles('nutritionist'),
+  nutritionistController.getNutritionistProfile,
+);
+
+// PUT /api/nutritionists/profile/me — Authenticated nutritionist updates their professional profile
+router.put(
+  '/profile/me',
+  authenticateToken,
+  authorizeRoles('nutritionist'),
+  uploadNutritionistCertificate,
+  nutritionistController.updateNutritionistProfile,
+);
+
 module.exports = router;

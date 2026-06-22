@@ -7,6 +7,7 @@ import '../widgets/custom_text_field.dart';
 import '../widgets/google_sign_in_button.dart';
 import 'nutritionist_login_screen.dart';
 import 'customer_register_screen.dart';
+import 'forget_password_screen.dart';
 
 class CustomerLoginScreen extends StatefulWidget {
   const CustomerLoginScreen({super.key});
@@ -230,8 +231,8 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
         ),
         Flexible(
           child: TextButton(
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Forgot password not implemented')),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ForgetPasswordScreen()),
             ),
             child: const Text(
               'Forgot Password?',

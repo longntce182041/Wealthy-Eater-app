@@ -22,6 +22,11 @@ const UserSchema = new mongoose.Schema(
     reset_password_expires: { type: Date, default: null },
     fcmToken:               { type: String, default: null },
     googleId:               { type: String, default: null },
+    temp_link_email:        { type: String, default: null },
+    temp_link_phone:        { type: String, default: null },
+    temp_link_otp:          { type: String, default: null },
+    temp_link_otp_expires_at: { type: Date, default: null },
+    temp_link_otp_attempts: { type: Number, default: 0 },
     created_at:             { type: Date, default: Date.now },
   },
   { versionKey: false }
