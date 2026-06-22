@@ -197,4 +197,11 @@ const triggerMealGenerationPipeline = async (req, res, next) => {
   }
 };
 
-module.exports = { matchTemplateEndpoint, triggerMealGenerationPipeline };
+module.exports = {
+  matchTemplateEndpoint,
+  getMyMealPlanEndpoint,
+  updateItemWeightEndpoint,
+  publishMealPlan: exports.publishMealPlan,
+  updateFcmTokenEndpoint,
+  triggerMealGenerationPipeline, // <-- Đã gom em nó an toàn vào đây
+};
