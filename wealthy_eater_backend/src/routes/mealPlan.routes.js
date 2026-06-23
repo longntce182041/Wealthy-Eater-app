@@ -21,6 +21,9 @@ router.post(
   mealPlanController.triggerMealGenerationPipeline,
 );
 
+// UC-39: Receive AI-generated meal plan from n8n (internal, no JWT — secured by X-INTERNAL-SECRET)
+router.post("/from-ai", mealPlanController.receiveAIPlanEndpoint);
+
 // Client meal plan management
 router.get("/my-plan", protect, mealPlanController.getMyMealPlanEndpoint);
 router.put(
