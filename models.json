@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": 403,
+    "message": "You are experiencing temporary service disruptions since you are accessing Gemini API with one or more unrestricted keys - this is being done as a preview of the enforcement. You MUST either use a new restricted key to recover immediately, or restrict your key to avoid permanent disruption by going to https://console.cloud.google.com/apis/credentials (this may take hours to propagate).",
+    "status": "PERMISSION_DENIED"
+  }
+}
