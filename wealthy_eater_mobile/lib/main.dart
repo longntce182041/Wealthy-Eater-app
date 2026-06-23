@@ -8,6 +8,7 @@ import 'core/network/api_client.dart';
 import 'core/network/session_expired_notifier.dart';
 import 'core/theme/index.dart';
 import 'data/repositories/index.dart';
+import 'data/repositories/plan_repository.dart';
 import 'domain/usecases/get_recipe_detail_usecase.dart';
 import 'domain/usecases/get_recipes_usecase.dart';
 import 'domain/usecases/recipe_like_usecases.dart';
@@ -71,6 +72,11 @@ class WealthyEaterApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ConsultationProvider(api: api)),
         ChangeNotifierProvider(create: (_) => ChatProvider(api: api)),
         ChangeNotifierProvider(create: (_) => MealPlanProvider(api: api)),
+        ChangeNotifierProvider(
+          create: (_) => MealGenerationProvider(
+            repository: PlanRepository(api.dio),
+          ),
+        ),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',
