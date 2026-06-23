@@ -6,10 +6,10 @@ import '../providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../providers/notification_provider.dart';
 import '../providers/nutritionist_provider.dart';
-import '../widgets/coming_soon_tab.dart';
 import 'chat_screen.dart';
 import 'notification_history_screen.dart';
 import 'client_audit_screen.dart'; // Đã bổ sung import màn hình đối chiếu của ní
+import 'nutritionist_profile_tab.dart';
 
 class NutritionistDashboardScreen extends StatefulWidget {
   final UserEntity? user;
@@ -131,11 +131,7 @@ class _NutritionistDashboardScreenState extends State<NutritionistDashboardScree
         children: [
           const _NutritionistRequestsTab(),
           const _NutritionistClientsTab(),
-          const ComingSoonTab(
-            icon: Icons.manage_accounts_outlined,
-            title: 'My Profile',
-            description: 'Update your biography, specialties, and service fees.',
-          ),
+          const NutritionistProfileTab(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -563,8 +559,11 @@ class _NutritionistRequestsTabState extends State<_NutritionistRequestsTab> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         OutlinedButton(
                           onPressed: () async {
@@ -591,7 +590,6 @@ class _NutritionistRequestsTabState extends State<_NutritionistRequestsTab> {
                           ),
                           child: const Text('Reject'),
                         ),
-                        const SizedBox(width: 12),
                         FilledButton(
                           onPressed: () async {
                             final success = await provider.respondToRequest(
