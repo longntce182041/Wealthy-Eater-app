@@ -1,10 +1,10 @@
 import React from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 
-// 🌟 ĐỒNG BỘ CHUẨN CẤU TRÚC THƯ MỤC THỰC TẾ (ĐÃ LOẠI BỎ DÒNG LẶP)
-import DashboardPage from "../pages/Dashboard.jsx"; 
+// ĐỒNG BỘ CHUẨN CẤU TRÚC THƯ MỤC THỰC TẾ CỦA BẠN:
+import DashboardPage from "../pages/Dashboard.jsx"; // File Dashboard.jsx nằm trực tiếp trong pages
 import IngredientsPage from "../pages/ingredients/ingredients.jsx";
-import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx"; 
+import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx";
 import RecipesPage from "../pages/recipes/recipes.jsx"; 
 import RecipeDetail from '../pages/recipes/recipe-detail';
 import AddRecipePage from "../pages/recipes/add-recipe";
@@ -13,6 +13,7 @@ import UserListPage from "../pages/user/user-list.jsx";
 import NutritionistListPage from "../pages/nutritionist/nutritionist-list.jsx";
 import LoginPage from "../pages/Login.jsx"; 
 import AdminLayout from "../layouts/AdminLayout.jsx";
+import PlatformAnalytics from "../pages/analytics/PlatformAnalytics.jsx";
 
 // Route bảo vệ yêu cầu trạng thái đăng nhập hệ thống
 const PrivateRoute = () => {
@@ -57,6 +58,7 @@ export function AppRoutes() {
 
           {/* Group Route bảo vệ nghiêm ngặt dành riêng cho quyền 'admin' */}
           <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
+            <Route path="analytics" element={<PlatformAnalytics />} />
             <Route path="ingredients" element={<IngredientsPage />} />
             <Route path="micronutrients" element={<MicronutrientsPage />} />
             
