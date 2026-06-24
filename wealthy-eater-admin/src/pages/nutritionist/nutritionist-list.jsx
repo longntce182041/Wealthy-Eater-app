@@ -20,7 +20,8 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function NutritionistListPage() {
@@ -39,16 +40,25 @@ export default function NutritionistListPage() {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // ⚡ Trạng thái quản lý Subview xem chi tiết hồ sơ năng lực (UC-85)
+  // Trạng thái quản lý Subview xem chi tiết hồ sơ năng lực (UC-85)
   const [selectedExpertId, setSelectedExpertId] = useState(null);
   
   // Phân tầng theo trạng thái duyệt của database thực tế: 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'
   const [activeTab, setActiveTab] = useState('ALL');
 
-  // 🛠️ BỔ SUNG: Trạng thái Sắp xếp & Phân trang dữ liệu
+  // Trạng thái Sắp xếp & Phân trang dữ liệu
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // ⚡ TRẠNG THÁI QUẢN LÝ POP-UP KỶ LUẬT CHUYÊN GIA (UC-86)
+  const [banModal, setBanModal] = useState({
+    isOpen: false,
+    expertId: null,
+    expertName: '',
+    banType: 'SUSPENDED', // Mặc định khóa tạm thời: 'SUSPENDED' | 'BANNED'
+    reason: ''
+  });
 
   const handleForceLogout = useCallback(() => {
     localStorage.removeItem('admin_user');
@@ -99,20 +109,18 @@ export default function NutritionistListPage() {
     setCurrentPage(1);
   }, [searchTerm, activeTab]);
 
-  // Hành động Admin Duyệt / Từ chối hồ sơ chuyên gia trực tiếp từ Frontend
+  // Hành động Admin Duyệt hồ sơ chuyên gia trực tiếp từ Frontend công khai
   async function handleProcessApproval(id, actionStatus) {
-    const actionText = actionStatus === 'APPROVED' ? 'DUYỆT HỒ SƠ CHÍNH THỨC' : 'TỪ CHỐI HỒ SƠ';
-    if (!window.confirm(`Bạn có chắc chắn muốn thực hiện hành động: ${actionText}?`)) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn kích hoạt hành động này?`)) return;
 
     try {
-      // Gọi API cập nhật trạng thái duyệt ở Backend
       const response = await apiClient.put(`/admin/nutritionists/${id}/approval`, {
         approvalStatus: actionStatus
       });
 
       if (response.data?.success) {
         alert('Cập nhật trạng thái duyệt hồ sơ chuyên gia thành công!');
-        fetchNutritionists(); // Tải lại bảng dữ liệu mới nhất
+        fetchNutritionists();
       } else {
         alert(response.data?.message || 'Có lỗi xảy ra');
       }
@@ -121,7 +129,33 @@ export default function NutritionistListPage() {
     }
   }
 
-  // 🛠️ BỔ SUNG: Hàm xử lý thay đổi logic Sort dữ liệu
+  // ⚡ XỬ LÝ GỬI YÊU CẦU BAN/LOCK CHUYÊN GIA LÊN BACKEND (UC-86)
+  const handleConfirmBanSubmit = async (e) => {
+    e.preventDefault();
+    if (!banModal.reason.trim()) {
+      alert('Bắt buộc phải nhập lý do vi phạm đạo đức nghề nghiệp!');
+      return;
+    }
+
+    try {
+      const response = await apiClient.put(`/admin/nutritionists/${banModal.expertId}/approval`, {
+        approvalStatus: banModal.banType,
+        reason: banModal.reason.trim()
+      });
+
+      if (response.data?.success) {
+        alert(`Đã thực thi hình thức kỷ luật [${banModal.banType === 'SUSPENDED' ? 'KHÓA TẠM THỜI' : 'KHÓA VĨNH VIỄN'}] thành công!`);
+        // Reset trạng thái đóng modal
+        setBanModal({ isOpen: false, expertId: null, expertName: '', banType: 'SUSPENDED', reason: '' });
+        fetchNutritionists(); // Tải lại bảng dữ liệu
+      } else {
+        alert(response.data?.message || 'Có lỗi xảy ra trong quá trình xử lý kỷ luật.');
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message || err.message || 'Không thể cập nhật hình thức xử lý');
+    }
+  };
+
   const requestSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -141,13 +175,19 @@ export default function NutritionistListPage() {
     
     let matchesTab = true;
     if (activeTab !== 'ALL') {
-      matchesTab = item.approvalStatus?.toUpperCase() === activeTab;
+      const currentStatus = item.approvalStatus?.toUpperCase();
+      if (activeTab === 'REJECTED') {
+        // Nhóm các trạng thái bị khóa/từ chối chung vào 1 Tab để admin dễ quản lý diện rộng
+        matchesTab = ['REJECTED', 'REJECT', 'SUSPENDED', 'BANNED'].includes(currentStatus);
+      } else {
+        matchesTab = currentStatus === activeTab;
+      }
     }
 
     return matchesSearch && matchesTab;
   });
 
-  // 🛠️ BỔ SUNG: Xử lý Sắp xếp mượt mà trên Client trước khi Phân trang
+  // Sắp xếp mượt mà trên Client trước khi Phân trang
   const sortedNutritionists = [...filteredNutritionists].sort((a, b) => {
     let aValue = a[sortConfig.key];
     let bValue = b[sortConfig.key];
@@ -164,13 +204,12 @@ export default function NutritionistListPage() {
         : (bValue || '').localeCompare(aValue);
     }
 
-    // Các trường dữ liệu số (Phí dịch vụ, Đánh giá sao)
     return sortConfig.direction === 'asc'
       ? (aValue || 0) - (bValue || 0)
       : (bValue || 0) - (aValue || 0);
   });
 
-  // 🛠️ BỔ SUNG: Phân đoạn mảng theo Phân trang thực tế
+  // Phân đoạn mảng theo Phân trang thực tế
   const totalItems = sortedNutritionists.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -178,12 +217,15 @@ export default function NutritionistListPage() {
 
   const countByStatus = (statusType) => {
     if (statusType === 'ALL') return nutritionists.length;
+    if (statusType === 'REJECTED') {
+      return nutritionists.filter(item => ['REJECTED', 'REJECT', 'SUSPENDED', 'BANNED'].includes(item.approvalStatus?.toUpperCase())).length;
+    }
     return nutritionists.filter(item => item.approvalStatus?.toUpperCase() === statusType).length;
   };
 
   if (!user) return null;
 
-  // 🔄 NẾU CÓ CHỌN EXPERT -> ĐỔI SANG VIEW CHI TIẾT (UC-85) NGAY TẠI CHỖ
+  // NẾU CÓ CHỌN EXPERT -> ĐỔI SANG VIEW CHI TIẾT (UC-85) NGAY TẠI CHỖ
   if (selectedExpertId) {
     return (
       <ExpertProfileDetail 
@@ -218,13 +260,13 @@ export default function NutritionistListPage() {
         </div>
       </div>
 
-      {/* 🗂️ Phân loại Tab đồng bộ đúng Enums Database */}
+      {/* 🗂️ Phân loại Tab */}
       <div className="border-b border-slate-200 flex flex-wrap gap-1">
         {[
           { id: 'ALL', label: 'Tất cả chuyên gia' },
           { id: 'PENDING', label: 'Chờ duyệt hồ sơ' },
           { id: 'APPROVED', label: 'Đã duyệt (Active)' },
-          { id: 'REJECTED', label: 'Đã từ chối' },
+          { id: 'REJECTED', label: 'Bị khóa / Từ chối' },
         ].map((tab) => {
           const count = countByStatus(tab.id);
           const isSelected = activeTab === tab.id;
@@ -249,7 +291,7 @@ export default function NutritionistListPage() {
         })}
       </div>
 
-      {/* Thanh Tìm Kiếm kèm nút Xóa Nhanh */}
+      {/* Thanh Tìm Kiếm */}
       <div className="relative max-w-md bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex items-center">
         <Search className="absolute left-3 text-slate-400 w-4 h-4" />
         <input
@@ -315,18 +357,18 @@ export default function NutritionistListPage() {
                 </tr>
               ) : (
                 paginatedNutritionists.map((expert) => {
-                  // Fallback ID an toàn cho cả cấu trúc id lẫn _id từ MongoDB
                   const expertId = expert._id || expert.id;
                   
                   let statusBadge = 'bg-slate-100 text-slate-700';
                   const appStatus = expert.approvalStatus?.toUpperCase();
                   if (appStatus === 'APPROVED' || appStatus === 'APPROVAL') statusBadge = 'bg-emerald-50 text-emerald-700 border border-emerald-100';
                   if (appStatus === 'PENDING') statusBadge = 'bg-amber-50 text-amber-700 border border-amber-100';
-                  if (appStatus === 'REJECTED' || appStatus === 'REJECT') statusBadge = 'bg-red-50 text-red-700 border border-red-100';
+                  if (appStatus === 'SUSPENDED') statusBadge = 'bg-orange-50 text-orange-700 border border-orange-100';
+                  if (appStatus === 'BANNED' || appStatus === 'REJECTED' || appStatus === 'REJECT') statusBadge = 'bg-red-50 text-red-700 border border-red-100';
 
                   return (
                     <tr key={expertId} className="hover:bg-slate-50/50 transition-colors">
-                      {/* Họ Tên & Ngày tham gia */}
+                      {/* Họ Tên */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold shrink-0">
@@ -342,7 +384,7 @@ export default function NutritionistListPage() {
                         </div>
                       </td>
 
-                      {/* Email & Giấy phép nghề nghiệp */}
+                      {/* Tài khoản */}
                       <td className="px-6 py-4">
                         <div className="flex flex-col space-y-1">
                           <span className="flex items-center gap-1 text-xs font-medium text-slate-700 break-all">
@@ -354,7 +396,7 @@ export default function NutritionistListPage() {
                         </div>
                       </td>
 
-                      {/* Chuyên môn / Danh hiệu */}
+                      {/* Chuyên môn */}
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
@@ -372,7 +414,7 @@ export default function NutritionistListPage() {
                         </span>
                       </td>
 
-                      {/* Rating đánh giá trung bình */}
+                      {/* Đánh Giá */}
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded">
                           <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
@@ -380,18 +422,17 @@ export default function NutritionistListPage() {
                         </span>
                       </td>
 
-                      {/* Trạng thái duyệt hồ sơ */}
+                      {/* Trạng thái */}
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold uppercase border ${statusBadge}`}>
                           {expert.approvalStatus || 'PENDING'}
                         </span>
                       </td>
 
-                      {/* Hành động quản trị Duyệt / Hủy / Xem Hồ Sơ Năng Lực */}
+                      {/* Hành động */}
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-2">
                           
-                          {/* 👁️ NÚT KÍCH HOẠT UC-85: XEM CHI TIẾT HỒ SƠ CHUYÊN SÂU */}
                           <button 
                             type="button"
                             title="Thẩm định chi tiết hồ sơ năng lực"
@@ -401,8 +442,7 @@ export default function NutritionistListPage() {
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {/* Nút kiểm tra tài liệu URL chứng chỉ thô (Dự phòng) */}
-                          {expert.certificationUrl ? (
+                          {expert.certificationUrl && (
                             <a 
                               href={expert.certificationUrl} 
                               target="_blank" 
@@ -412,17 +452,9 @@ export default function NutritionistListPage() {
                             >
                               <FileText className="w-4 h-4" />
                             </a>
-                          ) : (
-                            <button 
-                              disabled 
-                              title="Không có file đính kèm"
-                              className="p-1.5 bg-slate-50 text-slate-300 rounded-md border border-slate-100 opacity-50"
-                            >
-                              <FileText className="w-4 h-4" />
-                            </button>
                           )}
 
-                          {/* Nút hành động phê duyệt nhanh */}
+                          {/* Phê duyệt hồ sơ chờ duyệt */}
                           {expert.approvalStatus?.toUpperCase() === 'PENDING' && (
                             <>
                               <button 
@@ -444,25 +476,33 @@ export default function NutritionistListPage() {
                             </>
                           )}
 
+                          {/* ⚡ NÚT KÍCH HOẠT UC-86: KHÓA KÈM LÝ DO QUA POP-UP MODAL */}
                           {expert.approvalStatus?.toUpperCase() === 'APPROVED' && (
                             <button 
                               type="button"
-                              title="Khóa hồ sơ"
-                              className="bg-red-50 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-red-200 cursor-pointer text-xs font-semibold px-2 py-1"
-                              onClick={() => handleProcessApproval(expertId, 'REJECTED')}
+                              title="Khóa kỷ luật chuyên gia"
+                              className="bg-red-50 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-red-200 cursor-pointer text-xs font-bold px-2 py-1"
+                              onClick={() => setBanModal({
+                                isOpen: true,
+                                expertId: expertId,
+                                expertName: expert.fullName || 'Chuyên gia',
+                                banType: 'SUSPENDED',
+                                reason: ''
+                              })}
                             >
-                              Khóa
+                              Khóa tài khoản
                             </button>
                           )}
 
-                          {expert.approvalStatus?.toUpperCase() === 'REJECTED' && (
+                          {/* Tài khoản đang bị Khóa / Từ chối -> Mở lại */}
+                          {['REJECTED', 'SUSPENDED', 'BANNED', 'REJECT'].includes(expert.approvalStatus?.toUpperCase()) && (
                             <button 
                               type="button"
-                              title="Kích hoạt lại hồ sơ"
-                              className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors border border-emerald-200 cursor-pointer text-xs font-semibold px-2 py-1"
+                              title="Kích hoạt lại tài khoản"
+                              className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors border border-emerald-200 cursor-pointer text-xs font-bold px-2 py-1"
                               onClick={() => handleProcessApproval(expertId, 'APPROVED')}
                             >
-                              Mở
+                              Kích hoạt lại
                             </button>
                           )}
                         </div>
@@ -475,7 +515,7 @@ export default function NutritionistListPage() {
           </table>
         </div>
 
-        {/* 🛠️ BỔ SUNG: UI Thanh Điều Hướng Phân Trang Giao Diện */}
+        {/* Thanh Điều Hướng Phân Trang */}
         {totalItems > itemsPerPage && (
           <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-between">
             <span className="text-xs text-slate-500 font-medium">
@@ -518,6 +558,110 @@ export default function NutritionistListPage() {
           </div>
         )}
       </div>
+
+      {/* ⚡ UI POP-UP MODAL XỬ LÝ KỶ LUẬT CHUYÊN GIA (UC-86) */}
+      {banModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-opacity">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            
+            {/* Header Modal */}
+            <div className="bg-red-50 border-b border-red-100 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-red-700 font-bold text-base">
+                <ShieldAlert className="w-5 h-5 text-red-600" />
+                Quyết định xử lý kỷ luật
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setBanModal(prev => ({ ...prev, isOpen: false }))}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form Modal Body */}
+            <form onSubmit={handleConfirmBanSubmit} className="p-6 flex flex-col space-y-4 m-0">
+              <div>
+                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider m-0">Chuyên gia áp dụng:</p>
+                <p className="text-base font-bold text-slate-800 mt-1 m-0">{banModal.expertName}</p>
+              </div>
+
+              {/* Hình thức khóa tài khoản */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 block">Hình thức xử phạt:</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${
+                    banModal.banType === 'SUSPENDED' 
+                      ? 'border-orange-500 bg-orange-50/50 font-bold text-orange-700' 
+                      : 'border-slate-200 hover:bg-slate-50'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="banType" 
+                      value="SUSPENDED"
+                      checked={banModal.banType === 'SUSPENDED'}
+                      onChange={(e) => setBanModal(prev => ({ ...prev, banType: e.target.value }))}
+                      className="text-orange-600 focus:ring-orange-500"
+                    />
+                    <span className="text-xs">Khóa tạm thời</span>
+                  </label>
+
+                  <label className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${
+                    banModal.banType === 'BANNED' 
+                      ? 'border-red-500 bg-red-50/50 font-bold text-red-700' 
+                      : 'border-slate-200 hover:bg-slate-50'
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="banType" 
+                      value="BANNED"
+                      checked={banModal.banType === 'BANNED'}
+                      onChange={(e) => setBanModal(prev => ({ ...prev, banType: e.target.value }))}
+                      className="text-red-600 focus:ring-red-500"
+                    />
+                    <span className="text-xs">Khóa vĩnh viễn</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Ô nhập lý do vi phạm */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700 flex items-center justify-between">
+                  <span>Lý do vi phạm đạo đức nghề nghiệp:</span>
+                  <span className="text-xs font-normal text-red-500">* Bắt buộc</span>
+                </label>
+                <textarea
+                  required
+                  rows="4"
+                  placeholder="Nhập chi tiết hành vi vi phạm (Ví dụ: Tư vấn sai lệch quy chuẩn y khoa, nhận phản hồi xấu liên tục từ người bệnh, gian lận bằng cấp...)"
+                  value={banModal.reason}
+                  onChange={(e) => setBanModal(prev => ({ ...prev, reason: e.target.value }))}
+                  className="w-full text-sm p-3 rounded-lg border border-slate-200 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 placeholder-slate-400 bg-transparent resize-none"
+                />
+              </div>
+
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setBanModal(prev => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={!banModal.reason.trim()}
+                  className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 shadow-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Xác nhận khóa
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
