@@ -16,7 +16,11 @@ import {
   Mail,
   FileText,
   DollarSign,
-  Star
+  Star,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react';
 
 export default function NutritionistListPage() {
@@ -40,6 +44,11 @@ export default function NutritionistListPage() {
   
   // Phân tầng theo trạng thái duyệt của database thực tế: 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'
   const [activeTab, setActiveTab] = useState('ALL');
+
+  // 🛠️ BỔ SUNG: Trạng thái Sắp xếp & Phân trang dữ liệu
+  const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const handleForceLogout = useCallback(() => {
     localStorage.removeItem('admin_user');
@@ -85,6 +94,11 @@ export default function NutritionistListPage() {
     fetchNutritionists();
   }, [handleForceLogout, fetchNutritionists]);
 
+  // Reset trang về 1 khi đổi bộ lọc tìm kiếm hoặc đổi Tab
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeTab]);
+
   // Hành động Admin Duyệt / Từ chối hồ sơ chuyên gia trực tiếp từ Frontend
   async function handleProcessApproval(id, actionStatus) {
     const actionText = actionStatus === 'APPROVED' ? 'DUYỆT HỒ SƠ CHÍNH THỨC' : 'TỪ CHỐI HỒ SƠ';
@@ -107,6 +121,15 @@ export default function NutritionistListPage() {
     }
   }
 
+  // 🛠️ BỔ SUNG: Hàm xử lý thay đổi logic Sort dữ liệu
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
   // Bộ lọc kết hợp tìm kiếm Text & Phân loại Tab
   const filteredNutritionists = nutritionists.filter(item => {
     const nameStr = item.fullName || '';
@@ -123,6 +146,35 @@ export default function NutritionistListPage() {
 
     return matchesSearch && matchesTab;
   });
+
+  // 🛠️ BỔ SUNG: Xử lý Sắp xếp mượt mà trên Client trước khi Phân trang
+  const sortedNutritionists = [...filteredNutritionists].sort((a, b) => {
+    let aValue = a[sortConfig.key];
+    let bValue = b[sortConfig.key];
+
+    if (sortConfig.key === 'createdAt') {
+      return sortConfig.direction === 'asc'
+        ? new Date(aValue || 0) - new Date(bValue || 0)
+        : new Date(bValue || 0) - new Date(aValue || 0);
+    }
+
+    if (typeof aValue === 'string') {
+      return sortConfig.direction === 'asc'
+        ? aValue.localeCompare(bValue || '')
+        : (bValue || '').localeCompare(aValue);
+    }
+
+    // Các trường dữ liệu số (Phí dịch vụ, Đánh giá sao)
+    return sortConfig.direction === 'asc'
+      ? (aValue || 0) - (bValue || 0)
+      : (bValue || 0) - (aValue || 0);
+  });
+
+  // 🛠️ BỔ SUNG: Phân đoạn mảng theo Phân trang thực tế
+  const totalItems = sortedNutritionists.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedNutritionists = sortedNutritionists.slice(startIndex, startIndex + itemsPerPage);
 
   const countByStatus = (statusType) => {
     if (statusType === 'ALL') return nutritionists.length;
@@ -143,11 +195,13 @@ export default function NutritionistListPage() {
   }
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-6 text-slate-700">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight m-0">Nutritionists Management</h1>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight m-0 flex items-center gap-2">
+            <Users className="w-8 h-8 text-emerald-600" /> Nutritionists Management
+          </h1>
           <p className="text-slate-500 text-sm mt-1">
             Kết quả lọc hồ sơ: <strong className="text-emerald-600">{filteredNutritionists.length}</strong> / Tổng số: <strong>{nutritionists.length}</strong> chuyên gia trong hệ thống.
           </p>
@@ -195,16 +249,25 @@ export default function NutritionistListPage() {
         })}
       </div>
 
-      {/* Thanh Tìm Kiếm */}
-      <div className="relative max-w-md bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+      {/* Thanh Tìm Kiếm kèm nút Xóa Nhanh */}
+      <div className="relative max-w-md bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex items-center">
+        <Search className="absolute left-3 text-slate-400 w-4 h-4" />
         <input
           type="text"
           placeholder="Tìm theo tên, email, số giấy phép chứng chỉ..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 text-sm bg-transparent border-none focus:outline-none"
+          className="w-full pl-9 pr-10 py-2.5 text-sm bg-transparent border-none focus:outline-none focus:ring-0"
         />
+        {searchTerm && (
+          <button 
+            type="button"
+            onClick={() => setSearchTerm('')}
+            className="absolute right-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {error && (
@@ -220,11 +283,17 @@ export default function NutritionistListPage() {
           <table className="w-full border-collapse text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4">Chuyên Gia</th>
+                <th onClick={() => requestSort('fullName')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none transition-colors">
+                  <div className="flex items-center gap-1">Chuyên Gia <ArrowUpDown className="w-3.5 h-3.5" /></div>
+                </th>
                 <th className="px-6 py-4">Tài khoản & Bằng cấp</th>
                 <th className="px-6 py-4">Chuyên Môn</th>
-                <th className="px-6 py-4">Phí Tư Vấn</th>
-                <th className="px-6 py-4">Đánh Giá</th>
+                <th onClick={() => requestSort('serviceFee')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none transition-colors">
+                  <div className="flex items-center gap-1">Phí Tư Vấn <ArrowUpDown className="w-3.5 h-3.5" /></div>
+                </th>
+                <th onClick={() => requestSort('averageRating')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none transition-colors">
+                  <div className="flex items-center gap-1">Đánh Giá <ArrowUpDown className="w-3.5 h-3.5" /></div>
+                </th>
                 <th className="px-6 py-4">Trạng Thái Duyệt</th>
                 <th className="px-6 py-4 text-center">Hành Động</th>
               </tr>
@@ -237,7 +306,7 @@ export default function NutritionistListPage() {
                     Đang đồng bộ dữ liệu từ MongoDB...
                   </td>
                 </tr>
-              ) : filteredNutritionists.length === 0 ? (
+              ) : paginatedNutritionists.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="text-center py-12 text-slate-400">
                     <SearchX className="w-8 h-8 mx-auto mb-2 text-slate-300" />
@@ -245,7 +314,10 @@ export default function NutritionistListPage() {
                   </td>
                 </tr>
               ) : (
-                filteredNutritionists.map((expert) => {
+                paginatedNutritionists.map((expert) => {
+                  // Fallback ID an toàn cho cả cấu trúc id lẫn _id từ MongoDB
+                  const expertId = expert._id || expert.id;
+                  
                   let statusBadge = 'bg-slate-100 text-slate-700';
                   const appStatus = expert.approvalStatus?.toUpperCase();
                   if (appStatus === 'APPROVED' || appStatus === 'APPROVAL') statusBadge = 'bg-emerald-50 text-emerald-700 border border-emerald-100';
@@ -253,15 +325,15 @@ export default function NutritionistListPage() {
                   if (appStatus === 'REJECTED' || appStatus === 'REJECT') statusBadge = 'bg-red-50 text-red-700 border border-red-100';
 
                   return (
-                    <tr key={expert.id} className="hover:bg-slate-50/50 transition-colors">
+                    <tr key={expertId} className="hover:bg-slate-50/50 transition-colors">
                       {/* Họ Tên & Ngày tham gia */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold">
+                          <div className="w-9 h-9 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold shrink-0">
                            {expert.fullName?.charAt(0)?.toUpperCase() || "N"}
                           </div>
                           <div className="flex flex-col">
-                            <span className="font-bold text-slate-800">{expert.fullName}</span>
+                            <span className="font-bold text-slate-800 line-clamp-1">{expert.fullName}</span>
                             <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
                               <Calendar className="w-3 h-3" />
                               {expert.createdAt ? new Date(expert.createdAt).toLocaleDateString('vi-VN') : '—'}
@@ -273,11 +345,11 @@ export default function NutritionistListPage() {
                       {/* Email & Giấy phép nghề nghiệp */}
                       <td className="px-6 py-4">
                         <div className="flex flex-col space-y-1">
-                          <span className="flex items-center gap-1 text-xs font-medium text-slate-700">
-                            <Mail className="w-3.5 h-3.5 text-slate-400" /> {expert.email}
+                          <span className="flex items-center gap-1 text-xs font-medium text-slate-700 break-all">
+                            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {expert.email}
                           </span>
                           <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-100 w-fit font-mono">
-                            No: {expert.licenseNumber}
+                            No: {expert.licenseNumber || 'N/A'}
                           </span>
                         </div>
                       </td>
@@ -286,9 +358,9 @@ export default function NutritionistListPage() {
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                            <Award className="w-3.5 h-3.5 text-amber-500" /> {expert.professionalTitle}
+                            <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" /> {expert.professionalTitle || 'Chuyên gia'}
                           </span>
-                          <span className="text-xs text-slate-500 mt-0.5">{expert.specialization}</span>
+                          <span className="text-xs text-slate-500 mt-0.5 line-clamp-1">{expert.specialization || 'Dinh dưỡng chung'}</span>
                         </div>
                       </td>
 
@@ -296,7 +368,7 @@ export default function NutritionistListPage() {
                       <td className="px-6 py-4 font-bold text-slate-900">
                         <span className="inline-flex items-center text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded">
                           <DollarSign className="w-3 h-3 text-slate-500 mr-0.5" />
-                          {expert.serviceFee?.toLocaleString('vi-VN')} VND
+                          {expert.serviceFee ? expert.serviceFee.toLocaleString('vi-VN') : '0'} VND
                         </span>
                       </td>
 
@@ -311,7 +383,7 @@ export default function NutritionistListPage() {
                       {/* Trạng thái duyệt hồ sơ */}
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold uppercase border ${statusBadge}`}>
-                          {expert.approvalStatus}
+                          {expert.approvalStatus || 'PENDING'}
                         </span>
                       </td>
 
@@ -324,7 +396,7 @@ export default function NutritionistListPage() {
                             type="button"
                             title="Thẩm định chi tiết hồ sơ năng lực"
                             className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors cursor-pointer"
-                            onClick={() => setSelectedExpertId(expert.id)}
+                            onClick={() => setSelectedExpertId(expertId)}
                           >
                             <Eye className="w-4 h-4" />
                           </button>
@@ -357,7 +429,7 @@ export default function NutritionistListPage() {
                                 type="button"
                                 title="Duyệt nhanh hồ sơ"
                                 className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors border border-emerald-200 cursor-pointer"
-                                onClick={() => handleProcessApproval(expert.id, 'APPROVED')}
+                                onClick={() => handleProcessApproval(expertId, 'APPROVED')}
                               >
                                 <CheckCircle className="w-4 h-4" />
                               </button>
@@ -365,7 +437,7 @@ export default function NutritionistListPage() {
                                 type="button"
                                 title="Từ chối nhanh hồ sơ"
                                 className="p-1.5 bg-red-50 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-red-200 cursor-pointer"
-                                onClick={() => handleProcessApproval(expert.id, 'REJECTED')}
+                                onClick={() => handleProcessApproval(expertId, 'REJECTED')}
                               >
                                 <XCircle className="w-4 h-4" />
                               </button>
@@ -376,8 +448,8 @@ export default function NutritionistListPage() {
                             <button 
                               type="button"
                               title="Khóa hồ sơ"
-                              className="p-1.5 bg-red-50 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-red-200 cursor-pointer text-xs font-semibold px-2"
-                              onClick={() => handleProcessApproval(expert.id, 'REJECTED')}
+                              className="bg-red-50 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-red-200 cursor-pointer text-xs font-semibold px-2 py-1"
+                              onClick={() => handleProcessApproval(expertId, 'REJECTED')}
                             >
                               Khóa
                             </button>
@@ -387,8 +459,8 @@ export default function NutritionistListPage() {
                             <button 
                               type="button"
                               title="Kích hoạt lại hồ sơ"
-                              className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors border border-emerald-200 cursor-pointer text-xs font-semibold px-2"
-                              onClick={() => handleProcessApproval(expert.id, 'APPROVED')}
+                              className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md transition-colors border border-emerald-200 cursor-pointer text-xs font-semibold px-2 py-1"
+                              onClick={() => handleProcessApproval(expertId, 'APPROVED')}
                             >
                               Mở
                             </button>
@@ -402,6 +474,49 @@ export default function NutritionistListPage() {
             </tbody>
           </table>
         </div>
+
+        {/* 🛠️ BỔ SUNG: UI Thanh Điều Hướng Phân Trang Giao Diện */}
+        {totalItems > itemsPerPage && (
+          <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-between">
+            <span className="text-xs text-slate-500 font-medium">
+              Hiển thị <strong>{startIndex + 1}</strong> - <strong>{Math.min(startIndex + itemsPerPage, totalItems)}</strong> trên tổng số <strong>{totalItems}</strong> kết quả
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                className="p-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              
+              {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNum) => (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`px-3 py-1 text-xs font-bold rounded transition-colors cursor-pointer ${
+                    currentPage === pageNum
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white border border-slate-200 hover:bg-slate-50 text-slate-600'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                className="p-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -22,10 +22,10 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
       // Gọi API lấy thông tin tổng hợp (Bác có thể tách endpoint nếu backend yêu cầu)
       const response = await apiClient.get(`/admin/nutritionists/${expertId}`);
       if (response.data?.success) {
-        const { info, history, reviewsData } = response.data.data;
-        setExpertData(info);
-        setConsultationHistory(history || []);
-        setReviews(reviewsData || []);
+        const { consultations, reviews, ...info } = response.data.data;
+      setExpertData(info); // Toàn bộ thông tin cá nhân, title, fee, license...
+      setConsultationHistory(consultations || []); // Mảng lịch sử ca tư vấn
+      setReviews(reviews || []); // Mảng đánh giá từ cộng đồng
       }
     } catch (error) {
       console.error("Lỗi đồng bộ hồ sơ chuyên gia:", error);
