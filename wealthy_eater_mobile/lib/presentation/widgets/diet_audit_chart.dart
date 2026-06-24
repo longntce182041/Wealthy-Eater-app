@@ -7,10 +7,10 @@ class DietAuditChart extends StatelessWidget {
   final Map<String, dynamic> actualData;
 
   const DietAuditChart({
-    Key? key,
+    super.key,
     required this.targetData,
     required this.actualData,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
