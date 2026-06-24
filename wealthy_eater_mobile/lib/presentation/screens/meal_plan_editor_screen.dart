@@ -20,6 +20,7 @@ class _MealPlanEditorScreenState extends State<MealPlanEditorScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<NutritionistProvider>().fetchDraftMealPlan(widget.planId).then((_) {
+        if (!mounted) return;
         final state = context.read<NutritionistProvider>().draftMealPlan;
         if (state != null) {
           setState(() {
