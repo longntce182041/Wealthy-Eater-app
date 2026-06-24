@@ -124,9 +124,14 @@ class _MealPlansTabState extends State<MealPlansTab> {
                 ),
                 const Spacer(),
                 if (provider.mealPlan?['created_by'] != null)
-                  Text(
-                    'By: ${provider.mealPlan!['created_by']}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+                  Expanded(
+                    child: Text(
+                      'By: ${provider.mealPlan!['created_by'].split('|')[0]}',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
               ],
             ),
@@ -347,10 +352,9 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
                     trackHeight: 4,
                   ),
                   child: Slider(
-                    value: _currentGram,
-                    min: 50.0,
-                    max: 1000.0,
-                    divisions: 95, // 10g steps: (1000 - 50) / 10 = 95 steps
+                    value: _currentGram.clamp(10.0, _currentGram > 2000.0 ? _currentGram + 1000.0 : 2000.0),
+                    min: 10.0,
+                    max: _currentGram > 2000.0 ? _currentGram + 1000.0 : 2000.0,
                     label: '${_currentGram.round()}g',
                     onChanged: _isSaving
                         ? null
