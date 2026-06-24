@@ -12,7 +12,7 @@ const RecipeIngredient = require('../models/RecipeIngredient');
 const RecipeStep = require('../models/RecipeStep');
 const RecipeReview = require('../models/RecipeReview');
 const Ingredient = require('../models/Ingredient');
-
+const User = require('../models/User');
 
 const { uploadBase64ToCloudinary } = require('../config/cloudinary.config');
 
@@ -216,19 +216,28 @@ async function getRecipesList(req, res, next) {
 /**
  * UC-71: GET /api/admin/recipes/stats
  */
+/**
+ * UC-71: GET /api/admin/recipes/stats
+ */
 async function getRecipesStats(req, res, next) {
   try {
-    const [totalRecipes, publishedRecipes, draftRecipes, totalReviews, avgRating, topRecipeByRating] = await Promise.all([
+    // 🔥 Đã bổ sung User.countDocuments({}) chạy song song trong Promise.all
+    const [totalRecipes, publishedRecipes, draftRecipes, totalReviews, avgRating, topRecipeByRating, totalUsers] = await Promise.all([
       Recipe.countDocuments({}),
       Recipe.countDocuments({ status: 'published' }),
       Recipe.countDocuments({ status: 'draft' }),
       RecipeReview.countDocuments({}),
       RecipeReview.aggregate([{ $group: { _id: null, avgRating: { $avg: '$rating' } } }]),
       RecipeReview.aggregate([{ $group: { _id: '$recipe_id', avgRating: { $avg: '$rating' }, count: { $sum: 1 } } }, { $sort: { avgRating: -1 } }, { $limit: 1 }, { $lookup: { from: 'recipes', localField: '_id', foreignField: '_id', as: 'recipe' } }]),
+      User.countDocuments({}), // <-- Thêm dòng này để đếm tổng số User trong hệ thống
     ]);
 
     const stats = {
-      totalRecipes, publishedRecipes, draftRecipes, totalReviews,
+      totalRecipes, 
+      publishedRecipes, 
+      draftRecipes, 
+      totalReviews,
+      totalUsers, // <-- 🎯 Trả thêm key này về cho Frontend hiển thị
       averageRating: avgRating[0]?.avgRating ? Number(avgRating[0].avgRating.toFixed(1)) : 0,
       topRecipe: topRecipeByRating[0] ? { id: topRecipeByRating[0]._id, name: topRecipeByRating[0].recipe[0]?.name || 'Unknown', rating: Number((topRecipeByRating[0].avgRating || 0).toFixed(1)), reviewCount: topRecipeByRating[0].count } : null,
     };
