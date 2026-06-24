@@ -33,77 +33,170 @@ class CustomerProfileTab extends StatelessWidget {
     return Colors.red;
   }
 
-  void _showLinkEmailDialog(BuildContext context) {
-    final emailController = TextEditingController();
+  void _showLinkDialog(BuildContext context, bool isEmail) {
+    final inputController = TextEditingController();
+    final otpController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (dialogCtx) {
         bool isLoading = false;
+        bool isCodeSent = false;
+
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Link & Verify Email'),
+              title: Text(isCodeSent 
+                  ? 'Verify Code' 
+                  : (isEmail ? 'Link & Verify Email' : 'Link & Verify Phone')),
               content: Form(
                 key: formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'Link your email address to this account to enable email sign-in.',
-                      style: TextStyle(fontSize: 14, color: Colors.black54),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email Address',
-                        prefixIcon: Icon(Icons.email_outlined),
+                    if (!isCodeSent) ...[
+                      Text(
+                        isEmail
+                            ? 'Link your email address to this account to enable email sign-in and receive notifications.'
+                            : 'Link your phone number to this account to enable SMS OTP authentication.',
+                        style: const TextStyle(fontSize: 14, color: Colors.black54),
                       ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Email is required';
-                        final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-                        if (!emailRegex.hasMatch(value.trim())) return 'Enter a valid email address';
-                        return null;
-                      },
-                    ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: inputController,
+                        keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.phone,
+                        decoration: InputDecoration(
+                          labelText: isEmail ? 'Email Address' : 'Phone Number',
+                          prefixIcon: Icon(isEmail ? Icons.email_outlined : Icons.phone_outlined),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return isEmail ? 'Email is required' : 'Phone number is required';
+                          }
+                          final trimmed = value.trim();
+                          if (isEmail) {
+                            final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                            if (!emailRegex.hasMatch(trimmed)) return 'Enter a valid email address';
+                          } else {
+                            final phoneRegex = RegExp(r'^\+?[0-9]{7,15}$');
+                            if (!phoneRegex.hasMatch(trimmed)) return 'Enter a valid phone number';
+                          }
+                          return null;
+                        },
+                      ),
+                    ] else ...[
+                      Text(
+                        isEmail
+                            ? 'Enter the 6-digit verification code sent to ${inputController.text.trim()}'
+                            : 'Enter the 6-digit verification code sent to ${inputController.text.trim()}',
+                        style: const TextStyle(fontSize: 14, color: Colors.black54),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: otpController,
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        decoration: const InputDecoration(
+                          labelText: 'Verification Code',
+                          prefixIcon: Icon(Icons.pin_outlined),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) return 'Verification code is required';
+                          if (value.trim().length < 6) return 'Verification code must be 6 digits';
+                          return null;
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: isLoading ? null : () => Navigator.pop(dialogCtx),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: isLoading
-                      ? null
-                      : () async {
-                          if (!formKey.currentState!.validate()) return;
-                          setState(() => isLoading = true);
-                          final auth = dialogCtx.read<AuthProvider>();
-                          final success = await auth.linkEmail(emailController.text.trim());
-                          if (dialogCtx.mounted) {
-                            Navigator.pop(dialogCtx);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(success
-                                    ? 'Email linked successfully!'
-                                    : (auth.errorMessage ?? 'Failed to link email')),
-                              ),
-                            );
-                          }
-                        },
-                  child: isLoading
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('Link Email'),
-                ),
+                if (!isCodeSent) ...[
+                  TextButton(
+                    onPressed: isLoading ? null : () => Navigator.pop(dialogCtx),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: isLoading
+                        ? null
+                        : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            setState(() => isLoading = true);
+                            final auth = dialogCtx.read<AuthProvider>();
+                            final success = await auth.linkRequest(inputController.text.trim());
+                            if (dialogCtx.mounted) {
+                              setState(() => isLoading = false);
+                              if (success) {
+                                setState(() {
+                                  isCodeSent = true;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Verification code sent successfully!')),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(auth.errorMessage ?? 'Failed to send verification code')),
+                                );
+                              }
+                            }
+                          },
+                    child: isLoading
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Send OTP'),
+                  ),
+                ] else ...[
+                  TextButton(
+                    onPressed: isLoading
+                        ? null
+                        : () {
+                            setState(() {
+                              isCodeSent = false;
+                              otpController.clear();
+                            });
+                          },
+                    child: const Text('Back'),
+                  ),
+                  FilledButton(
+                    onPressed: isLoading
+                        ? null
+                        : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            setState(() => isLoading = true);
+                            final auth = dialogCtx.read<AuthProvider>();
+                            final success = await auth.linkVerify(otpController.text.trim());
+                            if (dialogCtx.mounted) {
+                              setState(() => isLoading = false);
+                              if (success) {
+                                Navigator.pop(dialogCtx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(isEmail
+                                        ? 'Email linked successfully!'
+                                        : 'Phone number linked successfully!'),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(auth.errorMessage ?? 'Verification failed')),
+                                );
+                              }
+                            }
+                          },
+                    child: isLoading
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Verify & Link'),
+                  ),
+                ],
               ],
             );
           },
@@ -169,9 +262,24 @@ class CustomerProfileTab extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: () => _showLinkEmailDialog(context),
+                    onPressed: () => _showLinkDialog(context, true),
                     icon: const Icon(Icons.link_outlined),
                     label: const Text('Link & Verify Email', style: TextStyle(fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                ),
+              ],
+              if (user?.phoneNumber == null || user!.phoneNumber!.isEmpty) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showLinkDialog(context, false),
+                    icon: const Icon(Icons.link_outlined),
+                    label: const Text('Link & Verify Phone Number', style: TextStyle(fontWeight: FontWeight.bold)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -263,7 +371,7 @@ class CustomerProfileTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton.icon(
-                      onPressed: () => _showLinkEmailDialog(context),
+                      onPressed: () => _showLinkDialog(context, true),
                       icon: const Icon(Icons.link_outlined, size: 18),
                       label: const Text('Link & Verify Email'),
                       style: ElevatedButton.styleFrom(
@@ -277,6 +385,46 @@ class CustomerProfileTab extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       user.email,
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                  ],
+                  if (user?.phoneNumber == null || user!.phoneNumber!.isEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.amber),
+                          const SizedBox(width: 6),
+                          Text(
+                            'No phone number linked',
+                            style: TextStyle(fontSize: 12, color: Colors.amber[800], fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: () => _showLinkDialog(context, false),
+                      icon: const Icon(Icons.link_outlined, size: 18),
+                      label: const Text('Link & Verify Phone'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      user.phoneNumber!,
                       style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                   ],

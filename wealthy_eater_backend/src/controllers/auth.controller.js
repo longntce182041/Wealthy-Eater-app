@@ -181,6 +181,70 @@ async function linkEmail(req, res, next) {
   }
 }
 
+/**
+ * POST /api/auth/forget-password
+ * Body: { identifier }
+ */
+async function forgetPassword(req, res, next) {
+  try {
+    const { identifier } = req.body || {};
+    const result = await AuthService.forgetPassword(identifier);
+    return res.json({ success: true, data: result.message || result, error: null });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * POST /api/auth/reset-password
+ * Body: { identifier, otp, newPassword }
+ */
+async function resetPassword(req, res, next) {
+  try {
+    const { identifier, otp, newPassword } = req.body || {};
+    const result = await AuthService.resetPassword(identifier, otp, newPassword);
+    return res.json({ success: true, data: result.message || result, error: null });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * POST /api/auth/link-request
+ * Body: { identifier }
+ */
+async function linkRequest(req, res, next) {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
+    }
+    const { identifier } = req.body || {};
+    const result = await AuthService.linkRequest(userId, identifier);
+    return res.json({ success: true, data: result.message || result, error: null });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * POST /api/auth/link-verify
+ * Body: { otp }
+ */
+async function linkVerify(req, res, next) {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
+    }
+    const { otp } = req.body || {};
+    const result = await AuthService.linkVerify(userId, otp);
+    return res.json({ success: true, data: result, error: null });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   login,
   googleLogin,
@@ -191,4 +255,8 @@ module.exports = {
   resendOtp,
   changePassword,
   linkEmail,
+  forgetPassword,
+  resetPassword,
+  linkRequest,
+  linkVerify,
 };

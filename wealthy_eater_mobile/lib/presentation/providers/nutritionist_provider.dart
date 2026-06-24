@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../../core/network/api_client.dart';
 import '../../data/models/nutritionist_model.dart';
@@ -71,6 +72,64 @@ class NutritionistProvider extends ChangeNotifier {
     }
   }
 
+  // ── Nutritionist My Profile ───────────────────────────────────────────────
+  Map<String, dynamic>? _myProfile;
+  bool _isLoadingProfile = false;
+  String? _profileError;
+
+  Map<String, dynamic>? get myProfile => _myProfile;
+  bool get isLoadingProfile => _isLoadingProfile;
+  String? get profileError => _profileError;
+
+  Future<void> fetchMyProfile() async {
+    _isLoadingProfile = true;
+    _profileError = null;
+    notifyListeners();
+
+    try {
+      _myProfile = await _service.fetchMyProfile();
+    } catch (e) {
+      _profileError = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      _isLoadingProfile = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateMyProfile({
+    required String professionalTitle,
+    required String licenseNumber,
+    required int serviceFee,
+    required String fullName,
+    required String specialization,
+    File? certificateFile,
+    String? certificateUrl,
+  }) async {
+    _isLoadingProfile = true;
+    _profileError = null;
+    notifyListeners();
+
+    try {
+      final updated = await _service.updateProfile(
+        professionalTitle: professionalTitle,
+        licenseNumber: licenseNumber,
+        serviceFee: serviceFee,
+        fullName: fullName,
+        specialization: specialization,
+        certificateFile: certificateFile,
+        certificateUrl: certificateUrl,
+      );
+      _myProfile = updated;
+      return true;
+    } catch (e) {
+      _profileError = e.toString().replaceFirst('Exception: ', '');
+      return false;
+    } finally {
+      _isLoadingProfile = false;
+      notifyListeners();
+    }
+  }
+
   /// Clears all user-specific state on logout to prevent data leakage
   /// between different accounts.
   void reset() {
@@ -80,6 +139,9 @@ class NutritionistProvider extends ChangeNotifier {
     _mealPlanRequests = [];
     _isLoadingRequests = false;
     _requestsError = null;
+    _myProfile = null;
+    _isLoadingProfile = false;
+    _profileError = null;
     notifyListeners();
   }
 }

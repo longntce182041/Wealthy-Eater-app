@@ -108,6 +108,9 @@ class NutritionistController {
   /**
    * POST /api/nutritionists/meal-plan-requests/:id/respond
    */
+  /**
+   * POST /api/nutritionists/meal-plan-requests/:id/respond
+   */
   async respondToMealPlanRequest(req, res, next) {
     try {
       const nutritionistUserId = req.user.id;
@@ -125,6 +128,53 @@ class NutritionistController {
       console.error('NutritionistController.respondToMealPlanRequest Error:', error.message);
       const statusCode = error.statusCode || error.status || 500;
       return next(new AppError(error.message || 'Failed to respond to meal plan request.', statusCode, 'RESPOND_MEAL_PLAN_REQUEST_ERROR'));
+    }
+  }
+
+  /**
+   * GET /api/nutritionists/profile/me
+   */
+  async getNutritionistProfile(req, res, next) {
+    try {
+      const userId = req.user?.id || req.user?.sub;
+      if (!userId) {
+        throw new AppError("Unauthorized user", 401);
+      }
+      const profile = await nutritionistService.getNutritionistProfileByUserId(userId);
+      return res.status(200).json({
+        success: true,
+        data: profile,
+      });
+    } catch (error) {
+      console.error('NutritionistController.getNutritionistProfile Error:', error.message);
+      const statusCode = error.statusCode || error.status || 500;
+      return next(new AppError(error.message || 'Failed to fetch nutritionist profile.', statusCode));
+    }
+  }
+
+  /**
+   * PUT /api/nutritionists/profile/me
+   */
+  async updateNutritionistProfile(req, res, next) {
+    try {
+      const userId = req.user?.id || req.user?.sub;
+      if (!userId) {
+        throw new AppError("Unauthorized user", 401);
+      }
+      const result = await nutritionistService.updateNutritionistProfileByUserId(
+        userId,
+        req.body,
+        req.file
+      );
+      return res.status(200).json({
+        success: true,
+        message: "Nutritionist profile updated successfully",
+        data: result,
+      });
+    } catch (error) {
+      console.error('NutritionistController.updateNutritionistProfile Error:', error.message);
+      const statusCode = error.statusCode || error.status || 500;
+      return next(new AppError(error.message || 'Failed to update nutritionist profile.', statusCode));
     }
   }
 }
