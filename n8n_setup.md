@@ -10,12 +10,13 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        0,
-        16
+        -672,
+        1120
       ],
-      "id": "56b7daf5-41fa-4bea-b1be-66842f630587",
-      "name": "Webhook",
-      "webhookId": "55210ba0-54d0-4fc7-85ad-309dcf8c38b0"
+      "id": "78067a80-4fe8-49b8-b824-27e7f2659590",
+      "name": "Webhook1",
+      "webhookId": "55210ba0-54d0-4fc7-85ad-309dcf8c38b0",
+      "retryOnFail": false
     },
     {
       "parameters": {
@@ -65,11 +66,11 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        208,
-        16
+        -464,
+        1120
       ],
-      "id": "0f4402fc-5440-4879-a6a1-93ac5e27249e",
-      "name": "Edit Fields"
+      "id": "475ff20e-8bf5-42bd-95b6-2c1067c76590",
+      "name": "Edit Fields1"
     },
     {
       "parameters": {
@@ -80,11 +81,11 @@
       "type": "n8n-nodes-base.mongoDb",
       "typeVersion": 1.3,
       "position": [
-        656,
-        -64
+        -16,
+        1040
       ],
-      "id": "bac5063c-a082-4eab-a930-280f7223562f",
-      "name": "Find documents",
+      "id": "d27cd0e4-ec62-41f4-be64-ae4f48eaa946",
+      "name": "Find documents1",
       "credentials": {
         "mongoDb": {
           "id": "Zghyt3NlT8HiuKH2",
@@ -95,16 +96,16 @@
     },
     {
       "parameters": {
-        "jsCode": "// Lấy dữ liệu từ Edit Fields node\nconst clientPrefs = $('Edit Fields').first().json;\nconst targetTdee = clientPrefs.tdee;\nconst allergiesList = clientPrefs.allergies || [];\nconst medicalConditionsList = clientPrefs.medicalConditions || [];\n\n// Lấy templates từ MongoDB node\nconst rawTemplates = $input.all();\nlet bestCandidate = null;\nlet minimalCalorieVariance = Infinity;\n\nfor (const entry of rawTemplates) {\n    const template = entry.json;\n    \n    // 1. Kiểm tra TDEE range\n    if (targetTdee < template.minTDEE || targetTdee > template.maxTDEE) {\n        continue;\n    }\n    \n    // 2. Kiểm tra allergens\n    let containsAllergen = false;\n    if (template.excludedAllergies && template.excludedAllergies.length > 0) {\n        for (const allergen of allergiesList) {\n            if (template.excludedAllergies.includes(allergen)) {\n                containsAllergen = true;\n                break;\n            }\n        }\n    }\n    if (containsAllergen) continue;\n    \n    // 3. Kiểm tra medical conditions\n    let containsMedicalConflict = false;\n    if (template.medicalConditionTags && template.medicalConditionTags.length > 0) {\n        for (const condition of medicalConditionsList) {\n            if (template.medicalConditionTags.includes(condition)) {\n                containsMedicalConflict = true;\n                break;\n            }\n        }\n    }\n    if (containsMedicalConflict) continue;\n\n    // 4. Chọn template có calorie gần TDEE nhất\n    const currentVariance = Math.abs(template.totalCalories - targetTdee);\n    if (currentVariance < minimalCalorieVariance) {\n        minimalCalorieVariance = currentVariance;\n        bestCandidate = template;\n    }\n}\n\n// 5. Trả về kết quả\nif (bestCandidate) {\n    return [{ json: { candidateFound: true, matchedTemplate: bestCandidate } }];\n} else {\n    return [{ json: { candidateFound: false, reason: \"No matching template found.\" } }];\n}"
+        "jsCode": "// Lấy dữ liệu từ Edit Fields node\nconst clientPrefs = $('Edit Fields1').first().json;\nconst targetTdee = clientPrefs.tdee;\nconst allergiesList = clientPrefs.allergies || [];\nconst medicalConditionsList = clientPrefs.medicalConditions || [];\n\n// Lấy templates từ MongoDB node\nconst rawTemplates = $input.all();\nlet bestCandidate = null;\nlet minimalCalorieVariance = Infinity;\n\nfor (const entry of rawTemplates) {\n    const template = entry.json;\n    \n    // 1. Kiểm tra TDEE range\n    if (targetTdee < template.minTDEE || targetTdee > template.maxTDEE) {\n        continue;\n    }\n    \n    // 2. Kiểm tra allergens\n    let containsAllergen = false;\n    if (template.excludedAllergies && template.excludedAllergies.length > 0) {\n        for (const allergen of allergiesList) {\n            if (template.excludedAllergies.includes(allergen)) {\n                containsAllergen = true;\n                break;\n            }\n        }\n    }\n    if (containsAllergen) continue;\n    \n    // 3. Kiểm tra medical conditions\n    let containsMedicalConflict = false;\n    if (template.medicalConditionTags && template.medicalConditionTags.length > 0) {\n        for (const condition of medicalConditionsList) {\n            if (template.medicalConditionTags.includes(condition)) {\n                containsMedicalConflict = true;\n                break;\n            }\n        }\n    }\n    if (containsMedicalConflict) continue;\n\n    // 4. Chọn template có calorie gần TDEE nhất\n    const currentVariance = Math.abs(template.totalCalories - targetTdee);\n    if (currentVariance < minimalCalorieVariance) {\n        minimalCalorieVariance = currentVariance;\n        bestCandidate = template;\n    }\n}\n\n// 5. Trả về kết quả\nif (bestCandidate) {\n    return [{ json: { candidateFound: true, matchedTemplate: bestCandidate } }];\n} else {\n    return [{ json: { candidateFound: false, reason: \"No matching template found.\" } }];\n}"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        928,
-        -64
+        256,
+        1040
       ],
-      "id": "6f1feb90-ec3a-4fd5-84ba-5d207006c219",
-      "name": "Code in JavaScript"
+      "id": "2c6c9de7-e18b-4dde-955f-1d975fa52bcf",
+      "name": "Code in JavaScript1"
     },
     {
       "parameters": {
@@ -153,11 +154,11 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        416,
-        48
+        -256,
+        1152
       ],
-      "id": "938dd278-9c78-4ecf-8717-e13b25e12f9f",
-      "name": "If"
+      "id": "367ba13c-c1da-40b4-9e0e-f4e587ce2ecb",
+      "name": "If2"
     },
     {
       "parameters": {
@@ -170,11 +171,11 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        656,
-        144
+        -16,
+        1248
       ],
-      "id": "e1a669e5-f063-4cff-891d-e73390348241",
-      "name": "Respond to Webhook"
+      "id": "9e14c695-ae6c-4c04-b07f-d4c85c8c733f",
+      "name": "Respond to Webhook2"
     },
     {
       "parameters": {
@@ -204,11 +205,11 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1136,
-        -64
+        464,
+        1040
       ],
-      "id": "f1151db3-825f-4f9e-981c-da2eb3b03d99",
-      "name": "If1"
+      "id": "b7028693-a161-4999-a1c0-4a95a44e9b1f",
+      "name": "If3"
     },
     {
       "parameters": {
@@ -221,11 +222,11 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        1408,
-        -160
+        736,
+        944
       ],
-      "id": "0e4ddc34-29e3-494d-b135-2a99029431d1",
-      "name": "Respond to Webhook1"
+      "id": "2b7e173b-e76a-4e07-8e58-7b329569be41",
+      "name": "Respond to Webhook3"
     },
     {
       "parameters": {
@@ -242,16 +243,16 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{\n  JSON.stringify({\n    targetCalories: $('Edit Fields').first().json.tdee,\n    targetProtein: 140,\n    targetCarbs: 200,\n    targetFat: 65,\n    allergiesExclusions: $('Edit Fields').first().json.allergies || [],\n    dietType: $('Edit Fields').first().json.dietaryPreference,\n    minVarietyItems: 0,\n    maxVarietyItems: null,\n    activationGramThreshold: 1.0,\n    availableIngredients: $input.all().map(item => ({\n      id: item.json._id?.toString() || '',\n      name: item.json.name || '',\n      calories: item.json.calories_per_unit ?? 0,\n      protein: item.json.protein ?? 0,\n      carbs: item.json.carbs ?? 0,\n      fat: item.json.fat ?? 0,\n      allergenTags: [],\n      minLimitGram: 0,\n      maxLimitGram: 350\n    })).filter(ing => ing.id && ing.name && ing.calories > 0)\n  })\n}}",
+        "jsonBody": "={{\n  JSON.stringify({\n    targetCalories: $('Edit Fields1').first().json.tdee,\n    targetProtein: 140,\n    targetCarbs: 200,\n    targetFat: 65,\n    allergiesExclusions: $('Edit Fields1').first().json.allergies || [],\n    dietType: $('Edit Fields1').first().json.dietaryPreference,\n    minVarietyItems: 0,\n    maxVarietyItems: null,\n    activationGramThreshold: 1.0,\n    availableIngredients: $input.all().map(item => ({\n      id: item.json._id?.toString() || '',\n      name: item.json.name || '',\n      calories: item.json.calories_per_unit ?? 0,\n      protein: item.json.protein ?? 0,\n      carbs: item.json.carbs ?? 0,\n      fat: item.json.fat ?? 0,\n      allergenTags: [],\n      minLimitGram: 0,\n      maxLimitGram: 350\n    })).filter(ing => ing.id && ing.name && ing.calories > 0)\n  })\n}}",
         "options": {}
       },
-      "id": "7c15a12b-6c49-4dc9-9843-263a5e55d77e",
-      "name": "Invoke FastAPI Optimization Service1",
+      "id": "a343f5ab-751d-4421-a896-e15252364603",
+      "name": "Invoke FastAPI Optimization Service",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1600,
-        128
+        928,
+        1232
       ],
       "alwaysOutputData": false,
       "retryOnFail": false
@@ -265,11 +266,11 @@
       "type": "n8n-nodes-base.mongoDb",
       "typeVersion": 1.3,
       "position": [
-        1360,
-        96
+        688,
+        1200
       ],
-      "id": "7d6b038a-70e5-41ca-980a-ca094a7228c8",
-      "name": "Load Ingredients",
+      "id": "edd65826-4f7a-4c40-afbf-7f592ad1bcd3",
+      "name": "Load Ingredients1",
       "alwaysOutputData": false,
       "credentials": {
         "mongoDb": {
@@ -280,16 +281,16 @@
     },
     {
       "parameters": {
-        "jsCode": "// UC-39: Transform LP solver allocation results into Gemini-friendly prompt\nconst fastapiResult = $input.first().json;\nconst editFields = $('Edit Fields').first().json;\n\nconst allocation = fastapiResult.allocation || [];\nconst totals = fastapiResult.totals || {};\n\n// Build human-readable ingredient summary for Gemini prompt\nconst ingredientSummary = allocation\n  .map(item => `${Math.round(item.allocatedGrams)}g ${item.ingredientName}`)\n  .join(', ');\n\nreturn [{\n  json: {\n    clientId: editFields.clientId,\n    dietType: editFields.dietaryPreference,\n    ingredientSummary,\n    allocation,\n    totals,\n    targetCalories: Math.round(totals.calculatedCalories || 0),\n    targetProtein: Math.round(totals.calculatedProtein || 0),\n    targetCarbs: Math.round(totals.calculatedCarbs || 0),\n    targetFat: Math.round(totals.calculatedFat || 0)\n  }\n}];"
+        "jsCode": "// UC-39: Transform LP solver allocation results into Gemini-friendly prompt\nconst fastapiResult = $input.first().json;\nconst editFields = $('Edit Fields1').first().json;\n\nconst allocation = fastapiResult.allocation || [];\nconst totals = fastapiResult.totals || {};\n\n// Build human-readable ingredient summary for Gemini prompt\nconst ingredientSummary = allocation\n  .map(item => `${Math.round(item.allocatedGrams)}g ${item.ingredientName}`)\n  .join(', ');\n\nreturn [{\n  json: {\n    clientId: editFields.clientId,\n    dietType: editFields.dietaryPreference,\n    ingredientSummary,\n    allocation,\n    totals,\n    targetCalories: Math.round(totals.calculatedCalories || 0),\n    targetProtein: Math.round(totals.calculatedProtein || 0),\n    targetCarbs: Math.round(totals.calculatedCarbs || 0),\n    targetFat: Math.round(totals.calculatedFat || 0)\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1840,
-        128
+        1168,
+        1232
       ],
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "name": "Transform Optimized Ingredients1"
+      "id": "52bf2d5b-ee26-4c4b-b0f5-99811cdb796b",
+      "name": "Transform Optimized Ingredients"
     },
     {
       "parameters": {
@@ -313,13 +314,13 @@
         "jsonBody": "={{\n  JSON.stringify({\n    clientId: $json.clientId,\n    dietType: $json.dietType,\n    ingredientSummary: $json.ingredientSummary,\n    allocation: $json.allocation,\n    totals: $json.totals\n  })\n}}",
         "options": {}
       },
-      "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
-      "name": "Save Plan to Backend API",
+      "id": "2ec78e9a-9143-4f51-b660-bce8c2d48d31",
+      "name": "Save Plan to Backend API1",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        2080,
-        128
+        1408,
+        1232
       ],
       "alwaysOutputData": false,
       "retryOnFail": false
@@ -335,132 +336,132 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        2800,
-        128
+        1680,
+        1232
       ],
-      "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
-      "name": "Respond — AI Plan Success"
+      "id": "4f83208f-eac5-4f91-a698-7a77cb564244",
+      "name": "Respond — AI Plan Success1"
     }
   ],
   "connections": {
-    "Webhook": {
+    "Webhook1": {
       "main": [
         [
           {
-            "node": "Edit Fields",
+            "node": "Edit Fields1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Edit Fields": {
+    "Edit Fields1": {
       "main": [
         [
           {
-            "node": "If",
+            "node": "If2",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Find documents": {
+    "Find documents1": {
       "main": [
         [
           {
-            "node": "Code in JavaScript",
+            "node": "Code in JavaScript1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Code in JavaScript": {
+    "Code in JavaScript1": {
       "main": [
         [
           {
-            "node": "If1",
+            "node": "If3",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If": {
+    "If2": {
       "main": [
         [
           {
-            "node": "Find documents",
+            "node": "Find documents1",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Respond to Webhook2",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If1": {
+    "If3": {
       "main": [
         [
           {
-            "node": "Respond to Webhook1",
+            "node": "Respond to Webhook3",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Load Ingredients",
+            "node": "Load Ingredients1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Load Ingredients": {
+    "Invoke FastAPI Optimization Service": {
       "main": [
         [
           {
-            "node": "Invoke FastAPI Optimization Service1",
+            "node": "Transform Optimized Ingredients",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Invoke FastAPI Optimization Service1": {
+    "Load Ingredients1": {
       "main": [
         [
           {
-            "node": "Transform Optimized Ingredients1",
+            "node": "Invoke FastAPI Optimization Service",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Transform Optimized Ingredients1": {
+    "Transform Optimized Ingredients": {
       "main": [
         [
           {
-            "node": "Save Plan to Backend API",
+            "node": "Save Plan to Backend API1",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Save Plan to Backend API": {
+    "Save Plan to Backend API1": {
       "main": [
         [
           {
-            "node": "Respond — AI Plan Success",
+            "node": "Respond — AI Plan Success1",
             "type": "main",
             "index": 0
           }

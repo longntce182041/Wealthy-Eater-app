@@ -170,12 +170,42 @@ class MealPlanService {
     };
   }
 
+  async calculateCustomIngredientsNutrients(customIngredients) {
+    const Ingredient = require("../models/Ingredient");
+    
+    let totalWeight = 0;
+    let totalCalories = 0;
+    let totalProtein = 0;
+    let totalFat = 0;
+    let totalCarbs = 0;
+
+    for (const item of customIngredients) {
+      const ing = await Ingredient.findById(item.ingredient_id).lean();
+      if (ing) {
+        const qty = item.amount_gram;
+        totalWeight += qty;
+        totalCalories += (ing.calories_per_unit * qty) / 100;
+        totalProtein += ((ing.protein || 0) * qty) / 100;
+        totalFat += ((ing.fat || 0) * qty) / 100;
+        totalCarbs += ((ing.carbs || 0) * qty) / 100;
+      }
+    }
+
+    return {
+      base_weight: totalWeight || 100,
+      calories: Math.round(totalCalories),
+      protein: parseFloat(totalProtein.toFixed(1)),
+      fat: parseFloat(totalFat.toFixed(1)),
+      carbs: parseFloat(totalCarbs.toFixed(1)),
+    };
+  }
+
   async getMyMealPlan(userId) {
     const MealPlan = require("../models/MealPlan");
     const MealPlanItem = require("../models/MealPlanItem");
 
     // Get the latest meal plan for the user
-    const mealPlan = await MealPlan.findOne({ user_id: userId })
+    const mealPlan = await MealPlan.findOne({ user_id: userId, status: "PUBLISHED" })
       .sort({ date: -1 })
       .lean();
 
@@ -187,6 +217,11 @@ class MealPlanService {
       .populate({
         path: "recipe_id",
         model: "Recipe",
+      })
+      .populate({
+        path: "custom_ingredients.ingredient_id",
+        model: "Ingredient",
+        select: "name calories_per_unit protein carbs fat",
       })
       .lean();
 
@@ -200,7 +235,22 @@ class MealPlanService {
         fat: 0,
         carbs: 0,
       };
-      if (recipe) {
+
+      let customIngredientsData = null;
+
+      if (item.custom_ingredients && item.custom_ingredients.length > 0) {
+        // Prepare custom_ingredients for calculate utility
+        const mappedCustomIngredients = item.custom_ingredients.map(ci => ({
+          ingredient_id: ci.ingredient_id?._id || ci.ingredient_id,
+          amount_gram: ci.amount_gram,
+        }));
+        nutrients = await this.calculateCustomIngredientsNutrients(mappedCustomIngredients);
+        
+        customIngredientsData = item.custom_ingredients.map(ci => ({
+          ingredient: ci.ingredient_id,
+          amount_gram: ci.amount_gram,
+        }));
+      } else if (recipe && recipe._id) {
         nutrients = await this.calculateRecipeNutrients(recipe._id);
       }
 
@@ -208,12 +258,12 @@ class MealPlanService {
         item.customized_servings_gram || nutrients.base_weight;
 
       // Scale nutrients based on customized servings gram vs base weight
-      const scale = customizedGram / nutrients.base_weight;
+      const scale = customizedGram / (nutrients.base_weight || 1);
 
       enrichedItems.push({
         _id: item._id,
         meal_type: item.meal_type,
-        recipe: recipe
+        recipe: recipe && recipe._id
           ? {
               _id: recipe._id,
               name: recipe.name,
@@ -222,6 +272,7 @@ class MealPlanService {
               cooking_time: recipe.cooking_time,
             }
           : null,
+        custom_ingredients: customIngredientsData,
         base_weight: nutrients.base_weight,
         customized_servings_gram: customizedGram,
         base_nutrients: {
@@ -245,6 +296,117 @@ class MealPlanService {
       created_by: mealPlan.created_by,
       items: enrichedItems,
     };
+  }
+
+  async getMealPlanById(planId) {
+    const MealPlan = require("../models/MealPlan");
+    const MealPlanItem = require("../models/MealPlanItem");
+
+    const mealPlan = await MealPlan.findById(planId).lean();
+    if (!mealPlan) return null;
+
+    const items = await MealPlanItem.find({ meal_plan_id: mealPlan._id })
+      .populate({
+        path: "recipe_id",
+        model: "Recipe",
+      })
+      .populate({
+        path: "custom_ingredients.ingredient_id",
+        model: "Ingredient",
+        select: "name calories_per_unit protein carbs fat",
+      })
+      .lean();
+
+    const enrichedItems = [];
+    for (const item of items) {
+      const recipe = item.recipe_id;
+      let nutrients = {
+        base_weight: 100,
+        calories: 0,
+        protein: 0,
+        fat: 0,
+        carbs: 0,
+      };
+
+      let customIngredientsData = null;
+
+      if (item.custom_ingredients && item.custom_ingredients.length > 0) {
+        const mappedCustomIngredients = item.custom_ingredients.map(ci => ({
+          ingredient_id: ci.ingredient_id?._id || ci.ingredient_id,
+          amount_gram: ci.amount_gram,
+        }));
+        nutrients = await this.calculateCustomIngredientsNutrients(mappedCustomIngredients);
+        
+        customIngredientsData = item.custom_ingredients.map(ci => ({
+          ingredient: ci.ingredient_id,
+          amount_gram: ci.amount_gram,
+        }));
+      } else if (recipe && recipe._id) {
+        nutrients = await this.calculateRecipeNutrients(recipe._id);
+      }
+
+      const customizedGram =
+        item.customized_servings_gram || nutrients.base_weight;
+
+      const scale = customizedGram / (nutrients.base_weight || 1);
+
+      enrichedItems.push({
+        _id: item._id,
+        meal_type: item.meal_type,
+        recipe: recipe && recipe._id
+          ? {
+              _id: recipe._id,
+              name: recipe.name,
+              description: recipe.description,
+              image_url: recipe.image_url,
+              cooking_time: recipe.cooking_time,
+            }
+          : null,
+        custom_ingredients: customIngredientsData,
+        base_weight: nutrients.base_weight,
+        customized_servings_gram: customizedGram,
+        base_nutrients: {
+          calories: nutrients.calories,
+          protein: nutrients.protein,
+          fat: nutrients.fat,
+          carbs: nutrients.carbs,
+        },
+        customized_nutrients: {
+          calories: Math.round(nutrients.calories * scale),
+          protein: parseFloat((nutrients.protein * scale).toFixed(1)),
+          fat: parseFloat((nutrients.fat * scale).toFixed(1)),
+          carbs: parseFloat((nutrients.carbs * scale).toFixed(1)),
+        },
+      });
+    }
+
+    return {
+      mealPlanId: mealPlan._id,
+      date: mealPlan.date,
+      status: mealPlan.status,
+      created_by: mealPlan.created_by,
+      items: enrichedItems,
+    };
+  }
+
+  async getNutritionistMealPlans(nutritionistId) {
+    const MealPlan = require("../models/MealPlan");
+
+    const plans = await MealPlan.find({ nutritionist_id: nutritionistId })
+      .populate({
+        path: "user_id",
+        select: "email name",
+      })
+      .sort({ date: -1 })
+      .lean();
+
+    return plans.map((p) => ({
+      mealPlanId: p._id,
+      clientEmail: p.user_id ? p.user_id.email : 'Unknown Client',
+      status: p.status,
+      date: p.date,
+      created_by: p.created_by,
+    }));
   }
 
   async updateItemWeight(itemId, weight) {
@@ -331,19 +493,24 @@ class MealPlanService {
     });
     await newPlan.save();
 
-    // 2. Build MealPlanItem entries — one per allocated ingredient component
-    //    Each item stores the ingredient name and gram weight as customized_servings_gram.
-    //    recipe_id is set to null since this is an AI-generated plan (no pre-existing recipe).
-    //    The mealName and cookingStep are embedded in the plan document's metadata field.
-    const itemDocs = allocation.map((component) =>
-      new MealPlanItem({
-        meal_plan_id: newPlan._id,
-        recipe_id: 'AI_GENERATED', // Sentinel value — no Recipe document
-        meal_type: 'LUNCH',
-        customized_servings_gram: component.allocatedGrams,
-      }),
-    );
-    await MealPlanItem.insertMany(itemDocs);
+    // 2. Build one MealPlanItem entry representing the entire AI meal
+    //    It contains all the allocated ingredients under the custom_ingredients array.
+    const customIngredients = allocation.map((component) => ({
+      ingredient_id: component.ingredientId,
+      amount_gram: component.allocatedGrams,
+    }));
+
+    const totalGrams = allocation.reduce((sum, item) => sum + item.allocatedGrams, 0);
+
+    const aiMealItem = new MealPlanItem({
+      meal_plan_id: newPlan._id,
+      recipe_id: 'AI_GENERATED',
+      meal_type: 'LUNCH', // AI defaults to 1 big meal currently
+      custom_ingredients: customIngredients,
+      target_calories: totals?.calculatedCalories || 0,
+      customized_servings_gram: totalGrams,
+    });
+    await aiMealItem.save();
 
     // 3. Compose cooking steps as a formatted string for the plan metadata
     const cookingStepText = Array.isArray(cookingSteps)
@@ -357,7 +524,7 @@ class MealPlanService {
     return {
       mealPlanId: newPlan._id,
       totalEnergyEnvelopeKcal: totals?.calculatedCalories || 0,
-      allocatedComponentsCount: itemDocs.length,
+      allocatedComponentsCount: customIngredients.length,
       mealName: mealName || 'Optimized Meal',
       difficulty: difficulty || 'Medium',
       cookingTimeMinutes: cookingTimeMinutes || 30,
@@ -434,6 +601,84 @@ class MealPlanService {
     }
 
     return mealPlan;
+  }
+
+  /**
+   * UC-52: Cập nhật bản nháp thực đơn (Nutritionist chỉnh sửa)
+   */
+  async updateDraftMealPlan(planId, nutritionistId, items) {
+    const MealPlan = require("../models/MealPlan");
+    const MealPlanItem = require("../models/MealPlanItem");
+
+    const mealPlan = await MealPlan.findById(planId);
+    if (!mealPlan) {
+      const AppError = require('../utils/AppError');
+      throw new AppError("Meal plan not found.", 404);
+    }
+
+    if (mealPlan.nutritionist_id?.toString() !== nutritionistId) {
+      const AppError = require('../utils/AppError');
+      throw new AppError("Unauthorized to edit this meal plan.", 403);
+    }
+
+    if (mealPlan.status !== "DRAFT") {
+      const AppError = require('../utils/AppError');
+      throw new AppError("Only DRAFT meal plans can be edited.", 400);
+    }
+
+    let totalCalories = 0;
+
+    for (const updateItem of items) {
+      const itemDoc = await MealPlanItem.findOne({
+        _id: updateItem.itemId,
+        meal_plan_id: planId,
+      });
+
+      if (!itemDoc) continue;
+
+      if (updateItem.ingredients && Array.isArray(updateItem.ingredients)) {
+        // Update custom ingredients
+        itemDoc.custom_ingredients = updateItem.ingredients.map(ing => ({
+          ingredient_id: ing.ingredientId,
+          amount_gram: ing.grams,
+        }));
+        
+        // Recalculate target_calories & customized_servings_gram
+        const mappedForCalc = itemDoc.custom_ingredients.map(ci => ({
+          ingredient_id: ci.ingredient_id,
+          amount_gram: ci.amount_gram,
+        }));
+        
+        const nutrients = await this.calculateCustomIngredientsNutrients(mappedForCalc);
+        itemDoc.target_calories = nutrients.calories;
+        itemDoc.customized_servings_gram = nutrients.base_weight;
+        itemDoc.recipe_id = "AI_GENERATED"; // If it was a recipe, it's now customized
+
+        totalCalories += nutrients.calories;
+      } else if (updateItem.recipeId) {
+        // Swap to a recipe
+        itemDoc.recipe_id = updateItem.recipeId;
+        itemDoc.custom_ingredients = [];
+        
+        const nutrients = await this.calculateRecipeNutrients(updateItem.recipeId);
+        itemDoc.target_calories = nutrients.calories;
+        itemDoc.customized_servings_gram = nutrients.base_weight;
+
+        totalCalories += nutrients.calories;
+      }
+      
+      await itemDoc.save();
+    }
+
+    // Refresh updatedAt timestamp (Mongoose handles this if timestamps: true, else manual fallback)
+    mealPlan.updatedAt = new Date();
+    await mealPlan.save();
+
+    return {
+      mealPlanId: mealPlan._id,
+      totalCalories,
+      updatedAt: mealPlan.updatedAt
+    };
   }
 }
 

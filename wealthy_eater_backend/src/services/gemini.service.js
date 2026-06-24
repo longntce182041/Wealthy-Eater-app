@@ -23,14 +23,26 @@ class GeminiService {
    * @returns {Promise<Object>} { mealName, description, difficulty, cookingTimeMinutes, cookingSteps[] }
    */
   async generateMealPlan({ ingredientSummary, dietType, targetCalories, targetProtein, targetCarbs, targetFat }) {
-    const prompt = `You are a professional nutritionist and chef. Given the following optimized ingredients from a linear programming meal solver, create a complete meal plan entry.
+    const prompt = `ROLE INSTRUCTIONS:
+You are an elite clinical research dietitian and executive culinary development chef specializing in high-precision therapeutic meal preparation. Your task is to translate a raw, mathematically optimized list of ingredients and their exact gram allocations into an appetizing, clear, and professional human-friendly recipe.
 
-Ingredients allocated: ${ingredientSummary}
-Diet type: ${dietType}
-Total calories: ${targetCalories} kcal
-Protein: ${targetProtein}g | Carbs: ${targetCarbs}g | Fat: ${targetFat}g
+INPUT CONSTRAINT PARAMETERS:
+You must strictly build the recipe using the exact ingredient names and mass allocations specified below:
+${ingredientSummary}
 
-Respond ONLY with valid JSON in this exact format, no markdown, no extra text:
+Diet Protocol: ${dietType}
+Target Energy: ${targetCalories} kcal | Protein: ${targetProtein}g | Carbohydrates: ${targetCarbs}g | Fat: ${targetFat}g
+
+CRITICAL EXECUTION GUARDRAILS:
+1. MANDATORY INGREDIENT CONFORMANCE: You MUST use ONLY the exact ingredients provided in the input list.
+2. ZERO ADDITIONS POLICY: You are STRICTLY FORBIDDEN from introducing any additional ingredients, spices, oils, herbs, condiments, seasoning mixes, or liquids that are not explicitly defined in the provided input parameters (even if you believe they are necessary for flavor, texture, or browning).
+3. MASS RETENTION ACCURACY: You must use the exact gram weights provided in the input data. Do not scale, multiply, or round the portion sizes.
+4. CULINARY VIABILITY: All preparation instructions must use realistic, healthy, and accessible kitchen validation techniques (e.g., grilling, baking, boiling, steaming) that can be easily executed at home using standard residential equipment.
+
+OUTPUT EXECUTION SCHEMA:
+You must output your response exclusively as a minified, valid JSON object that strictly adheres to the requested application schema. Do not append any conversational prefaces, introductory text, or markdown code block fences (e.g., do not wrap with \`\`\`json ... \`\`\`). Your output must start with '{' and end with '}'.
+
+Required JSON schema:
 {
   "mealName": "string — creative dish name combining these ingredients",
   "description": "string — 1-2 sentence appetizing description",
@@ -45,7 +57,7 @@ Respond ONLY with valid JSON in this exact format, no markdown, no extra text:
     const requestBody = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.7,
+        temperature: 0.3,
         maxOutputTokens: 1024,
         responseMimeType: 'application/json',
       },
