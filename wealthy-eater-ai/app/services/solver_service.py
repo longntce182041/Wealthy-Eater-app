@@ -88,9 +88,13 @@ class SolverService:
             20.0 * (fat_slack_plus + fat_slack_minus)
         ), "Total_System_Deviation"
 
-        # 6. Run the glpk optimization solver execution pipeline engine loop
-        solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=5)
-        status = prob.solve(solver)
+        # 6. Run the solver execution pipeline (falls back to default system solver if CBC fails on macOS/Windows/Linux)
+        try:
+            solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=5)
+            status = prob.solve(solver)
+        except Exception as solver_err:
+            logger.warning(f"Preferred PULP_CBC_CMD solver execution failed, falling back to default solver: {solver_err}")
+            status = prob.solve()
         
         if pulp.LpStatus[status] != "Optimal":
             logger.error("The optimization solver failed to identify a mathematically stable matrix configuration.")
