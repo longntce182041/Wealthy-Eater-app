@@ -7,7 +7,7 @@ import '../../features/nutritionist/presentation/providers/diet_audit_notifier.d
 
 class ClientAuditScreen extends StatefulWidget {
   final String clientId;
-  const ClientAuditScreen({Key? key, required this.clientId}) : super(key: key);
+  const ClientAuditScreen({super.key, required this.clientId});
 
   @override
   State<ClientAuditScreen> createState() => _ClientAuditScreenState();

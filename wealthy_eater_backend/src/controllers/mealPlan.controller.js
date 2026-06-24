@@ -1,5 +1,6 @@
 const AppError = require("../utils/AppError");
 const mealPlanService = require("../services/mealPlan.service");
+const geminiService = require("../services/gemini.service");
 
 const matchTemplateEndpoint = async (req, res) => {
   try {
@@ -165,7 +166,7 @@ const updateFcmTokenEndpoint = async (req, res) => {
 const triggerMealGenerationPipeline = async (req, res, next) => {
   try {
     const { clientId } = req.body;
-    const nutritionistId = req.user.id; // Extrated dynamically from the verified JWT payload
+    const nutritionistId = req.user.id;
 
     if (!clientId) {
       throw new AppError(
@@ -190,11 +191,62 @@ const triggerMealGenerationPipeline = async (req, res, next) => {
   }
 };
 
+/**
+ * UC-39 — Receive LP optimization result from n8n, call Gemini server-side,
+ * then persist MealPlan + MealPlanItem to MongoDB.
+ * Secured by X-INTERNAL-SECRET header (no JWT needed — internal call).
+ */
+const receiveAIPlanEndpoint = async (req, res, next) => {
+  try {
+    const internalSecret = req.headers["x-internal-secret"];
+    if (internalSecret !== process.env.N8N_INTERNAL_SECRET) {
+      return res.status(401).json({ error: "Unauthorized internal call." });
+    }
+
+    const { clientId, dietType, ingredientSummary, allocation, totals } = req.body;
+
+    if (!clientId || !allocation || !Array.isArray(allocation) || allocation.length === 0) {
+      return res.status(400).json({ error: "clientId and allocation[] are required." });
+    }
+
+    // 1. Call Gemini server-side (key stays in backend — avoids Google's key enforcement)
+    const aiMealData = await geminiService.generateMealPlan({
+      ingredientSummary: ingredientSummary || allocation.map(a => `${Math.round(a.allocatedGrams)}g ${a.ingredientName}`).join(', '),
+      dietType: dietType || 'BALANCED',
+      targetCalories: Math.round(totals?.calculatedCalories || 0),
+      targetProtein: Math.round(totals?.calculatedProtein || 0),
+      targetCarbs: Math.round(totals?.calculatedCarbs || 0),
+      targetFat: Math.round(totals?.calculatedFat || 0),
+    });
+
+    // 2. Persist to MongoDB
+    const result = await mealPlanService.saveAIGeneratedPlan({
+      clientId,
+      mealName: aiMealData.mealName,
+      description: aiMealData.description,
+      difficulty: aiMealData.difficulty,
+      cookingTimeMinutes: aiMealData.cookingTimeMinutes,
+      cookingSteps: aiMealData.cookingSteps,
+      allocation,
+      totals,
+    });
+
+    return res.status(201).json({
+      status: "SUCCESS_PIPELINE_RESOLVED",
+      message: "AI-generated meal plan created successfully.",
+      meta: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   matchTemplateEndpoint,
   getMyMealPlanEndpoint,
   updateItemWeightEndpoint,
   publishMealPlan: exports.publishMealPlan,
   updateFcmTokenEndpoint,
-  triggerMealGenerationPipeline, // <-- Đã gom em nó an toàn vào đây
+  triggerMealGenerationPipeline,
+  receiveAIPlanEndpoint,
 };

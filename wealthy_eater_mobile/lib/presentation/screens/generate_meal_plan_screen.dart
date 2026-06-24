@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:provider/provider.dart';
 import '../providers/meal_generation_provider.dart';
 
-class GenerateMealPlanScreen extends ConsumerWidget {
+class GenerateMealPlanScreen extends StatelessWidget {
   final String targetClientId;
   final String activeAuthToken;
 
@@ -13,8 +13,8 @@ class GenerateMealPlanScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final generationState = ref.watch(mealGenerationProvider);
+  Widget build(BuildContext context) {
+    final provider = context.watch<MealGenerationProvider>();
 
     return Scaffold(
       appBar: AppBar(
@@ -64,9 +64,81 @@ class GenerateMealPlanScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 40),
-            generationState.when(
-              data: (metrics) {
-                if (metrics == null) {
+            Builder(
+              builder: (context) {
+                if (provider.state == MealGenerationState.loading) {
+                  return const Center(
+                    child: Column(
+                      children: [
+                        CircularProgressIndicator(color: Color(0xFF1A5276)),
+                        SizedBox(height: 16),
+                        Text(
+                          'Compiling Linear Matrix constraints variables... Please wait.',
+                          style: TextStyle(fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    ),
+                  );
+                } else if (provider.state == MealGenerationState.error) {
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFADBD8),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Pipeline Execution Failure Context Notice: ${provider.errorMessage}',
+                      style: const TextStyle(
+                        color: Color(0xFF943126),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  );
+                } else if (provider.state == MealGenerationState.success && provider.generationResult != null) {
+                  final metrics = provider.generationResult!;
+                  return Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD4EFDF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFF27AE60),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        const Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF27AE60),
+                          size: 48,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          metrics.message,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const Divider(height: 24),
+                        Text(
+                          'Instantiated Target Plan ID Reference Key: ${metrics.mealPlanId}',
+                          style: const TextStyle(fontFamily: 'monospace'),
+                        ),
+                        Text(
+                          'Energy Target Distribution Envelope: ${metrics.totalCalories} Kcal',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          'Total Portion Item Models Generated: ${metrics.itemsCount}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  );
+                } else {
                   return ElevatedButton.icon(
                     icon: const Icon(Icons.psychology, size: 24),
                     label: const Padding(
@@ -87,81 +159,13 @@ class GenerateMealPlanScreen extends ConsumerWidget {
                       ),
                     ),
                     onPressed: () {
-                      ref
-                          .read(mealGenerationProvider.notifier)
+                      context
+                          .read<MealGenerationProvider>()
                           .executePipeline(targetClientId, activeAuthToken);
                     },
                   );
                 }
-                return Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD4EFDF),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: const Color(0xFF27AE60),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.check_circle,
-                        color: Color(0xFF27AE60),
-                        size: 48,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        metrics.message,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const Divider(height: 24),
-                      Text(
-                        'Instantiated Target Plan ID Reference Key: ${metrics.mealPlanId}',
-                        style: const TextStyle(fontFamily: 'monospace'),
-                      ),
-                      Text(
-                        'Energy Target Distribution Envelope: ${metrics.totalCalories} Kcal',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        'Total Portion Item Models Generated: ${metrics.itemsCount}',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                );
               },
-              loading: () => const Center(
-                child: Column(
-                  children: [
-                    CircularProgressIndicator(color: Color(0xFF1A5276)),
-                    SizedBox(height: 16),
-                    Text(
-                      'Compiling Linear Matrix constraints variables... Please wait.',
-                      style: TextStyle(fontStyle: FontStyle.italic),
-                    ),
-                  ],
-                ),
-              ),
-              error: (err, stack) => Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFADBD8),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Pipeline Execution Failure Context Notice: $err',
-                  style: const TextStyle(
-                    color: Color(0xFF943126),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
             ),
           ],
         ),
