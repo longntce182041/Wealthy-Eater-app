@@ -8,50 +8,11 @@ volumes:
     driver: local
   n8n_operational_storage:
     driver: local
-
 services:
-  # Container Hub 1: Operational Base Datastore Cluster
-  database_mongo:
-    image: mongo:7.0-jammy
-    container_name: wealthy_eater_db_mongo
-    networks:
-      - wealthy_eater_secure_mesh
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_cluster_volume:/data/db
-    restart: always
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
-  # Container Hub 2: Python Linear Programming Solver Service Layer
-  ai_service_solver:
-    build:
-      context: ./wealthy-eater-ai
-      dockerfile: Dockerfile
-    container_name: wealthy_eater_ai_solver
-    networks:
-      - wealthy_eater_secure_mesh
-    ports:
-      - "8000:8000"
-    env_file:
-      - ./.env
-    environment:
-      - INTERNAL_SECRET_KEY=${INTERNAL_SECRET_KEY}
-      - LOG_LEVEL=INFO
-    restart: always
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
 
   # Container Hub 3: Orchestration Automation Node Tool Framework
   orchestrator_n8n:
-    image: docker.n8n.io/n8nio/n8n:1.42.1
+    image: docker.n8n.io/n8nio/n8n:2.23.3
     container_name: wealthy_eater_orchestrator_n8n
     networks:
       - wealthy_eater_secure_mesh
@@ -64,33 +25,4 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - TZ=Asia/Ho_Chi_Minh
-    depends_on:
-      ai_service_solver:
-        condition: service_healthy
-    restart: always
-
-  # Container Hub 4: Central Enterprise Node API Client Server Gateway Layer
-  backend_api_gateway:
-    image: node:20-alpine
-    container_name: wealthy_eater_backend
-    working_dir: /src
-    command: sh -c "npm install && npm run dev"
-    volumes:
-      - ./wealthy_eater_backend:/src
-    networks:
-      - wealthy_eater_secure_mesh
-    ports:
-      - "5000:5000"
-    env_file:
-      - ./wealthy_eater_backend/.env
-    environment:
-      - PORT=5000
-      - MONGODB_URI=mongodb://longlong465t:long12345@ac-han8ngq-shard-00-00.8owvzxo.mongodb.net:27017,ac-han8ngq-shard-00-01.8owvzxo.mongodb.net:27017,ac-han8ngq-shard-00-02.8owvzxo.mongodb.net:27017/wealthy_eater?ssl=true&authSource=admin&retryWrites=true&w=majority
-      - N8N_WEBHOOK_URL=http://orchestrator_n8n:5678/webhook/match-meal-plan-template
-      - INTERNAL_SECRET_KEY=${INTERNAL_SECRET_KEY}
-    depends_on:
-      database_mongo:
-        condition: service_healthy
-      orchestrator_n8n:
-        condition: service_started
     restart: always
