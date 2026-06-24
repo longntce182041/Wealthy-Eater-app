@@ -22,6 +22,14 @@ const MealPlanItemSchema = new mongoose.Schema({
   customized_servings_gram: {
     type: Number,
     default: null
+  },
+  custom_ingredients: [{
+    ingredient_id: { type: String, ref: 'Ingredient' },
+    amount_gram: { type: Number, required: true }
+  }],
+  target_calories: {
+    type: Number,
+    default: null
   }
 });
 

@@ -19,8 +19,9 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
   const loadExpertDetails = async () => {
     try {
       setLoading(true);
-      // Gọi API lấy thông tin tổng hợp (Bác có thể tách endpoint nếu backend yêu cầu)
+      // Gọi API lấy thông tin chi tiết chuyên gia từ Backend đã tối ưu
       const response = await apiClient.get(`/admin/nutritionists/${expertId}`);
+      
       if (response.data?.success) {
         const { consultations, reviews, ...info } = response.data.data;
       setExpertData(info); // Toàn bộ thông tin cá nhân, title, fee, license...
@@ -28,8 +29,9 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
       setReviews(reviews || []); // Mảng đánh giá từ cộng đồng
       }
     } catch (error) {
-      console.error("Lỗi đồng bộ hồ sơ chuyên gia:", error);
-      // Mock data chuẩn cấu trúc trường dữ liệu thực tế để test UI độc lập
+      console.error("⚠️ Lỗi đồng bộ hoặc phân rã hồ sơ chuyên gia:", error);
+      
+      // Khôi phục Mock data chuẩn phác đồ để bảo vệ UI không bị sập khi mất kết nối
       setExpertData({
         id: expertId,
         fullName: "ThS. Bác sĩ Nguyễn Dinh Dưỡng",
@@ -64,7 +66,7 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
       return;
     }
 
-    if (!window.confirm(status === 'APPROVED' ? 'Duyệt hồ sơ & kích hoạt trạng thái chuyên gia?' : 'Từ chối cấp phép hồ sơ này?')) return;
+    if (!window.confirm(status === 'APPROVED' ? 'Duyệt hồ sơ & kích hoạt trạng thái chuyên gia chính thức?' : 'Từ chối cấp phép hồ sơ này?')) return;
 
     try {
       setSubmitting(true);
@@ -74,8 +76,8 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
       });
 
       if (response.data?.success) {
-        alert("Cập nhật thẩm định chứng chỉ thành công!");
-        if (onStatusUpdated) onStatusUpdated(); // Kích hoạt làm mới data ở danh sách gốc bên ngoài
+        alert("Cập nhật thẩm định chứng chỉ hệ thống thành công!");
+        if (onStatusUpdated) onStatusUpdated(); // Kích hoạt làm mới danh sách ở component cha bên ngoài
         loadExpertDetails();
         setShowRejectForm(false);
       }
@@ -90,26 +92,35 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
     return (
       <div className="py-20 text-center text-slate-500">
         <Loader2 className="w-8 h-8 animate-spin mx-auto text-emerald-600 mb-2" />
-        <p className="text-sm font-medium">Đang tải và kiểm tra hồ sơ năng lực năng lực chuyên gia...</p>
+        <p className="text-sm font-medium">Đang tải và kiểm tra hồ sơ năng lực chuyên gia...</p>
+      </div>
+    );
+  }
+
+  if (!expertData) {
+    return (
+      <div className="py-20 text-center text-red-500">
+        <p className="text-sm font-semibold">Không tìm thấy dữ liệu của chuyên gia này.</p>
+        <button onClick={onBack} className="mt-4 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold border-none cursor-pointer">Quay lại</button>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Nút quay lại & Tiêu đề phụ */}
+      {/* Khối thanh công cụ điều hướng */}
       <div className="flex items-center gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
         <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 border-none bg-transparent cursor-pointer transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
           <h2 className="text-lg font-bold text-slate-900 m-0">Hồ Sơ Năng Lực Chuyên Môn</h2>
-          <p className="text-xs text-slate-400 m-0 mt-0.5">ID tài khoản hệ thống: <span className="font-mono font-bold text-slate-600">{expertData.id}</span></p>
+          <p className="text-xs text-slate-400 m-0 mt-0.5">ID tài khoản hệ thống: <span className="font-mono font-bold text-slate-600">{expertData.id || expertData._id}</span></p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* 🔲 CỘT TRÁI (BẰNG CẤP & THÔNG TIN CHÍNH) */}
+        {/* 🔲 CỘT TRÁI (THÔNG TIN CHÍNH & CHỨNG CHỈ THẨM ĐỊNH) */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs text-center">
             <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-emerald-100">
@@ -122,7 +133,6 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
             </div>
           </div>
 
-          {/* Vùng hiển thị thông số chi phí & Ảnh bằng cấp */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider m-0 flex items-center gap-2">
               <Award className="w-4 h-4 text-emerald-600" /> Chỉ số chứng thực
@@ -143,20 +153,26 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
               </div>
             </div>
 
-            {/* VÙNG ẢNH BẰNG CẤP CHỨNG CHỈ (INSPECT IMAGE) */}
+            {/* VÙNG HIỂN THỊ ẢNH BẰNG CẤP CHỨNG CHỈ */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
               <span className="text-xs font-bold text-slate-700 block">Bằng cấp/Chứng chỉ đính kèm:</span>
               <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-900 group aspect-[4/3] flex items-center justify-center">
-                <img src={expertData.certificationUrl} alt="Medical Certificate" className="w-full h-full object-cover group-hover:opacity-75 transition-opacity" />
-                <a href={expertData.certificationUrl} target="_blank" rel="noreferrer" className="absolute inset-0 flex items-center justify-center bg-slate-950/40 opacity-0 group-hover:opacity-100 text-white font-bold text-xs gap-1.5 no-underline transition-opacity cursor-pointer">
-                  <Eye className="w-4 h-4" /> Xem ảnh gốc sắc nét
-                </a>
+                {expertData.certificationUrl ? (
+                  <>
+                    <img src={expertData.certificationUrl} alt="Medical Certificate" className="w-full h-full object-cover group-hover:opacity-75 transition-opacity" />
+                    <a href={expertData.certificationUrl} target="_blank" rel="noreferrer" className="absolute inset-0 flex items-center justify-center bg-slate-950/40 opacity-0 group-hover:opacity-100 text-white font-bold text-xs gap-1.5 no-underline transition-opacity cursor-pointer">
+                      <Eye className="w-4 h-4" /> Xem ảnh gốc sắc nét
+                    </a>
+                  </>
+                ) : (
+                  <span className="text-slate-400 text-xs">Không có tệp đính kèm</span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Cụm xử lý hành động duyệt tài liệu */}
-          {expertData.approvalStatus === 'PENDING' && !showRejectForm && (
+          {/* Các nút hành động duyệt hồ sơ PENDING */}
+          {String(expertData.approvalStatus).toUpperCase() === 'PENDING' && !showRejectForm && (
             <div className="grid grid-cols-2 gap-3">
               <button onClick={() => setShowRejectForm(true)} disabled={submitting} className="flex items-center justify-center gap-1 py-2.5 border border-red-200 hover:bg-red-50 text-red-600 font-bold rounded-xl text-xs bg-transparent cursor-pointer transition-colors">
                 <XCircle className="w-4 h-4" /> Từ chối cấp quyền
@@ -167,6 +183,7 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
             </div>
           )}
 
+          {/* Form điền lý do từ chối kiểm duyệt */}
           {showRejectForm && (
             <div className="bg-red-50/50 p-4 rounded-xl border border-red-200 space-y-3">
               <span className="text-xs font-bold text-red-800 flex items-center gap-1"><ShieldAlert className="w-4 h-4" /> Lý do hồ sơ không đạt chuẩn:</span>
@@ -179,9 +196,8 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
           )}
         </div>
 
-        {/* 📋 CỘT PHẢI (DANH SÁCH LỊCH SỬ & ĐÁNH GIÁ) */}
+        {/* 📋 CỘT PHẢI (DANH SÁCH LỊCH SỬ TƯ VẤN & REVIEW CỘNG ĐỒNG) */}
         <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
-          {/* Menu Tab */}
           <div className="flex border-b border-slate-200 bg-slate-50/50 p-2 gap-2">
             <button onClick={() => setActiveTab('history')} className={`flex items-center gap-1.5 px-4 py-2 border-none rounded-xl text-xs font-bold cursor-pointer transition-all ${activeTab === 'history' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-500 bg-transparent'}`}>
               <Calendar className="w-3.5 h-3.5" /> Lịch sử tư vấn ({consultationHistory.length})
@@ -192,7 +208,6 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
           </div>
 
           <div className="p-6 flex-1">
-            {/* Tab Lịch sử tư vấn */}
             {activeTab === 'history' && (
               <div className="space-y-4">
                 {consultationHistory.length === 0 ? (
@@ -216,7 +231,6 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
               </div>
             )}
 
-            {/* Tab Lượt Đánh giá */}
             {activeTab === 'reviews' && (
               <div className="space-y-3">
                 {reviews.length === 0 ? (

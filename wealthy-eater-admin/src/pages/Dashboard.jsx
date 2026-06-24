@@ -18,7 +18,7 @@ import {
   Trash2, 
   SearchX,
   AlertCircle,
-  Users // 🆕 Thêm Icon quản lý thành viên
+  Users 
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -32,21 +32,30 @@ export default function Dashboard() {
     }
   });
   
-  // 🆕 Đồng bộ state thống kê, bổ sung trường totalUsers mặc định
   const [stats, setStats] = useState({
     totalRecipes: 0,
     publishedRecipes: 0,
     draftRecipes: 0,
     totalReviews: 0,
     averageRating: 0,
-    totalUsers: 0, // Giá trị khởi tạo
+    totalUsers: 0, 
     topRecipe: null
   });
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Hàm dọn dẹp bộ nhớ khi không hợp lệ hoặc hết hạn
+  // 🆕 STATE QUẢN LÝ POPUP THÔNG BÁO NỔI (TOAST)
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  // 🆕 Hàm helper kích hoạt và tự động ẩn popup sau 3 giây
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 3000);
+  }, []);
+
   const handleForceLogout = useCallback(() => {
     localStorage.removeItem('admin_user');
     localStorage.removeItem('admin_session_jwt_token');
@@ -71,35 +80,33 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       
-      // NẾU BACKEND BÁO TOKEN HẾT HẠN (401) HOẶC SAI LỖI -> ĐÁ VỀ LOGIN LUÔN
       if (err.response?.status === 401 || err.response?.data?.message?.includes('expired')) {
-        alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!');
+        // 🔄 THAY THẾ ALERT BẰNG TOAST LỖI
+        showToast('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!', 'error');
         handleForceLogout();
         return;
       }
 
       setError(err?.response?.data?.message || err.message || 'Failed to load dashboard data');
+      showToast(err?.response?.data?.message || 'Không thể tải dữ liệu hệ thống!', 'error');
     } finally {
       setLoading(false);
     }
-  }, [handleForceLogout]);
+  }, [handleForceLogout, showToast]);
 
   useEffect(() => {
-    // Kiểm tra nghiêm ngặt CẢ Thông tin User và Token bảo mật
     const rawUser = localStorage.getItem('admin_user');
     const token = localStorage.getItem('admin_session_jwt_token');
 
-    // Nếu thiếu 1 trong 2, dọn sạch bộ nhớ và đá về trang Login ngay
     if (!rawUser || !token) {
       handleForceLogout();
       return;
     }
 
     try {
-      JSON.parse(rawUser); // validate
-      // Defer execution to avoid "synchronous setState in effect" strict linter warning
+      JSON.parse(rawUser); 
       const timeoutId = setTimeout(() => {
-        fetchData(); // Chỉ gọi API khi xác nhận có đủ cả user và token
+        fetchData(); 
       }, 0);
       return () => clearTimeout(timeoutId);
     } catch {
@@ -112,7 +119,8 @@ export default function Dashboard() {
     try {
       const res = await apiClient.delete(`/admin/recipes/${recipeId}`);
       if (res.data?.success) {
-        alert('Recipe soft-deleted successfully!');
+        // 🔄 THAY THẾ ALERT BẰNG TOAST THÀNH CÔNG KHHI XOÁ
+        showToast('Recipe soft-deleted successfully!', 'success');
         fetchData(); 
       }
     } catch (err) {
@@ -120,14 +128,15 @@ export default function Dashboard() {
         handleForceLogout();
         return;
       }
-      alert(err?.response?.data?.message || err.message || 'Failed to delete recipe');
+      // 🔄 THAY THẾ ALERT BẰNG TOAST LỖI KHI XOÁ THẤT BẠI
+      showToast(err?.response?.data?.message || err.message || 'Failed to delete recipe', 'error');
     }
   }
 
   if (!user) return null;
 
   return (
-    <main className="flex-1 w-full max-w-7xl mx-auto p-6 lg:p-8 space-y-8">
+    <main className="flex-1 w-full max-w-7xl mx-auto p-6 lg:p-8 space-y-8 relative">
       {/* Header Section */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -167,7 +176,6 @@ export default function Dashboard() {
           icon={<FileEdit className="w-5 h-5 text-amber-600 dark:text-amber-400" />} 
           iconBg="rgba(245, 158, 11, 0.1)"
         />
-        {/* 🆕 THẺ THÀNH VIÊN ĐÃ ĐỒNG BỘ: Hiển thị tổng số tài khoản thay cho rating trung bình */}
         <StatCard 
           title="Total Users" 
           value={loading ? '...' : (stats.totalUsers || 0)} 
@@ -175,8 +183,10 @@ export default function Dashboard() {
           iconBg="rgba(14, 165, 233, 0.1)"
         />
       </section>
+
       {/* COMPONENT CON UC56 - System Statistics */}
       <SystemStatsSection />
+
       {/* Recipes Table Section */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
@@ -290,6 +300,22 @@ export default function Dashboard() {
           }) : null}
         </DataTable>
       </section>
+
+      {/* 🆕 GIAO DIỆN POPUP THÔNG BÁO NỔI (TOAST COMPONENT) */}
+      {toast.show && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-xl border transition-all duration-300 transform translate-y-0 scale-100 ease-out ${
+          toast.type === 'success' 
+            ? 'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/95 dark:border-emerald-800 dark:text-emerald-200' 
+            : 'bg-red-50 text-red-900 border-red-200 dark:bg-red-950/95 dark:border-red-800 dark:text-red-200'
+        }`}>
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" />
+          )}
+          <span className="font-semibold text-sm tracking-wide">{toast.message}</span>
+        </div>
+      )}
     </main>
   );
 }

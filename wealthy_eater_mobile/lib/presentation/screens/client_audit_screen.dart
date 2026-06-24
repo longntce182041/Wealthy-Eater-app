@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:wealthy_eater_mobile/core/network/api_client.dart';
 import 'package:wealthy_eater_mobile/data/services/diet_audit_service.dart';
 import 'package:wealthy_eater_mobile/features/nutritionist/data/repositories/diet_audit_repository_impl.dart'; 
 import 'package:wealthy_eater_mobile/domain/usecases/get_client_diet_audit_usecase.dart';
@@ -20,7 +22,11 @@ class _ClientAuditScreenState extends State<ClientAuditScreen> {
   void initState() {
     super.initState();
     _notifier = DietAuditNotifier(
-      GetClientDietAuditUseCase(DietAuditRepositoryImpl(DietAuditService())),
+      GetClientDietAuditUseCase(
+        DietAuditRepositoryImpl(
+          DietAuditService(context.read<ApiClient>()),
+        ),
+      ),
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
