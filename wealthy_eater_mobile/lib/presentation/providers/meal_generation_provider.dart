@@ -1,41 +1,43 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../../data/models/meal_plan_generation_dto.dart';
 import '../../data/repositories/plan_repository.dart';
 
-// Base Network Injection Provider Layer Config Anchor
-final dioClientProvider = Provider<Dio>(
-  (ref) => Dio(BaseOptions(baseUrl: 'http://localhost:5000/api/v1')),
-);
-final planRepositoryProvider = Provider<PlanRepository>(
-  (ref) => PlanRepository(ref.read(dioClientProvider)),
-);
+enum MealGenerationState { initial, loading, success, error }
 
-class MealGenerationStateNotifier
-    extends StateNotifier<AsyncValue<MealPlanGenerationResponse?>> {
+class MealGenerationProvider extends ChangeNotifier {
   final PlanRepository _repository;
 
-  MealGenerationStateNotifier(this._repository)
-    : super(const AsyncValue.data(null));
+  MealGenerationProvider({required PlanRepository repository})
+      : _repository = repository;
+
+  MealGenerationState state = MealGenerationState.initial;
+  String? errorMessage;
+  MealPlanGenerationResponse? generationResult;
 
   Future<void> executePipeline(String clientId, String sessionToken) async {
-    state = const AsyncValue.loading();
+    state = MealGenerationState.loading;
+    errorMessage = null;
+    generationResult = null;
+    notifyListeners();
+
     try {
       final outcome = await _repository.requestPlanGeneration(
         clientId,
         sessionToken,
       );
-      state = AsyncValue.data(outcome);
-    } catch (err, stack) {
-      state = AsyncValue.error(err, stack);
+      generationResult = outcome;
+      state = MealGenerationState.success;
+    } catch (err) {
+      errorMessage = err.toString().replaceFirst('Exception: ', '');
+      state = MealGenerationState.error;
     }
+    notifyListeners();
+  }
+
+  void reset() {
+    state = MealGenerationState.initial;
+    errorMessage = null;
+    generationResult = null;
+    notifyListeners();
   }
 }
-
-final mealGenerationProvider =
-    StateNotifierProvider<
-      MealGenerationStateNotifier,
-      AsyncValue<MealPlanGenerationResponse?>
-    >((ref) {
-      return MealGenerationStateNotifier(ref.read(planRepositoryProvider));
-    });

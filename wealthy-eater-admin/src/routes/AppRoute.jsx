@@ -11,9 +11,11 @@ import AddRecipePage from "../pages/recipes/add-recipe";
 import EditRecipePage from "../pages/recipes/edit-recipes.jsx"; 
 import UserListPage from "../pages/user/user-list.jsx";
 import NutritionistListPage from "../pages/nutritionist/nutritionist-list.jsx";
-import LoginPage from "../pages/Login.jsx"; // File Login.jsx nằm trực tiếp trong pages
+import LoginPage from "../pages/Login.jsx"; 
 import AdminLayout from "../layouts/AdminLayout.jsx";
+import PlatformAnalytics from "../pages/analytics/PlatformAnalytics.jsx";
 
+// Route bảo vệ yêu cầu trạng thái đăng nhập hệ thống
 const PrivateRoute = () => {
   const token = localStorage.getItem("admin_session_jwt_token");
   if (!token) {
@@ -22,6 +24,7 @@ const PrivateRoute = () => {
   return <Outlet />;
 };
 
+// Route bảo vệ phân quyền tài khoản (Chỉ admin được phép vào nhóm cấu hình)
 const RoleProtectedRoute = ({ allowedRoles }) => {
   let userRole = null;
   try {
@@ -44,38 +47,42 @@ const RoleProtectedRoute = ({ allowedRoles }) => {
 export function AppRoutes() {
   return (
     <Routes>
+      {/* Cửa ngõ đăng nhập hệ thống */}
       <Route path="/login" element={<LoginPage />} />
 
+      {/* Vùng hệ thống được bảo vệ */}
       <Route element={<PrivateRoute />}>
         <Route path="/" element={<AdminLayout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
 
-          {/* Group Route bảo vệ nghiêm ngặt chỉ dành cho duy nhất Admin */}
+          {/* Group Route bảo vệ nghiêm ngặt dành riêng cho quyền 'admin' */}
           <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
+            <Route path="analytics" element={<PlatformAnalytics />} />
             <Route path="ingredients" element={<IngredientsPage />} />
             <Route path="micronutrients" element={<MicronutrientsPage />} />
             
-            {/* 🆕 TRANG QUẢN LÝ THÀNH VIÊN (Đặt tại đường dẫn /users) */}
+            {/* Quản lý thành viên (User) */}
             <Route path="users" element={<UserListPage />} />
 
-            {/* 🔥 ĐÃ THÊM: TRANG QUẢN LÝ CHUYÊN GIA DINH DƯỠNG Ở ĐÂY */}
+            {/* Quản lý chuyên gia dinh dưỡng (Nutritionist) */}
             <Route path="nutritionists" element={<NutritionistListPage />} />
 
-            {/* 1. Trang danh sách công thức */}
+            {/* Phân hệ quản lý Công thức nấu ăn (Recipes) */}
             <Route path="recipes" element={<RecipesPage />} /> 
             
-            {/* 2. ✅ ĐƯA TRANG ADD LÊN TRÊN (Để tránh bị nhầm add là một cái id) */}
-            {/* 2. ✅ ĐƯA TRANG ADD LÊN TRÊN (Để tránh bị nhầm add là một cái id) */}
+            {/* Đưa trang static (add) lên trên động (:id) để tránh lỗi route trùng lập */}
             <Route path="recipes/add" element={<AddRecipePage />} />
             <Route path="recipes/edit/:id" element={<EditRecipePage />} />
-            {/* 3. ĐƯA TRANG CHI TIẾT XUỐNG DƯỚI CÙNG */}
+            
+            {/* Đưa trang chi tiết ID xuống dưới cùng */}
             <Route path="recipes/:id" element={<RecipeDetail />} />
             
           </Route>
         </Route>
       </Route>
 
+      {/* Bẫy các router không tồn tại chuyển hướng về trang login */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );

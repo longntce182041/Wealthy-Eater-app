@@ -13,7 +13,7 @@ const MealPlanItemSchema = new mongoose.Schema({
   recipe_id: { 
     type: String, 
     ref: 'Recipe', 
-    required: true 
+    default: 'AI_GENERATED'
   },
   meal_type: { 
     type: String, 

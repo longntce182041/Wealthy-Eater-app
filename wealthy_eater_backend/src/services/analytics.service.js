@@ -2,10 +2,12 @@ const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const CustomerMealLog = require('../models/CustomerMealLog');
 const ConsultationContract = require('../models/ConsultationContract');
+const Transaction = require('../models/Transaction');
 
 /**
  * Hàm xử lý gom cụm dữ liệu phân tích tăng trưởng khách hàng (UC-57)
  */
+// UC-57: Analyze Customer Growth
 exports.getCustomerGrowthData = async (start, end) => {
   
   // 🎯 1. Gom cụm tính số lượng khách hàng mới theo chuỗi thời gian (Sử dụng 'created_at')
@@ -98,6 +100,7 @@ exports.getCustomerGrowthData = async (start, end) => {
   };
 };
 
+// UC-58: Evaluate Expert Performance
   exports.getExpertPerformanceData = async (start, end) => {
   // Bước 1: Lấy danh sách tất cả chuyên gia dinh dưỡng trong hệ thống
   const nutritionists = await User.find({ role: 'nutritionist' }, '_id email').lean();
@@ -162,4 +165,85 @@ exports.getCustomerGrowthData = async (start, end) => {
   }
 
   return performanceReport;
+  };
+
+  // UC-59: Audit Financial Trends
+  exports.getAdminFinancialTrendsData = async (start, end) => {
+    const PLATFORM_FEE_PERCENT = 15; // Phần trăm khấu trừ phí sàn hệ thống mặc định
+
+    // 1. Thực hiện thuật toán gom cụm toán học tài chính theo chuỗi ngày giao dịch thành công qua PayOS
+    const systemFinancialTrends = await Transaction.aggregate([
+      {
+        $match: {
+          status: "PAID",
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $project: {
+          date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          amount_gross: 1,
+          calculated_platform_fee: {
+            $multiply: ["$amount_gross", PLATFORM_FEE_PERCENT / 100]
+          },
+          calculated_expert_payout: {
+            $subtract: [
+              "$amount_gross",
+              { $multiply: ["$amount_gross", PLATFORM_FEE_PERCENT / 100] }
+            ]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$date",
+          totalGrossRevenue: { $sum: "$amount_gross" },
+          totalPlatformFee: { $sum: "$calculated_platform_fee" },
+          totalNetDisbursement: { $sum: "$calculated_expert_payout" },
+          totalTransactions: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // 2. Tính toán tổng tích lũy cho báo cáo tổng quan (Summary)
+    let totalGross = 0;
+    let totalFee = 0;
+    let totalNet = 0;
+    let totalInvoices = 0;
+
+    systemFinancialTrends.forEach(day => {
+      totalGross += day.totalGrossRevenue;
+      totalFee += day.totalPlatformFee;
+      totalNet += day.totalNetDisbursement;
+      totalInvoices += day.totalTransactions;
+    });
+
+    // 3. Đồng bộ hóa cập nhật và lưu vết toán học ngược lại vào database
+    const allPaidTransactions = await Transaction.find({
+      status: "PAID",
+      createdAt: { $gte: start, $lte: end }
+    });
+
+    for (const tx of allPaidTransactions) {
+      const fee = (tx.amount_gross * PLATFORM_FEE_PERCENT) / 100;
+      const payout = tx.amount_gross - fee;
+      
+      if (tx.platform_fee !== fee || tx.expert_payout !== payout) {
+        tx.platform_fee = fee;
+        tx.expert_payout = payout;
+        await tx.save();
+      }
+    }
+
+    return {
+      summary: {
+        platformFeePercent: PLATFORM_FEE_PERCENT,
+        totalGrossRevenue: totalGross,
+        totalPlatformFee: totalFee,
+        totalNetDisbursement: totalNet,
+        totalTransactionsCount: totalInvoices
+      },
+      trends: systemFinancialTrends
+    };
   };

@@ -87,78 +87,45 @@ class MealPlanService {
 
   async orchestratePlanningPipeline(clientId, nutritionistId) {
     // 1. Precondition Verification: Ensure baseline biological metrics are populated
-    const profile = await UserProfile.findOne({ userId: clientId });
-    if (!profile || !profile.calculatedTDEE) {
+    const profile = await UserProfile.findOne({ user_id: clientId });
+    if (!profile || !profile.tdee) {
+      const AppError = require('../utils/AppError');
       throw new AppError(
         "Client baseline profile parameters and calculated TDEE must be set before optimization loops can execute.",
         422,
       );
     }
 
-    const dietary = await UserDietary.findOne({ userId: clientId });
+    const dietary = await UserDietary.findOne({ user_id: clientId });
     if (!dietary) {
+      const AppError = require('../utils/AppError');
       throw new AppError(
         "Client preference configurations and allergy records are required.",
         422,
       );
     }
 
-    // 2. Dispatch data constraints payload to the orchestrator webhook pipeline
+    // 2. Dispatch data constraints payload to the n8n orchestrator webhook pipeline
     const pipelinePayload = {
       clientId: clientId,
-      tdee: profile.calculatedTDEE,
-      dietaryPreference: dietary.dietaryPreference,
-      allergies: dietary.allergies,
-      medicalConditions: dietary.medicalConditions,
+      tdee: profile.tdee,
+      dietaryPreference: dietary.diet_preferences?.[0] || 'BALANCED',
+      allergies: dietary.allergies || [],
+      medicalConditions: dietary.medical_condition_id ? [dietary.medical_condition_id] : [],
     };
 
-    const automationResult =
-      await n8nWorkflowService.invokePipeline(pipelinePayload);
+    const automationResult = await n8nService.triggerTemplateMatch(pipelinePayload);
 
-    // 3. Process execution outcomes
-    if (!automationResult || !automationResult.allocation) {
+    // 3. Process execution outcomes — n8n returns the persisted plan meta
+    if (!automationResult || !automationResult.meta) {
+      const AppError = require('../utils/AppError');
       throw new AppError(
         "The downstream optimization engine returned an invalid data matrix format.",
         502,
       );
     }
 
-    // 4. Save the generated plan structure to MongoDB as a Draft
-    const targetStartDate = new Date();
-    const targetEndDate = new Date();
-    targetEndDate.setDate(targetStartDate.getDate() + 7);
-
-    const generatedPlan = new MealPlan({
-      contractId: "660a1b2c4f9a3e21a00000aa", // Linked directly to the active consultant agreement
-      customerId: clientId,
-      nutritionistId: nutritionistId,
-      startDate: targetStartDate,
-      endDate: targetEndDate,
-      status: "DRAFT",
-    });
-    await generatedPlan.save();
-
-    // Map individual component data values to structural menu items rows
-    const itemModelsArray = automationResult.allocation.map(
-      (item) =>
-        new MealPlanItem({
-          planId: generatedPlan._id,
-          dayOfWeek: "MONDAY", // Slots auto-populate starting from week boundary anchors
-          mealPeriod: "LUNCH",
-          recipeId: "660a1b2c4f9a3e21a0000222", // Default blueprint id placeholder mapped for structural parsing
-          customizedServingsGram: item.allocatedGrams,
-          targetCalories: automationResult.totals.calculatedCalories,
-        }),
-    );
-
-    await MealPlanItem.insertMany(itemModelsArray);
-
-    return {
-      mealPlanId: generatedPlan._id,
-      status: "DRAFT",
-      totalEnergyEnvelopeKcal: automationResult.totals.calculatedCalories,
-      allocatedComponentsCount: itemModelsArray.length,
-    };
+    return automationResult.meta;
   }
 
   async calculateRecipeNutrients(recipeId) {
@@ -325,6 +292,75 @@ class MealPlanService {
         fat: parseFloat((nutrients.fat * scale).toFixed(1)),
         carbs: parseFloat((nutrients.carbs * scale).toFixed(1)),
       },
+    };
+  }
+
+  /**
+   * UC-39 — Persist AI-generated meal plan to MongoDB.
+   * Called by the n8n workflow after Gemini AI generates meal name & cooking steps.
+   *
+   * @param {Object} planData - Data from n8n:
+   *   clientId, nutritionistId, mealName, description, difficulty,
+   *   cookingTimeMinutes, cookingSteps[], allocation[], totals{}
+   */
+  async saveAIGeneratedPlan(planData) {
+    const {
+      clientId,
+      nutritionistId,
+      mealName,
+      description,
+      difficulty,
+      cookingTimeMinutes,
+      cookingSteps,
+      allocation,
+      totals,
+    } = planData;
+
+    if (!clientId || !allocation || !Array.isArray(allocation) || allocation.length === 0) {
+      const AppError = require('../utils/AppError');
+      throw new AppError('Invalid payload: clientId and allocation are required.', 400);
+    }
+
+    // 1. Create the MealPlan header document
+    const newPlan = new MealPlan({
+      user_id: clientId,
+      nutritionist_id: nutritionistId || null,
+      date: new Date(),
+      created_by: 'AI',
+      status: 'DRAFT',
+    });
+    await newPlan.save();
+
+    // 2. Build MealPlanItem entries — one per allocated ingredient component
+    //    Each item stores the ingredient name and gram weight as customized_servings_gram.
+    //    recipe_id is set to null since this is an AI-generated plan (no pre-existing recipe).
+    //    The mealName and cookingStep are embedded in the plan document's metadata field.
+    const itemDocs = allocation.map((component) =>
+      new MealPlanItem({
+        meal_plan_id: newPlan._id,
+        recipe_id: 'AI_GENERATED', // Sentinel value — no Recipe document
+        meal_type: 'LUNCH',
+        customized_servings_gram: component.allocatedGrams,
+      }),
+    );
+    await MealPlanItem.insertMany(itemDocs);
+
+    // 3. Compose cooking steps as a formatted string for the plan metadata
+    const cookingStepText = Array.isArray(cookingSteps)
+      ? cookingSteps.map((s) => `${s.stepNumber}. ${s.instruction}`).join('\n')
+      : '';
+
+    // 4. Attach AI-generated metadata to the MealPlan document
+    newPlan.created_by = `AI|${mealName || 'Optimized Meal'}|${cookingStepText}`;
+    await newPlan.save();
+
+    return {
+      mealPlanId: newPlan._id,
+      totalEnergyEnvelopeKcal: totals?.calculatedCalories || 0,
+      allocatedComponentsCount: itemDocs.length,
+      mealName: mealName || 'Optimized Meal',
+      difficulty: difficulty || 'Medium',
+      cookingTimeMinutes: cookingTimeMinutes || 30,
     };
   }
 

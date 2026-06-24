@@ -1,6 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:wealthy_eater_mobile/data/services/diet_audit_service.dart';
-import 'package:wealthy_eater_mobile/features/nutritionist/data/repositories/diet_audit_repository_impl.dart';
 import 'package:wealthy_eater_mobile/domain/usecases/get_client_diet_audit_usecase.dart';
 
 class DietAuditNotifier extends ChangeNotifier {

@@ -229,17 +229,32 @@
     },
     {
       "parameters": {
-        "respondWith": "allIncomingItems",
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/v1/ai/compute-diet",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-INTERNAL-SECRET",
+              "value": "9a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    targetCalories: $('Edit Fields').first().json.tdee,\n    targetProtein: 140,\n    targetCarbs: 200,\n    targetFat: 65,\n    allergiesExclusions: $('Edit Fields').first().json.allergies || [],\n    dietType: $('Edit Fields').first().json.dietaryPreference,\n    minVarietyItems: 0,\n    maxVarietyItems: null,\n    activationGramThreshold: 1.0,\n    availableIngredients: $input.all().map(item => ({\n      id: item.json._id?.toString() || '',\n      name: item.json.name || '',\n      calories: item.json.calories_per_unit ?? 0,\n      protein: item.json.protein ?? 0,\n      carbs: item.json.carbs ?? 0,\n      fat: item.json.fat ?? 0,\n      allergenTags: [],\n      minLimitGram: 0,\n      maxLimitGram: 350\n    })).filter(ing => ing.id && ing.name && ing.calories > 0)\n  })\n}}",
         "options": {}
       },
-      "id": "bd4ba93a-6727-46f6-b89a-a343c75abeb1",
-      "name": "Return Output To Core API1",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "id": "7c15a12b-6c49-4dc9-9843-263a5e55d77e",
+      "name": "Invoke FastAPI Optimization Service1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [
-        1872,
-        144
-      ]
+        1600,
+        128
+      ],
+      "alwaysOutputData": false,
+      "retryOnFail": false
     },
     {
       "parameters": {
@@ -265,32 +280,66 @@
     },
     {
       "parameters": {
+        "jsCode": "// UC-39: Transform LP solver allocation results into Gemini-friendly prompt\nconst fastapiResult = $input.first().json;\nconst editFields = $('Edit Fields').first().json;\n\nconst allocation = fastapiResult.allocation || [];\nconst totals = fastapiResult.totals || {};\n\n// Build human-readable ingredient summary for Gemini prompt\nconst ingredientSummary = allocation\n  .map(item => `${Math.round(item.allocatedGrams)}g ${item.ingredientName}`)\n  .join(', ');\n\nreturn [{\n  json: {\n    clientId: editFields.clientId,\n    dietType: editFields.dietaryPreference,\n    ingredientSummary,\n    allocation,\n    totals,\n    targetCalories: Math.round(totals.calculatedCalories || 0),\n    targetProtein: Math.round(totals.calculatedProtein || 0),\n    targetCarbs: Math.round(totals.calculatedCarbs || 0),\n    targetFat: Math.round(totals.calculatedFat || 0)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        128
+      ],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Transform Optimized Ingredients1"
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "http://ai_service_solver:8000/api/v1/ai/compute-diet",
+        "url": "http://host.docker.internal:5000/api/meal-plans/from-ai",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "X-INTERNAL-SECRET",
               "value": "9a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{\n  JSON.stringify({\n    targetCalories: $('Edit Fields').first().json.tdee,\n    targetProtein: 140,\n    targetCarbs: 200,\n    targetFat: 65,\n    allergiesExclusions: $('Edit Fields').first().json.allergies || [],\n    dietType: $('Edit Fields').first().json.dietaryPreference,\n    minVarietyItems: 0,\n    maxVarietyItems: null,\n    activationGramThreshold: 1.0,\n    availableIngredients: $input.all().map(item => ({\n      id: item.json._id?.toString() || '',\n      name: item.json.name || '',\n      calories: item.json.calories_per_unit ?? 0,\n      protein: item.json.protein ?? 0,\n      carbs: item.json.carbs ?? 0,\n      fat: item.json.fat ?? 0,\n      allergenTags: [],\n      minLimitGram: 0,\n      maxLimitGram: 350\n    })).filter(ing => ing.id && ing.name && ing.calories > 0)\n  })\n}}",
+        "jsonBody": "={{\n  JSON.stringify({\n    clientId: $json.clientId,\n    dietType: $json.dietType,\n    ingredientSummary: $json.ingredientSummary,\n    allocation: $json.allocation,\n    totals: $json.totals\n  })\n}}",
         "options": {}
       },
-      "id": "7c15a12b-6c49-4dc9-9843-263a5e55d77e",
-      "name": "Invoke FastAPI Optimization Service1",
+      "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+      "name": "Save Plan to Backend API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1600,
+        2080,
         128
       ],
       "alwaysOutputData": false,
       "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{\n  JSON.stringify({\n    success: true,\n    cacheHit: false,\n    cacheMiss: true,\n    status: $json.status || 'SUCCESS_PIPELINE_RESOLVED',\n    message: $json.message || 'AI-generated meal plan created successfully.',\n    meta: $json.meta || {}\n  })\n}}",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2800,
+        128
+      ],
+      "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+      "name": "Respond — AI Plan Success"
     }
   ],
   "connections": {
@@ -389,7 +438,29 @@
       "main": [
         [
           {
-            "node": "Return Output To Core API1",
+            "node": "Transform Optimized Ingredients1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform Optimized Ingredients1": {
+      "main": [
+        [
+          {
+            "node": "Save Plan to Backend API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Plan to Backend API": {
+      "main": [
+        [
+          {
+            "node": "Respond — AI Plan Success",
             "type": "main",
             "index": 0
           }
