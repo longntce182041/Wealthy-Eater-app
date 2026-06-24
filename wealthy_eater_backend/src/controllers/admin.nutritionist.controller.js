@@ -2,6 +2,15 @@ const Nutritionist = require("../models/Nutritionist");
 const User = require("../models/User");
 const { sendApprovalEmail, sendRejectionEmail } = require("../services/email.service");
 
+
+// Thêm hàm tiện ích dọn ID rác ở đầu file nếu chưa có
+function cleanIdParam(id) {
+  if (!id) return null;
+  let cleanId = String(id).trim();
+  if (cleanId.includes(':')) cleanId = cleanId.split(':')[0];
+  if (cleanId.startsWith(':')) cleanId = cleanId.slice(1);
+  return cleanId;
+}
 /**
  * 1. LẤY DANH SÁCH CHUYÊN GIA
  * Sử dụng Aggregate $lookup để né lỗi lệch kiểu dữ liệu String giữa các collection
@@ -207,8 +216,122 @@ async function verifyNutritionistCertificate(req, res) {
   }
 }
 
+/**
+ * UC-85: INSPECT EXPERT PROFILE
+ * GET /api/admin/nutritionists/:id
+ * Lấy chi tiết hồ sơ năng lực chuyên gia kèm Bằng cấp, Lịch sử tư vấn và Đánh giá
+ */
+async function getNutritionistDetails(req, res) {
+  try {
+    const rawId = req.params.id;
+    const cleanId = cleanIdParam(rawId);
+
+    if (!cleanId) {
+      return res.status(400).json({
+        success: false,
+        message: "ID chuyên gia không hợp lệ hoặc trống."
+      });
+    }
+
+    // Tiến hành kích hoạt bộ ba Pipeline liên kết dữ liệu siêu tốc
+    const details = await Nutritionist.aggregate([
+      // 1. Tìm đúng chuyên gia theo ID
+      { $match: { _id: cleanId } },
+
+      // 2. Lookup thông tin tài khoản (Email, Trạng thái hoạt động)
+      {
+        $lookup: {
+          from: "users",
+          localField: "user_id",
+          foreignField: "_id",
+          as: "user_info"
+        }
+      },
+      { $unwind: { path: "$user_info", preserveNullAndEmptyArrays: true } },
+
+      // 3. Lookup lịch sử tư vấn từ bộ sưu tập NutritionAssessment
+      {
+        $lookup: {
+          from: "nutritionassessments",
+          localField: "_id",
+          foreignField: "nutritionist_id",
+          as: "consultation_history"
+        }
+      },
+
+      // 4. Lookup danh sách đánh giá từ cộng đồng (bảng reviews)
+      {
+        $lookup: {
+          from: "reviews", // Tên collection chứa review của bác trong DB
+          localField: "_id",
+          foreignField: "nutritionist_id",
+          as: "community_reviews"
+        }
+      }
+    ]);
+
+    // Nếu mảng trả về rỗng chứng tỏ ID không tồn tại trên hệ thống
+    if (!details || details.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Không tìm thấy hồ sơ năng lực của chuyên gia có ID: ${cleanId}`
+      });
+    }
+
+    const expertData = details[0];
+
+    // Định dạng dữ liệu đầu ra hoàn hảo cho UI Frontend dễ map()
+    const formattedResult = {
+      id: expertData._id,
+      userId: expertData.user_id,
+      email: expertData.user_info?.email || "N/A (Tài khoản ẩn)",
+      fullName: expertData.full_name || "Chưa cập nhật họ tên",
+      specialization: expertData.specialization || "Dinh dưỡng tổng quát",
+      professionalTitle: expertData.professional_title || "Chuyên gia",
+      licenseNumber: expertData.license_number || "Chưa cấp số",
+      certificationUrl: expertData.certification_url || "", // Link ảnh bằng cấp chứng chỉ
+      serviceFee: expertData.service_fee || 0,
+      approvalStatus: expertData.approval_status || "PENDING",
+      averageRating: expertData.average_rating || 5.0,
+      createdAt: expertData.createdAt,
+      
+      // Mảng danh sách lịch sử tư vấn
+      consultations: (expertData.consultation_history || []).map(c => ({
+        id: c._id,
+        diagnosis: c.diagnosis || "Chưa có chẩn đoán",
+        recommendations: c.recommendations || "Chưa có khuyến nghị",
+        notes: c.notes || "Không có ghi chú thêm"
+      })),
+
+      // Mảng danh sách đánh giá cộng đồng
+      reviews: (expertData.community_reviews || []).map(r => ({
+        id: r._id,
+        reviewerName: r.reviewer_name || "Người dùng ẩn danh",
+        rating: r.rating || 5,
+        comment: r.comment || "Không có bình luận.",
+        createdAt: r.createdAt || new Date()
+      }))
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: "Tải hồ sơ chi tiết năng lực chuyên gia thành công!",
+      data: formattedResult
+    });
+
+  } catch (error) {
+    console.error("❌ Lỗi tại getNutritionistDetails:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi hệ thống khi truy xuất chi tiết hồ sơ năng lực chuyên gia.",
+      error: error.message
+    });
+  }
+}
+
 module.exports = {
   getNutritionistsList,
   updateApprovalStatus,
-  verifyNutritionistCertificate
+  verifyNutritionistCertificate,
+  getNutritionistDetails
 };
