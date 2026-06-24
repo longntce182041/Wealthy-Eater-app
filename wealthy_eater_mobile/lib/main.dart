@@ -34,6 +34,7 @@ class WealthyEaterApp extends StatelessWidget {
 
     return MultiProvider(
       providers: [
+        Provider<ApiClient>.value(value: api),
         ChangeNotifierProvider(create: (_) => AuthProvider(api: api)),
         ChangeNotifierProvider(
           create: (_) => RecipeProvider(
