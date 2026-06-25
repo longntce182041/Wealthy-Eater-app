@@ -34,6 +34,15 @@ router.get(
 
 // Client meal plan management
 router.get("/my-plan", protect, mealPlanController.getMyMealPlanEndpoint);
+router.get("/daily-report", protect, mealPlanController.getDailyMacroReportEndpoint);
+router.get("/logs", protect, mealPlanController.getMealLogsEndpoint);
+router.put("/logs/:logId", protect, mealPlanController.updateMealLogEndpoint);
+router.delete("/logs/:logId", protect, mealPlanController.deleteMealLogEndpoint);
+router.post(
+  "/items/:itemId/log",
+  protect,
+  mealPlanController.logMealPlanItemEndpoint,
+);
 router.put(
   "/items/:itemId/weight",
   protect,
