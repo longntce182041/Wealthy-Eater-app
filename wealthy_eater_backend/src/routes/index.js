@@ -46,6 +46,7 @@ router.use("/api/admin/system-dashboard", systemDashboardRoute); // 🔥 Bây gi
 router.use("/api/nutritionists", nutritionistRoute);
 router.use("/api/nutritionist", nutritionistChatRoute);
 router.use("/api/meal-plans", mealPlanRoutes);
+router.use("/api/meal-plan", mealPlanRoutes);
 router.use("/api/diet-audit", dietAuditRoute);
 
 // ─── USER / CUSTOMER ROUTES ─────────────────────────────────────────────────

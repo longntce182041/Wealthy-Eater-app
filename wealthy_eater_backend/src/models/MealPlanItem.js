@@ -30,6 +30,14 @@ const MealPlanItemSchema = new mongoose.Schema({
   target_calories: {
     type: Number,
     default: null
+  },
+  day_number: {
+    type: Number,
+    default: 1
+  },
+  is_completed: {
+    type: Boolean,
+    default: false
   }
 });
 

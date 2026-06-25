@@ -54,13 +54,17 @@ const getMyMealPlanEndpoint = async (req, res) => {
 const updateItemWeightEndpoint = async (req, res) => {
   try {
     const { itemId } = req.params;
-    const { weight } = req.body;
+    const { weight, ingredients } = req.body;
 
-    if (weight === undefined || isNaN(weight) || weight <= 0) {
-      return res.status(400).json({ success: false, error: 'Invalid weight value' });
+    if (ingredients === undefined && (weight === undefined || isNaN(weight) || weight <= 0)) {
+      return res.status(400).json({ success: false, error: 'Invalid weight or ingredients value' });
     }
 
-    const updatedItem = await mealPlanService.updateItemWeight(itemId, Number(weight));
+    const updatedItem = await mealPlanService.updateItemWeight(
+      itemId,
+      weight !== undefined ? Number(weight) : undefined,
+      ingredients
+    );
     return res.status(200).json({ success: true, data: updatedItem });
   } catch (error) {
     if (error.message === 'MEAL_PLAN_ITEM_NOT_FOUND') {
@@ -360,6 +364,89 @@ const getNutritionistMealPlansEndpoint = async (req, res, next) => {
   }
 };
 
+// ── Log Meal Plan Item ────────────────────────────────────────────────────────
+const logMealPlanItemEndpoint = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { itemId } = req.params;
+    const { actual_weight_gram, date } = req.body;
+
+    const log = await mealPlanService.logMealPlanItem(userId, itemId, actual_weight_gram, date);
+    return res.status(201).json({ success: true, data: log });
+  } catch (error) {
+    if (error.message === 'MEAL_PLAN_ITEM_NOT_FOUND') {
+      return res.status(404).json({ success: false, error: 'Meal plan item not found' });
+    }
+    if (error.message === 'MEAL_ALREADY_COMPLETED') {
+      return res.status(400).json({ success: false, error: 'Meal already completed' });
+    }
+    next(error);
+  }
+};
+
+// ── Update Meal Log ───────────────────────────────────────────────────────────
+const updateMealLogEndpoint = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { logId } = req.params;
+    const { actual_weight_gram, date } = req.body;
+
+    if (!actual_weight_gram || isNaN(actual_weight_gram) || actual_weight_gram <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid weight value' });
+    }
+
+    const log = await mealPlanService.updateMealLog(userId, logId, Number(actual_weight_gram), date);
+    return res.status(200).json({ success: true, data: log });
+  } catch (error) {
+    if (error.message === 'MEAL_LOG_NOT_FOUND') {
+      return res.status(404).json({ success: false, error: 'Meal log not found' });
+    }
+    next(error);
+  }
+};
+
+// ── Delete Meal Log ───────────────────────────────────────────────────────────
+const deleteMealLogEndpoint = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { logId } = req.params;
+
+    const result = await mealPlanService.deleteMealLog(userId, logId);
+    return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    if (error.message === 'MEAL_LOG_NOT_FOUND') {
+      return res.status(404).json({ success: false, error: 'Meal log not found' });
+    }
+    next(error);
+  }
+};
+
+// ── Get Meal Logs ─────────────────────────────────────────────────────────────
+const getMealLogsEndpoint = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { date } = req.query;
+
+    const logs = await mealPlanService.getMealLogs(userId, date);
+    return res.status(200).json({ success: true, data: logs });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── Get Daily Macro Report ───────────────────────────────────────────────────
+const getDailyMacroReportEndpoint = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { date } = req.query;
+
+    const report = await mealPlanService.getDailyMacroReport(userId, date);
+    return res.status(200).json({ success: true, data: report });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   matchTemplateEndpoint,
   getMyMealPlanEndpoint,
@@ -371,4 +458,9 @@ module.exports = {
   updateDraftPlanEndpoint,
   getMealPlanByIdEndpoint,
   getNutritionistMealPlansEndpoint,
+  logMealPlanItemEndpoint,
+  updateMealLogEndpoint,
+  deleteMealLogEndpoint,
+  getMealLogsEndpoint,
+  getDailyMacroReportEndpoint,
 };
