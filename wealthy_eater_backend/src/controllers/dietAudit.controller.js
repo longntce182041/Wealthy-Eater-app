@@ -14,7 +14,12 @@ const auditClientDietLogsEndpoint = async (req, res) => {
       });
     }
 
-    const auditResult = await dietAuditService.auditClientDietLogs(userId, date);
+    // ── UC55: EXTRACT EXPRESS APP SOCKET.IO INSTANCE ─────────────────────────────
+    // Hút thực thể io toàn cục được máy chủ server.js gán sẵn vào Express app thông qua app.set('io')
+    const io = req.app.get('io');
+
+    // Truyền thực thể io vào hàm làm tham số thứ 3 để xử lý đường ống bắn tin khẩn cấp tự động
+    const auditResult = await dietAuditService.auditClientDietLogs(userId, date, io);
 
     return res.status(200).json({
       success: true,
@@ -29,6 +34,38 @@ const auditClientDietLogsEndpoint = async (req, res) => {
   }
 };
 
+// ── UC55: ISSUE MANUAL DEVIATION WARNING ENDPOINT ────────────────────────────
+// Tiếp nhận lệnh bấm nút trực tiếp từ giao diện quản lý của Chuyên gia / Admin để ép bắn tin alert khẩn cấp
+const issueManualWarningEndpoint = async (req, res) => {
+  try {
+    const { flagId } = req.params;
+    const { customMessage } = req.body;
+
+    if (!flagId) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required route parameter: flagId"
+      });
+    }
+
+    // Lấy thực thể Socket.io cấp phát toàn nền tảng từ ứng dụng Express
+    const io = req.app.get('io');
+    const notificationResult = await dietAuditService.issueManualDeviationWarning(flagId, customMessage, io);
+
+    return res.status(200).json({
+      success: true,
+      message: "Emergency deviation warning code block executed and dispatched over Socket.io network successfully.",
+      data: notificationResult
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
-  auditClientDietLogsEndpoint
+  auditClientDietLogsEndpoint,
+  issueManualWarningEndpoint
 };
