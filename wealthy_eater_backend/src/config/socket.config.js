@@ -87,6 +87,15 @@ function initSocketIO(httpServer) {
 
     // Rate limiter state per connection
     let lastMessageTime = 0;
+    // ==============================================================================
+    // 🆕 UC55: CLIENT LISTEN FOR CRIMSON DEVIATION ALERTS
+    // Mobile client kích hoạt sự kiện này ngay khi login để lắng nghe kênh thông báo đỏ
+    // ==============================================================================
+    socket.on('join_alert_room', () => {
+      const roomName = `user_alert_${userId}`;
+      socket.join(roomName);
+      console.log(`[UC55 Socket.io] Client Mobile userId=${userId} đã tham gia thành công phòng: ${roomName}`);
+    });
 
     // ── join_room ──────────────────────────────────────────────────────────
     // Client joins a private room scoped to their consultation contract.
