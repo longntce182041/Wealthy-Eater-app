@@ -7,3 +7,4 @@ export 'nutritionist_provider.dart';
 export 'chat_provider.dart';
 export 'meal_plan_provider.dart';
 export 'meal_generation_provider.dart';
+export 'chatbot_provider.dart';

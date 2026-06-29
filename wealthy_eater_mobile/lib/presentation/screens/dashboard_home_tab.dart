@@ -5,6 +5,8 @@ import 'package:fl_chart/fl_chart.dart';
 
 import '../../domain/entities/user.dart';
 import '../providers/auth_provider.dart';
+import '../../core/theme/app_colors.dart';
+import 'chatbot_screen.dart';
 import 'profile_form_screen.dart';
 
 class DashboardHomeTab extends StatefulWidget {
@@ -362,6 +364,8 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               const SizedBox(height: 20),
 
               // Weight Log and Chart Section
+              _buildNutriBotBanner(context),
+              const SizedBox(height: 16),
               _buildWeightTrackingCard(context, auth),
               const SizedBox(height: 20),
             ],
@@ -384,6 +388,81 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
       width: 1,
       height: 24,
       color: Colors.grey.shade300,
+    );
+  }
+
+  // ── NutriBot Banner ────────────────────────────────────────────────────────
+
+  Widget _buildNutriBotBanner(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const ChatbotScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.primary, AppColors.primaryDark],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.15),
+              ),
+              child: const Icon(
+                Icons.psychology_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'Ask NutriBot now',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Your personal AI nutrition assistant',
+                    style: TextStyle(
+                      color: AppColors.primaryLight,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white54,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
