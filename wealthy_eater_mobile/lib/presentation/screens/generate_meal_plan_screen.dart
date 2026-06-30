@@ -36,7 +36,8 @@ class _GenerateMealPlanScreenState extends State<GenerateMealPlanScreen> {
   }
 
   Future<void> _runGeneration() async {
-    await context.read<NutritionistProvider>().generateMealPlan(widget.clientId);
+    // Default: use recipe-based generation (existing recipes from DB)
+    await context.read<NutritionistProvider>().generateRecipePlan(widget.clientId);
   }
 
   Future<void> _refresh() async {
@@ -49,7 +50,7 @@ class _GenerateMealPlanScreenState extends State<GenerateMealPlanScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Generate AI Meal Plan'),
+        title: const Text('Generate Weekly Meal Plan'),
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: theme.colorScheme.onPrimary,
       ),
@@ -175,18 +176,18 @@ class _ClientProfileCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _InfoChip(
-                icon: Icons.verified_user_outlined,
-                label: 'AI Optimization',
+                icon: Icons.restaurant_menu_outlined,
+                label: 'Recipe-Based',
                 color: theme.colorScheme.primary,
               ),
               _InfoChip(
                 icon: Icons.science_outlined,
-                label: 'Linear Programming',
+                label: 'LP Optimizer',
                 color: Colors.teal,
               ),
               _InfoChip(
-                icon: Icons.auto_awesome_outlined,
-                label: 'Gemini AI',
+                icon: Icons.calendar_month_outlined,
+                label: '7-Day Plan',
                 color: Colors.deepPurple,
               ),
             ],
@@ -266,15 +267,15 @@ class _GenerateButton extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'AI Meal Plan Generation',
+                'Weekly Recipe Meal Plan',
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
-                'The system will run a Linear Programming optimizer to '
-                'determine optimal ingredient gram allocations, then use '
-                'Gemini AI to generate meal names and cooking instructions.',
+                'The system will select the best recipes from the database '
+                'and assign them to 7 days × 3 meals (Breakfast, Lunch, Dinner), '
+                'optimizing portion sizes to meet daily nutrition targets.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: Colors.grey.shade600),
@@ -325,21 +326,21 @@ class _LoadingWidget extends StatelessWidget {
           CircularProgressIndicator(color: theme.colorScheme.primary),
           const SizedBox(height: 20),
           Text(
-            'Running AI Optimization Pipeline…',
+            'Generating Weekly Meal Plan…',
             style: theme.textTheme.titleSmall
                 ?.copyWith(fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
-            'Calculating optimal ingredient allocations and\ngenerating meal names via Gemini AI.',
+            'Selecting optimal recipes from the database and\nassigning them across 7 days × 3 meals.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: Colors.grey.shade600),
           ),
           const SizedBox(height: 12),
           Text(
-            'This may take 15–30 seconds.',
+            'This may take 10–30 seconds.',
             style: TextStyle(
               fontSize: 11,
               color: Colors.grey.shade500,

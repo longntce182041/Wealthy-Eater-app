@@ -10,8 +10,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -672,
-        1120
+        -1648,
+        1088
       ],
       "id": "78067a80-4fe8-49b8-b824-27e7f2659590",
       "name": "Webhook1",
@@ -66,8 +66,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -464,
-        1120
+        -1392,
+        1088
       ],
       "id": "475ff20e-8bf5-42bd-95b6-2c1067c76590",
       "name": "Edit Fields1"
@@ -81,8 +81,8 @@
       "type": "n8n-nodes-base.mongoDb",
       "typeVersion": 1.3,
       "position": [
-        -16,
-        1040
+        -944,
+        976
       ],
       "id": "d27cd0e4-ec62-41f4-be64-ae4f48eaa946",
       "name": "Find documents1",
@@ -101,8 +101,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        256,
-        1040
+        -672,
+        976
       ],
       "id": "2c6c9de7-e18b-4dde-955f-1d975fa52bcf",
       "name": "Code in JavaScript1"
@@ -154,8 +154,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -256,
-        1152
+        -1184,
+        1088
       ],
       "id": "367ba13c-c1da-40b4-9e0e-f4e587ce2ecb",
       "name": "If2"
@@ -171,8 +171,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        -16,
-        1248
+        -944,
+        1184
       ],
       "id": "9e14c695-ae6c-4c04-b07f-d4c85c8c733f",
       "name": "Respond to Webhook2"
@@ -205,8 +205,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        464,
-        1040
+        -464,
+        976
       ],
       "id": "b7028693-a161-4999-a1c0-4a95a44e9b1f",
       "name": "If3"
@@ -222,8 +222,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        736,
-        944
+        -192,
+        880
       ],
       "id": "2b7e173b-e76a-4e07-8e58-7b329569be41",
       "name": "Respond to Webhook3"
@@ -251,8 +251,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        928,
-        1232
+        48,
+        1168
       ],
       "alwaysOutputData": false,
       "retryOnFail": false
@@ -266,8 +266,8 @@
       "type": "n8n-nodes-base.mongoDb",
       "typeVersion": 1.3,
       "position": [
-        688,
-        1200
+        -208,
+        1104
       ],
       "id": "edd65826-4f7a-4c40-afbf-7f592ad1bcd3",
       "name": "Load Ingredients1",
@@ -286,8 +286,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1168,
-        1232
+        272,
+        1168
       ],
       "id": "52bf2d5b-ee26-4c4b-b0f5-99811cdb796b",
       "name": "Transform Optimized Ingredients"
@@ -319,8 +319,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1408,
-        1232
+        512,
+        1168
       ],
       "alwaysOutputData": false,
       "retryOnFail": false
@@ -336,11 +336,55 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        1680,
-        1232
+        752,
+        1168
       ],
       "id": "4f83208f-eac5-4f91-a698-7a77cb564244",
       "name": "Respond — AI Plan Success1"
+    },
+    {
+      "parameters": {
+        "collection": "recipes",
+        "options": {},
+        "query": "={{ JSON.stringify({ calories_per_unit: { $gt: 0 } }) }}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.3,
+      "position": [
+        -208,
+        1280
+      ],
+      "id": "e0043ed8-dd11-43b1-91c3-1039beb6b2be",
+      "name": "Load recipes",
+      "alwaysOutputData": false,
+      "credentials": {
+        "mongoDb": {
+          "id": "Zghyt3NlT8HiuKH2",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collection": "recipesnutritons",
+        "options": {},
+        "query": "={{ JSON.stringify({ calories_per_unit: { $gt: 0 } }) }}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.3,
+      "position": [
+        -208,
+        1440
+      ],
+      "id": "ffcb530e-10e0-4d5f-b20a-8236bd7d639d",
+      "name": "Load recipes-nutrtion",
+      "alwaysOutputData": false,
+      "credentials": {
+        "mongoDb": {
+          "id": "Zghyt3NlT8HiuKH2",
+          "name": "MongoDB account"
+        }
+      }
     }
   ],
   "connections": {
@@ -420,6 +464,16 @@
             "node": "Load Ingredients1",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Load recipes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Load recipes-nutrtion",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -462,6 +516,28 @@
         [
           {
             "node": "Respond — AI Plan Success1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load recipes": {
+      "main": [
+        [
+          {
+            "node": "Invoke FastAPI Optimization Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load recipes-nutrtion": {
+      "main": [
+        [
+          {
+            "node": "Invoke FastAPI Optimization Service",
             "type": "main",
             "index": 0
           }

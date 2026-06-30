@@ -19,6 +19,15 @@ class _MealPlansTabState extends State<MealPlansTab> {
     });
   }
 
+  String _formatDate(String isoString) {
+    try {
+      final date = DateTime.parse(isoString).toLocal();
+      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    } catch (e) {
+      return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -115,12 +124,22 @@ class _MealPlansTabState extends State<MealPlansTab> {
               children: [
                 const Icon(Icons.calendar_today_outlined, size: 20, color: AppColors.primary),
                 const SizedBox(width: 8),
-                Text(
-                  'Weekly Menu',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Weekly Menu',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (provider.mealPlan?['date'] != null)
+                      Text(
+                        _formatDate(provider.mealPlan!['date'].toString()),
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                  ],
                 ),
                 const Spacer(),
                 if (provider.mealPlan?['created_by'] != null)
@@ -217,6 +236,8 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
     final imageUrl = recipe?['image_url']?.toString();
     final cookingTime = recipe?['cooking_time']?.toString();
     final mealType = widget.item['meal_type']?.toString() ?? 'meal';
+    final dayOfWeek = widget.item['day_of_week']?.toString();
+    final dayString = dayOfWeek != null ? 'Day $dayOfWeek • ' : '';
 
     return Container(
       decoration: BoxDecoration(
@@ -268,7 +289,7 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          _formatMealType(mealType),
+                          '$dayString${_formatMealType(mealType)}',
                           style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ),

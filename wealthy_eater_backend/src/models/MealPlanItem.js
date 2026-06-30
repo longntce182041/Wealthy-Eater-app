@@ -19,6 +19,10 @@ const MealPlanItemSchema = new mongoose.Schema({
     type: String, 
     required: true 
   },
+  day_of_week: {
+    type: Number,  // 1-7 (Day 1 through Day 7)
+    default: null
+  },
   customized_servings_gram: {
     type: Number,
     default: null

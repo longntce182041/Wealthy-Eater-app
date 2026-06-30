@@ -2,7 +2,7 @@ class N8nService {
   async triggerTemplateMatch(payload) {
     const url =
       process.env.N8N_WEBHOOK_URL ||
-      "http://localhost:5678/webhook/match-meal-plan-template";
+      "http://localhost:5678/webhook-test/match-meal-plan-template";
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);

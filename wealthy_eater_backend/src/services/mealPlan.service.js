@@ -56,12 +56,11 @@ class MealPlanService {
     targetEndDate.setDate(targetStartDate.getDate() + 7);
 
     const newPlan = new MealPlan({
-      contractId: activeContract._id,
-      customerId: clientId,
-      nutritionistId: nutritionistId,
-      startDate: targetStartDate,
-      endDate: targetEndDate,
+      user_id: clientId,
+      nutritionist_id: nutritionistId,
+      date: targetStartDate,
       status: "DRAFT",
+      created_by: "TEMPLATE_MATCH",
     });
     await newPlan.save();
 
@@ -172,7 +171,7 @@ class MealPlanService {
 
   async calculateCustomIngredientsNutrients(customIngredients) {
     const Ingredient = require("../models/Ingredient");
-    
+
     let totalWeight = 0;
     let totalCalories = 0;
     let totalProtein = 0;
@@ -245,7 +244,7 @@ class MealPlanService {
           amount_gram: ci.amount_gram,
         }));
         nutrients = await this.calculateCustomIngredientsNutrients(mappedCustomIngredients);
-        
+
         customIngredientsData = item.custom_ingredients.map(ci => ({
           ingredient: ci.ingredient_id,
           amount_gram: ci.amount_gram,
@@ -263,14 +262,15 @@ class MealPlanService {
       enrichedItems.push({
         _id: item._id,
         meal_type: item.meal_type,
+        day_of_week: item.day_of_week || null,
         recipe: recipe && recipe._id
           ? {
-              _id: recipe._id,
-              name: recipe.name,
-              description: recipe.description,
-              image_url: recipe.image_url,
-              cooking_time: recipe.cooking_time,
-            }
+            _id: recipe._id,
+            name: recipe.name,
+            description: recipe.description,
+            image_url: recipe.image_url,
+            cooking_time: recipe.cooking_time,
+          }
           : null,
         custom_ingredients: customIngredientsData,
         base_weight: nutrients.base_weight,
@@ -336,7 +336,7 @@ class MealPlanService {
           amount_gram: ci.amount_gram,
         }));
         nutrients = await this.calculateCustomIngredientsNutrients(mappedCustomIngredients);
-        
+
         customIngredientsData = item.custom_ingredients.map(ci => ({
           ingredient: ci.ingredient_id,
           amount_gram: ci.amount_gram,
@@ -353,18 +353,20 @@ class MealPlanService {
       enrichedItems.push({
         _id: item._id,
         meal_type: item.meal_type,
+        day_of_week: item.day_of_week || null,
         recipe: recipe && recipe._id
           ? {
-              _id: recipe._id,
-              name: recipe.name,
-              description: recipe.description,
-              image_url: recipe.image_url,
-              cooking_time: recipe.cooking_time,
-            }
+            _id: recipe._id,
+            name: recipe.name,
+            description: recipe.description,
+            image_url: recipe.image_url,
+            cooking_time: recipe.cooking_time,
+          }
           : null,
         custom_ingredients: customIngredientsData,
         base_weight: nutrients.base_weight,
         customized_servings_gram: customizedGram,
+        target_calories: item.target_calories || null,
         base_nutrients: {
           calories: nutrients.calories,
           protein: nutrients.protein,
@@ -433,12 +435,12 @@ class MealPlanService {
       meal_type: item.meal_type,
       recipe: recipe
         ? {
-            _id: recipe._id,
-            name: recipe.name,
-            description: recipe.description,
-            image_url: recipe.image_url,
-            cooking_time: recipe.cooking_time,
-          }
+          _id: recipe._id,
+          name: recipe.name,
+          description: recipe.description,
+          image_url: recipe.image_url,
+          cooking_time: recipe.cooking_time,
+        }
         : null,
       base_weight: nutrients.base_weight,
       customized_servings_gram: weight,
@@ -630,25 +632,34 @@ class MealPlanService {
 
     for (const updateItem of items) {
       const itemDoc = await MealPlanItem.findOne({
-        _id: updateItem.itemId,
+        _id: updateItem.itemId || updateItem._id, // allow both formats
         meal_plan_id: planId,
       });
 
       if (!itemDoc) continue;
 
+      // Allow editing all entities in MealPlanItem except _id
+      const allowedFields = ['meal_plan_id', 'recipe_id', 'meal_type', 'day_of_week', 'customized_servings_gram', 'custom_ingredients', 'target_calories'];
+      for (const field of allowedFields) {
+        if (updateItem[field] !== undefined) {
+          itemDoc[field] = updateItem[field];
+        }
+      }
+
+      // Keep existing logic for specific nested properties updates (ingredients, recipeId)
       if (updateItem.ingredients && Array.isArray(updateItem.ingredients)) {
         // Update custom ingredients
         itemDoc.custom_ingredients = updateItem.ingredients.map(ing => ({
           ingredient_id: ing.ingredientId,
           amount_gram: ing.grams,
         }));
-        
+
         // Recalculate target_calories & customized_servings_gram
         const mappedForCalc = itemDoc.custom_ingredients.map(ci => ({
           ingredient_id: ci.ingredient_id,
           amount_gram: ci.amount_gram,
         }));
-        
+
         const nutrients = await this.calculateCustomIngredientsNutrients(mappedForCalc);
         itemDoc.target_calories = nutrients.calories;
         itemDoc.customized_servings_gram = nutrients.base_weight;
@@ -659,14 +670,17 @@ class MealPlanService {
         // Swap to a recipe
         itemDoc.recipe_id = updateItem.recipeId;
         itemDoc.custom_ingredients = [];
-        
+
         const nutrients = await this.calculateRecipeNutrients(updateItem.recipeId);
         itemDoc.target_calories = nutrients.calories;
         itemDoc.customized_servings_gram = nutrients.base_weight;
 
         totalCalories += nutrients.calories;
+      } else {
+        // If neither specific format is used, add to total calories from the itemDoc's updated or existing target_calories
+        totalCalories += itemDoc.target_calories || 0;
       }
-      
+
       await itemDoc.save();
     }
 
@@ -678,6 +692,61 @@ class MealPlanService {
       mealPlanId: mealPlan._id,
       totalCalories,
       updatedAt: mealPlan.updatedAt
+    };
+  }
+
+  /**
+   * Save a recipe-based weekly meal plan.
+   * Creates 1 MealPlan + N MealPlanItem records (one per recipe assignment).
+   *
+   * @param {Object} planData
+   * @param {string} planData.clientId
+   * @param {string} planData.nutritionistId
+   * @param {Array} planData.assignments - from FastAPI recipe solver
+   * @param {Array} planData.dailySummaries - daily nutrition totals
+   */
+  async saveRecipeBasedPlan(planData) {
+    const { clientId, nutritionistId, assignments, dailySummaries } = planData;
+
+    if (!clientId || !assignments || !Array.isArray(assignments) || assignments.length === 0) {
+      const AppError = require('../utils/AppError');
+      throw new AppError('Invalid payload: clientId and assignments are required.', 400);
+    }
+
+    // 1. Create the MealPlan header document
+    const newPlan = new MealPlan({
+      user_id: clientId,
+      nutritionist_id: nutritionistId || null,
+      date: new Date(),
+      created_by: 'RECIPE_BASED',
+      status: 'DRAFT',
+    });
+    await newPlan.save();
+
+    // 2. Create MealPlanItem entries — one per recipe assignment
+    const planItems = assignments.map((assignment) => new MealPlanItem({
+      meal_plan_id: newPlan._id,
+      recipe_id: assignment.recipeId,
+      meal_type: assignment.mealType,
+      day_of_week: assignment.dayOfWeek,
+      customized_servings_gram: Math.round(assignment.scaledWeight),
+      target_calories: Math.round(assignment.scaledCalories),
+      custom_ingredients: [], // Using existing recipe, no custom ingredients
+    }));
+
+    await MealPlanItem.insertMany(planItems);
+
+    // 3. Calculate overall plan totals
+    const totalCalories = dailySummaries
+      ? dailySummaries.reduce((sum, d) => sum + (d.totalCalories || 0), 0)
+      : assignments.reduce((sum, a) => sum + (a.scaledCalories || 0), 0);
+
+    return {
+      mealPlanId: newPlan._id,
+      totalItems: planItems.length,
+      totalWeeklyCalories: Math.round(totalCalories),
+      dailySummaries: dailySummaries || [],
+      createdBy: 'RECIPE_BASED',
     };
   }
 }

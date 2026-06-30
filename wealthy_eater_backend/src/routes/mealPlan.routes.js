@@ -20,6 +20,12 @@ router.post(
   nutritionistOnly,
   mealPlanController.triggerMealGenerationPipeline,
 );
+router.post(
+  "/generate-recipe-plan",
+  verifyToken,
+  nutritionistOnly,
+  mealPlanController.generateRecipeBasedPlan,
+);
 
 // UC-39: Receive AI-generated meal plan from n8n (internal, no JWT — secured by X-INTERNAL-SECRET)
 router.post("/from-ai", mealPlanController.receiveAIPlanEndpoint);

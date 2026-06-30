@@ -52,7 +52,10 @@ class _MealPlanEditorScreenState extends State<MealPlanEditorScreen> {
       
       return DraftItemUpdate(
         itemId: item['_id'],
-        recipeId: item['recipe']?['_id'],
+        recipeId: item['recipe_id'] ?? item['recipe']?['_id'],
+        mealType: item['meal_type'],
+        customizedServingsGram: item['customized_servings_gram'],
+        targetCalories: item['target_calories'] ?? item['customized_nutrients']?['calories'],
         ingredients: ingredients,
       );
     }).toList();
@@ -140,56 +143,148 @@ class _MealPlanEditorScreenState extends State<MealPlanEditorScreen> {
   Widget _buildEditorGrid() {
     final items = _localDraft!['items'] as List;
 
+    // Check if this is a weekly plan (items have day_of_week)
+    final hasWeeklyDays = items.any((item) => item['day_of_week'] != null);
+
+    if (!hasWeeklyDays) {
+      // Fallback: old flat list for AI-generated single-day plans
+      return _buildFlatItemList(items);
+    }
+
+    // Group items by day_of_week
+    final Map<int, List<Map<String, dynamic>>> groupedByDay = {};
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i] as Map<String, dynamic>;
+      final day = (item['day_of_week'] as num?)?.toInt() ?? 1;
+      groupedByDay.putIfAbsent(day, () => []);
+      groupedByDay[day]!.add({...item, '_originalIndex': i});
+    }
+
+    final sortedDays = groupedByDay.keys.toList()..sort();
+    final dayLabels = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: sortedDays.length,
+      itemBuilder: (context, dayIndex) {
+        final day = sortedDays[dayIndex];
+        final dayItems = groupedByDay[day]!;
+        final dayLabel = day <= 7 ? dayLabels[day] : 'Day $day';
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (dayIndex > 0) const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.blue[700],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '📅 Day $day — $dayLabel',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...dayItems.map((item) {
+              final originalIndex = item['_originalIndex'] as int;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _buildItemCard(item, originalIndex),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildFlatItemList(List items) {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: items.length,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final item = items[index];
-        final isAI = item['recipe'] == null;
-        final name = isAI ? "AI Customized Meal" : item['recipe']['name'];
-        final macros = item['customized_nutrients'] ?? item['base_nutrients'];
+        return _buildItemCard(item, index);
+      },
+    );
+  }
 
-        return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildItemCard(Map<String, dynamic> item, int index) {
+    final isAI = item['recipe'] == null;
+    final name = isAI ? "AI Customized Meal" : item['recipe']['name'];
+    final macros = item['customized_nutrients'] ?? item['base_nutrients'] ?? {};
+    final mealType = item['meal_type'] ?? 'LUNCH';
+
+    // Meal type color coding
+    Color mealColor;
+    IconData mealIcon;
+    switch (mealType.toUpperCase()) {
+      case 'BREAKFAST':
+        mealColor = Colors.amber[800]!;
+        mealIcon = Icons.wb_sunny_outlined;
+        break;
+      case 'DINNER':
+        mealColor = Colors.indigo[700]!;
+        mealIcon = Icons.nightlight_outlined;
+        break;
+      default: // LUNCH
+        mealColor = Colors.green[700]!;
+        mealIcon = Icons.light_mode_outlined;
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(item['meal_type'] ?? 'LUNCH', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue[800])),
-                        const SizedBox(height: 4),
-                        Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
-                      onPressed: () => _openEditBottomSheet(item, index),
-                    ),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(mealIcon, size: 16, color: mealColor),
+                          const SizedBox(width: 4),
+                          Text(mealType, style: TextStyle(fontWeight: FontWeight.bold, color: mealColor, fontSize: 12)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
                 ),
-                const Divider(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _macroWidget('Cal', '${macros['calories']} kcal', Colors.orange),
-                    _macroWidget('Pro', '${macros['protein']}g', Colors.red),
-                    _macroWidget('Carb', '${macros['carbs']}g', Colors.green),
-                    _macroWidget('Fat', '${macros['fat']}g', Colors.purple),
-                  ],
-                )
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.blue),
+                  onPressed: () => _openEditBottomSheet(item, index),
+                ),
               ],
             ),
-          ),
-        );
-      },
+            const Divider(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _macroWidget('Cal', '${macros['calories'] ?? 0} kcal', Colors.orange),
+                _macroWidget('Pro', '${macros['protein'] ?? 0}g', Colors.red),
+                _macroWidget('Carb', '${macros['carbs'] ?? 0}g', Colors.green),
+                _macroWidget('Fat', '${macros['fat'] ?? 0}g', Colors.purple),
+              ],
+            )
+          ],
+        ),
+      ),
     );
   }
 
@@ -216,6 +311,9 @@ class _EditItemBottomSheet extends StatefulWidget {
 
 class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
   late Map<String, dynamic> _editingItem;
+  final TextEditingController _recipeIdController = TextEditingController();
+  final TextEditingController _servingsController = TextEditingController();
+  final TextEditingController _caloriesController = TextEditingController();
 
   @override
   void initState() {
@@ -227,6 +325,17 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
         (_editingItem['custom_ingredients'] as List).map((i) => Map<String, dynamic>.from(i))
       );
     }
+    _recipeIdController.text = _editingItem['recipe_id'] ?? _editingItem['recipe']?['_id'] ?? '';
+    _servingsController.text = (_editingItem['customized_servings_gram'] ?? _editingItem['base_weight'] ?? '').toString();
+    _caloriesController.text = (_editingItem['target_calories'] ?? _editingItem['customized_nutrients']?['calories'] ?? '').toString();
+  }
+
+  @override
+  void dispose() {
+    _recipeIdController.dispose();
+    _servingsController.dispose();
+    _caloriesController.dispose();
+    super.dispose();
   }
 
   void _recalculateLocalMacros() {
@@ -298,7 +407,55 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          // Additional Entity Editing Fields
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _editingItem['meal_type'] ?? 'LUNCH',
+                  decoration: const InputDecoration(labelText: 'Meal Type', border: OutlineInputBorder()),
+                  items: ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'].map((String value) {
+                    return DropdownMenuItem<String>(value: value, child: Text(value));
+                  }).toList(),
+                  onChanged: (newValue) {
+                    setState(() { _editingItem['meal_type'] = newValue; });
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  controller: _recipeIdController,
+                  decoration: const InputDecoration(labelText: 'Recipe ID (or AI)', border: OutlineInputBorder()),
+                  onChanged: (val) => _editingItem['recipe_id'] = val.isEmpty ? null : val,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _servingsController,
+                  decoration: const InputDecoration(labelText: 'Servings (g)', border: OutlineInputBorder()),
+                  keyboardType: TextInputType.number,
+                  onChanged: (val) => _editingItem['customized_servings_gram'] = num.tryParse(val),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextFormField(
+                  controller: _caloriesController,
+                  decoration: const InputDecoration(labelText: 'Target Calories', border: OutlineInputBorder()),
+                  keyboardType: TextInputType.number,
+                  onChanged: (val) => _editingItem['target_calories'] = num.tryParse(val),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           const Text('Ingredients', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           Expanded(
