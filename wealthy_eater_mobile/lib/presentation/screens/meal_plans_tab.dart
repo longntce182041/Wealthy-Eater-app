@@ -13,6 +13,23 @@ class MealPlansTab extends StatefulWidget {
 
 class _MealPlansTabState extends State<MealPlansTab> {
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<MealPlanProvider>().loadMyMealPlan();
+    });
+  }
+
+  String _formatDate(String isoString) {
+    try {
+      final date = DateTime.parse(isoString).toLocal();
+      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 3,
@@ -33,9 +50,51 @@ class _MealPlansTabState extends State<MealPlansTab> {
         ),
         body: const TabBarView(
           children: [
-            _WeeklyMealPlansView(),
-            _MealLogsView(),
-            DailyMacroReportWidget(),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined, size: 20, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Weekly Menu',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (provider.mealPlan?['date'] != null)
+                      Text(
+                        _formatDate(provider.mealPlan!['date'].toString()),
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                  ],
+                ),
+                const Spacer(),
+                if (provider.mealPlan?['created_by'] != null)
+                  Expanded(
+                    child: Text(
+                      'By: ${provider.mealPlan!['created_by'].split('|')[0]}',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                return _MealPlanItemCard(item: items[index]);
+              },
+            ),
+            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -230,6 +289,8 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
     final imageUrl = recipe?['image_url']?.toString();
     final cookingTime = recipe?['cooking_time']?.toString();
     final mealType = widget.item['meal_type']?.toString() ?? 'meal';
+    final dayOfWeek = widget.item['day_of_week']?.toString();
+    final dayString = dayOfWeek != null ? 'Day $dayOfWeek • ' : '';
     final bool isCompleted = widget.item['is_completed'] ?? false;
 
     return Container(
@@ -282,7 +343,7 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          _formatMealType(mealType),
+                          '$dayString${_formatMealType(mealType)}',
                           style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ),

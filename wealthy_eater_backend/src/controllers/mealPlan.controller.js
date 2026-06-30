@@ -6,7 +6,7 @@ const geminiService = require('../services/gemini.service');
 const matchTemplateEndpoint = async (req, res) => {
   try {
     const { clientId } = req.params;
-    const nutritionistId = req.nutritionistId;
+    const nutritionistId = req.user?.id;
 
     const output = await mealPlanService.runTemplateMatchPipeline(clientId, nutritionistId);
 
@@ -299,7 +299,7 @@ const receiveAIPlanEndpoint = async (req, res, next) => {
 const updateDraftPlanEndpoint = async (req, res, next) => {
   try {
     const { planId } = req.params;
-    const nutritionistId = req.nutritionistId; // Provided by auth middleware
+    const nutritionistId = req.user?.id; // Provided by auth middleware
     const { items } = req.body;
 
     if (!items || !Array.isArray(items)) {
@@ -352,9 +352,9 @@ const getMealPlanByIdEndpoint = async (req, res, next) => {
 // ── Get Nutritionist Meal Plans ────────────────────────────────────────────────
 const getNutritionistMealPlansEndpoint = async (req, res, next) => {
   try {
-    const nutritionistId = req.nutritionistId;
+    const nutritionistId = req.user?.id;
     const plans = await mealPlanService.getNutritionistMealPlans(nutritionistId);
-    
+
     return res.status(200).json({
       success: true,
       data: plans
@@ -447,6 +447,137 @@ const getDailyMacroReportEndpoint = async (req, res, next) => {
   }
 };
 
+// ── Generate Recipe-Based Weekly Meal Plan ────────────────────────────────────
+const generateRecipeBasedPlan = async (req, res, next) => {
+  try {
+    const { clientId } = req.body;
+    const nutritionistId = req.user?.id || null;
+
+    if (!clientId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'clientId is required.' },
+      });
+    }
+
+    const UserProfile = require('../models/UserProfile');
+    const UserDietary = require('../models/UserDietary');
+    const Recipe = require('../models/Recipe');
+    const RecipeIngredient = require('../models/RecipeIngredient');
+    const Ingredient = require('../models/Ingredient');
+
+    // 1. Fetch client biometric profile
+    const profile = await UserProfile.findOne({ user_id: clientId }).lean();
+    if (!profile || !profile.tdee) {
+      return res.status(422).json({
+        success: false,
+        error: { message: 'Client has not completed their biometric profile (TDEE missing).' },
+      });
+    }
+
+    // 2. Fetch client dietary preferences
+    const dietary = await UserDietary.findOne({ user_id: clientId }).lean();
+    const dietType = dietary?.diet_preferences?.[0] || 'BALANCED';
+
+    // 3. Load all published recipes from DB
+    const allRecipes = await Recipe.find({}).lean();
+
+    if (allRecipes.length === 0) {
+      return res.status(422).json({
+        success: false,
+        error: { message: 'No recipes found in the database.' },
+      });
+    }
+
+    // 4. For each recipe, calculate total nutrition via RecipeIngredient + Ingredient
+    const availableRecipes = [];
+
+    for (const recipe of allRecipes) {
+      const nutrients = await mealPlanService.calculateRecipeNutrients(recipe._id);
+
+      // Skip recipes with 0 calories
+      if (nutrients.calories <= 0) continue;
+
+      availableRecipes.push({
+        id: recipe._id.toString(),
+        name: recipe.name,
+        totalCalories: nutrients.calories,
+        totalProtein: nutrients.protein,
+        totalCarbs: nutrients.carbs,
+        totalFat: nutrients.fat,
+        baseWeight: nutrients.base_weight,
+      });
+    }
+
+    if (availableRecipes.length < 3) {
+      return res.status(422).json({
+        success: false,
+        error: { message: `Need at least 3 recipes with nutrition data, found ${availableRecipes.length}.` },
+      });
+    }
+
+    // 5. Call FastAPI recipe solver
+    const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
+    const internalSecret = process.env.N8N_INTERNAL_SECRET || '9a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a';
+
+    const solverResponse = await fetch(`${fastApiUrl}/api/v1/ai/compute-recipe-plan`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-INTERNAL-SECRET': internalSecret,
+      },
+      body: JSON.stringify({
+        targetCalories: profile.tdee,
+        targetProtein: 140,
+        targetCarbs: 200,
+        targetFat: 65,
+        days: 7,
+        mealsPerDay: 3,
+        mealCalorieSplit: [0.25, 0.40, 0.35],
+        allowRepeatSameDay: false,
+        availableRecipes,
+      }),
+    });
+
+    if (!solverResponse.ok) {
+      const errText = await solverResponse.text();
+      console.error('[Recipe Solver] Error response:', solverResponse.status, errText);
+      return res.status(502).json({
+        success: false,
+        error: { message: `Recipe solver returned an error: ${solverResponse.status}` },
+      });
+    }
+
+    const solverResult = await solverResponse.json();
+    const assignments = solverResult.assignments || [];
+    const dailySummaries = solverResult.dailySummaries || [];
+
+    if (assignments.length === 0) {
+      return res.status(422).json({
+        success: false,
+        error: { message: 'Recipe solver returned no assignments. Check recipe data.' },
+      });
+    }
+
+    // 6. Save the recipe-based plan to MongoDB
+    const result = await mealPlanService.saveRecipeBasedPlan({
+      clientId,
+      nutritionistId,
+      assignments,
+      dailySummaries,
+    });
+
+    return res.status(201).json({
+      success: true,
+      status: 'SUCCESS_RECIPE_PLAN_GENERATED',
+      message: 'Recipe-based weekly meal plan generated and saved successfully.',
+      meta: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   matchTemplateEndpoint,
   getMyMealPlanEndpoint,
@@ -463,4 +594,5 @@ module.exports = {
   deleteMealLogEndpoint,
   getMealLogsEndpoint,
   getDailyMacroReportEndpoint,
+  generateRecipeBasedPlan,
 };

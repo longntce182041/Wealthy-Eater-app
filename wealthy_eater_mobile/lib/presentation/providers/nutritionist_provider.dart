@@ -187,6 +187,25 @@ class NutritionistProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// POST /api/meal-plans/generate-recipe-plan
+  /// Generates a recipe-based weekly meal plan using existing recipes from DB.
+  Future<void> generateRecipePlan(String clientId) async {
+    _isGenerating = true;
+    _generationError = null;
+    _generationResult = null;
+    notifyListeners();
+
+    try {
+      final result = await _service.generateRecipeBasedMealPlan(clientId);
+      _generationResult = result;
+    } catch (e) {
+      _generationError = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      _isGenerating = false;
+      notifyListeners();
+    }
+  }
+
   // ── UC-52: Edit Draft Meal Plan ──────────────────────────────────────────────
   bool _isLoadingDraft = false;
   String? _loadDraftError;

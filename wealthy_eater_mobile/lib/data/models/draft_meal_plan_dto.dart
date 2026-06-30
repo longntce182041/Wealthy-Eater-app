@@ -11,11 +11,17 @@ class DraftUpdateRequest {
 class DraftItemUpdate {
   final String itemId;
   final String? recipeId;
+  final String? mealType;
+  final num? customizedServingsGram;
+  final num? targetCalories;
   final List<IngredientUpdate>? ingredients;
 
   DraftItemUpdate({
     required this.itemId,
     this.recipeId,
+    this.mealType,
+    this.customizedServingsGram,
+    this.targetCalories,
     this.ingredients,
   });
 
@@ -24,7 +30,16 @@ class DraftItemUpdate {
       'itemId': itemId,
     };
     if (recipeId != null) {
-      data['recipeId'] = recipeId;
+      data['recipe_id'] = recipeId;
+    }
+    if (mealType != null) {
+      data['meal_type'] = mealType;
+    }
+    if (customizedServingsGram != null) {
+      data['customized_servings_gram'] = customizedServingsGram;
+    }
+    if (targetCalories != null) {
+      data['target_calories'] = targetCalories;
     }
     if (ingredients != null) {
       data['ingredients'] = ingredients!.map((i) => i.toJson()).toList();

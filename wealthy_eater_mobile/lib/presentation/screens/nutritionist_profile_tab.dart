@@ -291,7 +291,10 @@ class _NutritionistProfileTabState extends State<NutritionistProfileTab> {
         final approvalStatus = profile['approval_status']?.toString() ?? 'PENDING';
         final certificationUrl = profile['certification_url']?.toString() ?? '';
 
-        final userObj = profile['user_id'] as Map<String, dynamic>?;
+        final dynamic rawUser = profile['user_id'];
+        final Map<String, dynamic>? userObj = rawUser is Map 
+            ? Map<String, dynamic>.from(rawUser) 
+            : null;
         final email = userObj?['email']?.toString() ?? '';
         final phone = userObj?['phone']?.toString() ?? '';
 

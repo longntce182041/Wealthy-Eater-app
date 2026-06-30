@@ -159,6 +159,30 @@ class NutritionistService {
     }
   }
 
+  /// POST /api/meal-plans/generate-recipe-plan
+  /// Triggers recipe-based weekly meal plan generation for a given client.
+  /// Uses existing recipes from DB instead of AI-generated meals.
+  Future<Map<String, dynamic>> generateRecipeBasedMealPlan(String clientId) async {
+    try {
+      final response = await apiClient.post(
+        '/api/meal-plans/generate-recipe-plan',
+        data: {'clientId': clientId},
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (response.data['success'] == true || response.data['status'] != null) {
+          return Map<String, dynamic>.from(response.data as Map);
+        }
+      }
+
+      throw AppError(
+        response.data['error']?['message'] ?? 'Failed to generate recipe-based meal plan.',
+      );
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
   /// GET /api/meal-plans/:planId/draft
   /// Fetches a draft AI-generated meal plan.
   Future<Map<String, dynamic>> fetchDraftMealPlan(String planId) async {
