@@ -78,6 +78,7 @@ class WealthyEaterApp extends StatelessWidget {
             repository: PlanRepository(api.dio),
           ),
         ),
+        ChangeNotifierProvider(create: (_) => ChatbotProvider(api: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',

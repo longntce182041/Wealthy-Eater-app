@@ -64,8 +64,8 @@ class _MyNutritionistDashboardState extends State<MyNutritionistDashboard> {
                 );
               } else {
                 messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Failed to send request. Please try again.'),
+                  SnackBar(
+                    content: Text(provider.requestError ?? 'Failed to send request. Please try again.'),
                     backgroundColor: Colors.red,
                   ),
                 );
