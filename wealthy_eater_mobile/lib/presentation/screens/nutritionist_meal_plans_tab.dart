@@ -22,8 +22,8 @@ class _NutritionistMealPlansTabState extends State<NutritionistMealPlansTab> {
 
   String _formatDate(String? isoString) {
     if (isoString == null) return '';
-    final date = DateTime.tryParse(isoString);
-    if (date == null) return '';
+    final date = DateTime.tryParse(isoString)?.toLocal();
+    if (date == null) return isoString;
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 

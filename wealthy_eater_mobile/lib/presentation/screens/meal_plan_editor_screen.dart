@@ -413,7 +413,7 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _editingItem['meal_type'] ?? 'LUNCH',
+                  initialValue: _editingItem['meal_type'] ?? 'LUNCH',
                   decoration: const InputDecoration(labelText: 'Meal Type', border: OutlineInputBorder()),
                   items: ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'].map((String value) {
                     return DropdownMenuItem<String>(value: value, child: Text(value));
