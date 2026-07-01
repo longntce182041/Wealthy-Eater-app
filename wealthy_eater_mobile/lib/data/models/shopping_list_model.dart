@@ -99,7 +99,7 @@ class ShoppingListItemModel extends ShoppingListItemEntity {
   static DateTime? _parseDate(dynamic raw) {
     if (raw == null) return null;
     try {
-      return DateTime.parse(raw.toString());
+      return DateTime.parse(raw.toString()).toLocal();
     } catch (_) {
       return null;
     }

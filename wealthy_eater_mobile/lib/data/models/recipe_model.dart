@@ -26,7 +26,7 @@ String _readString(Map<String, dynamic> json, List<String> keys, [String fallbac
 
 DateTime? _toDateTime(dynamic value) {
   if (value == null) return null;
-  if (value is String) return DateTime.tryParse(value);
+  if (value is String) return DateTime.tryParse(value)?.toLocal();
   return null;
 }
 

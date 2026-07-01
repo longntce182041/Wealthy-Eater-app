@@ -475,7 +475,7 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
       final lastLog = auth.weightHistory.last;
       final lastDateStr = lastLog['date']?.toString();
       if (lastDateStr != null) {
-        final lastDate = DateTime.tryParse(lastDateStr);
+        final lastDate = DateTime.tryParse(lastDateStr)?.toLocal();
         if (lastDate != null) {
           final now = DateTime.now();
           final todayDateOnly = DateTime(now.year, now.month, now.day);

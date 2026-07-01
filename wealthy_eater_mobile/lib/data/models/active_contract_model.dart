@@ -24,8 +24,8 @@ class ActiveContractModel {
       status: json['status'] ?? '',
       nutritionist: NutritionistModel.fromJson(json['nutritionist_id'] ?? {}),
       packageType: json['package_type'] ?? '1_month',
-      expireAt: json['expire_at'] != null ? DateTime.tryParse(json['expire_at']) : null,
-      createdAt: json['create_at'] != null ? DateTime.tryParse(json['create_at']) : null,
+      expireAt: json['expire_at'] != null ? DateTime.tryParse(json['expire_at'])?.toLocal() : null,
+      createdAt: json['create_at'] != null ? DateTime.tryParse(json['create_at'])?.toLocal() : null,
     );
   }
 }

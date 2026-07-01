@@ -53,10 +53,10 @@ class TransactionModel {
       status: json['status'] ?? 'PENDING',
       description: json['description'] ?? '',
       createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'])
+          ? DateTime.tryParse(json['createdAt'])?.toLocal()
           : null,
       updatedAt: json['updatedAt'] != null
-          ? DateTime.tryParse(json['updatedAt'])
+          ? DateTime.tryParse(json['updatedAt'])?.toLocal()
           : null,
       contract: json['consultation_contracts_id_fk'] is Map
           ? ContractInfo.fromJson(json['consultation_contracts_id_fk'])
