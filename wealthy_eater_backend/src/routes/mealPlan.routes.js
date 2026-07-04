@@ -6,6 +6,7 @@ const {
   protect,
   nutritionistOnly,
 } = require("../middlewares/authMiddleware");
+const { uploadMealImage } = require("../middlewares/imageUpload.middleware");
 
 // Nutritionist template matching
 router.post(
@@ -39,6 +40,7 @@ router.get(
 );
 
 // Client meal plan management
+router.post("/scan-meal", protect, uploadMealImage, mealPlanController.scanMealImageEndpoint);
 router.get("/my-plan", protect, mealPlanController.getMyMealPlanEndpoint);
 router.get("/daily-report", protect, mealPlanController.getDailyMacroReportEndpoint);
 router.get("/logs", protect, mealPlanController.getMealLogsEndpoint);
