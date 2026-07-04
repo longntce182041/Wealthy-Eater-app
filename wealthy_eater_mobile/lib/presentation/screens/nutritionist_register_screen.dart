@@ -16,6 +16,8 @@ class _NutritionistRegisterScreenState extends State<NutritionistRegisterScreen>
   final _identifierCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
@@ -32,8 +34,8 @@ class _NutritionistRegisterScreenState extends State<NutritionistRegisterScreen>
       final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
       if (!emailRegex.hasMatch(trimmed)) return 'Enter a valid email address';
     } else {
-      final phoneRegex = RegExp(r'^\+?[0-9]{7,15}$');
-      if (!phoneRegex.hasMatch(trimmed)) return 'Enter a valid phone number';
+      final phoneRegex = RegExp(r'^[0-9]{10}$');
+      if (!phoneRegex.hasMatch(trimmed)) return 'Phone number must be exactly 10 digits';
     }
     return null;
   }
@@ -112,21 +114,45 @@ class _NutritionistRegisterScreenState extends State<NutritionistRegisterScreen>
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _passCtrl,
-                        obscureText: true,
+                        obscureText: _obscurePassword,
                         validator: _validatePassword,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Password',
-                          prefixIcon: Icon(Icons.lock_outline),
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _confirmCtrl,
-                        obscureText: true,
+                        obscureText: _obscureConfirmPassword,
                         validator: (v) => v != _passCtrl.text ? 'Passwords do not match' : null,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Confirm Password',
-                          prefixIcon: Icon(Icons.lock_outline),
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscureConfirmPassword = !_obscureConfirmPassword;
+                              });
+                            },
+                          ),
                         ),
                       ),
                       const SizedBox(height: 32),

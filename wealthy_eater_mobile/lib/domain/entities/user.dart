@@ -12,6 +12,12 @@ class UserEntity {
   final String? phoneNumber;
   final String? address;
 
+  final String? approvalStatus;
+  final String? licenseNumber;
+  final String? professionalTitle;
+  final String? certificationUrl;
+  final double? serviceFee;
+
   const UserEntity({
     required this.id,
     required this.email,
@@ -21,6 +27,11 @@ class UserEntity {
     this.lastName,
     this.phoneNumber,
     this.address,
+    this.approvalStatus,
+    this.licenseNumber,
+    this.professionalTitle,
+    this.certificationUrl,
+    this.serviceFee,
   });
 
   /// Derives the best display name available.
@@ -41,6 +52,11 @@ class UserEntity {
       lastName: json['last_name']?.toString(),
       phoneNumber: (json['phone_number'] ?? json['phone'])?.toString(),
       address: json['address']?.toString(),
+      approvalStatus: json['approvalStatus']?.toString(),
+      licenseNumber: json['licenseNumber']?.toString(),
+      professionalTitle: json['professionalTitle']?.toString(),
+      certificationUrl: (json['certificationUrl'] ?? json['certificateUrl'])?.toString(),
+      serviceFee: json['serviceFee'] != null ? double.tryParse(json['serviceFee'].toString()) : null,
     );
   }
 }

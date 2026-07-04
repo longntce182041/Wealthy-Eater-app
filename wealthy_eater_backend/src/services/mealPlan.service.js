@@ -1110,6 +1110,10 @@ class MealPlanService {
       createdBy: 'RECIPE_BASED',
     };
   }
+
+  async scanMealImage(file) {
+    return await n8nService.scanMealImage(file);
+  }
 }
 
 module.exports = new MealPlanService();

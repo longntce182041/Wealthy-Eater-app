@@ -40,6 +40,25 @@ function uploadIngredientImage(req, res, next) {
   });
 }
 
+function uploadMealImage(req, res, next) {
+  upload.single("image")(req, res, (err) => {
+    if (!err) return next();
+
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({
+        success: false,
+        message: "Image file must be 5MB or smaller",
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: err.message || "Invalid image file",
+    });
+  });
+}
+
 module.exports = {
   uploadIngredientImage,
+  uploadMealImage,
 };
