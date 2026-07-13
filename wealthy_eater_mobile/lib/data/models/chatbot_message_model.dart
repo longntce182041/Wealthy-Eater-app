@@ -22,7 +22,7 @@ class ChatbotMessageModel {
       role:      json['role'] as String? ?? 'model',
       content:   json['content'] as String? ?? '',
       createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'].toString())
+          ? DateTime.tryParse(json['created_at'].toString())?.toLocal()
           : null,
     );
   }

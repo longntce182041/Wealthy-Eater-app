@@ -8,6 +8,7 @@ import '../providers/auth_provider.dart';
 import '../../core/theme/app_colors.dart';
 import 'chatbot_screen.dart';
 import 'profile_form_screen.dart';
+import 'meal_image_scan_screen.dart';
 
 class DashboardHomeTab extends StatefulWidget {
   final UserEntity? user;
@@ -366,6 +367,8 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               // Weight Log and Chart Section
               _buildNutriBotBanner(context),
               const SizedBox(height: 16),
+              _buildMealScanBanner(context),
+              const SizedBox(height: 16),
               _buildWeightTrackingCard(context, auth),
               const SizedBox(height: 20),
             ],
@@ -466,6 +469,80 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
     );
   }
 
+  // ── Meal Scan Banner ────────────────────────────────────────────────────────
+
+  Widget _buildMealScanBanner(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const MealImageScanScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.secondary, Color(0xFFC8600C)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.secondary.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.15),
+              ),
+              child: const Icon(
+                Icons.camera_alt_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'AI Scan Meal',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Quét khay đồ ăn thực tế phân tích dinh dưỡng',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white54,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildWeightTrackingCard(BuildContext context, AuthProvider auth) {
     bool isRateLimited = false;
     int daysRemaining = 0;
@@ -475,7 +552,7 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
       final lastLog = auth.weightHistory.last;
       final lastDateStr = lastLog['date']?.toString();
       if (lastDateStr != null) {
-        final lastDate = DateTime.tryParse(lastDateStr);
+        final lastDate = DateTime.tryParse(lastDateStr)?.toLocal();
         if (lastDate != null) {
           final now = DateTime.now();
           final todayDateOnly = DateTime(now.year, now.month, now.day);

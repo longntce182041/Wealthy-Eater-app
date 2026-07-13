@@ -111,10 +111,10 @@ class ChatMessageModel {
       content: content,
       isRead: json['is_read'] as bool? ?? false,
       readAt: json['read_at'] != null
-          ? DateTime.tryParse(json['read_at'].toString())
+          ? DateTime.tryParse(json['read_at'].toString())?.toLocal()
           : null,
       createdAt: json['create_at'] != null
-          ? DateTime.tryParse(json['create_at'].toString()) ?? DateTime.now()
+          ? (DateTime.tryParse(json['create_at'].toString())?.toLocal() ?? DateTime.now())
           : DateTime.now(),
     );
   }

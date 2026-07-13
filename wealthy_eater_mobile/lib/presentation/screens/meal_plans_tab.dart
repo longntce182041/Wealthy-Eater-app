@@ -20,15 +20,6 @@ class _MealPlansTabState extends State<MealPlansTab> {
     });
   }
 
-  String _formatDate(String isoString) {
-    try {
-      final date = DateTime.parse(isoString).toLocal();
-      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-    } catch (e) {
-      return '';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -533,6 +524,15 @@ class _WeeklyMealPlansViewState extends State<_WeeklyMealPlansView> {
     });
   }
 
+  String _formatDate(String isoString) {
+    try {
+      final date = DateTime.parse(isoString).toLocal();
+      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    } catch (e) {
+      return '';
+    }
+  }
+
   Widget _buildDaySelector(int activeDay) {
     return Container(
       height: 50,
@@ -693,12 +693,22 @@ class _WeeklyMealPlansViewState extends State<_WeeklyMealPlansView> {
             children: [
               const Icon(Icons.calendar_today_outlined, size: 20, color: AppColors.primary),
               const SizedBox(width: 8),
-              Text(
-                'Weekly Menu',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Weekly Menu',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (provider.mealPlan?['date'] != null)
+                    Text(
+                      _formatDate(provider.mealPlan!['date'].toString()),
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                ],
               ),
               const Spacer(),
               if (provider.mealPlan?['created_by'] != null)

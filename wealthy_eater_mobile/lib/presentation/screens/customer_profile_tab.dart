@@ -80,8 +80,8 @@ class CustomerProfileTab extends StatelessWidget {
                             final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
                             if (!emailRegex.hasMatch(trimmed)) return 'Enter a valid email address';
                           } else {
-                            final phoneRegex = RegExp(r'^\+?[0-9]{7,15}$');
-                            if (!phoneRegex.hasMatch(trimmed)) return 'Enter a valid phone number';
+                            final phoneRegex = RegExp(r'^[0-9]{10}$');
+                            if (!phoneRegex.hasMatch(trimmed)) return 'Phone number must be exactly 10 digits';
                           }
                           return null;
                         },

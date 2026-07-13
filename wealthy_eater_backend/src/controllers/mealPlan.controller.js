@@ -578,6 +578,26 @@ const generateRecipeBasedPlan = async (req, res, next) => {
   }
 };
 
+const scanMealImageEndpoint = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing image file. Use multipart/form-data with field 'image'.",
+      });
+    }
+
+    const result = await mealPlanService.scanMealImage(req.file);
+
+    return res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   matchTemplateEndpoint,
   getMyMealPlanEndpoint,
@@ -595,4 +615,5 @@ module.exports = {
   getMealLogsEndpoint,
   getDailyMacroReportEndpoint,
   generateRecipeBasedPlan,
+  scanMealImageEndpoint,
 };

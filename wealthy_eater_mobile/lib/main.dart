@@ -79,6 +79,7 @@ class WealthyEaterApp extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider(create: (_) => ChatbotProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => MealImageScanProvider(api: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',
@@ -171,7 +172,11 @@ class _AppRootState extends State<_AppRoot> {
       builder: (context, auth, _) {
         if (auth.isAuthenticated) {
           if (auth.user?.role == 'nutritionist') {
-            return NutritionistDashboardScreen(user: auth.user);
+            final status = auth.user?.approvalStatus;
+            if (status == 'APPROVED' || status == 'approval') {
+              return NutritionistDashboardScreen(user: auth.user);
+            }
+            return const NutritionistVerificationScreen();
           }
           return HomeScreen(user: auth.user);
         }
