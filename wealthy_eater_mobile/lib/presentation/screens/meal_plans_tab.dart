@@ -50,51 +50,9 @@ class _MealPlansTabState extends State<MealPlansTab> {
         ),
         body: const TabBarView(
           children: [
-            Row(
-              children: [
-                const Icon(Icons.calendar_today_outlined, size: 20, color: AppColors.primary),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Weekly Menu',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    if (provider.mealPlan?['date'] != null)
-                      Text(
-                        _formatDate(provider.mealPlan!['date'].toString()),
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                      ),
-                  ],
-                ),
-                const Spacer(),
-                if (provider.mealPlan?['created_by'] != null)
-                  Expanded(
-                    child: Text(
-                      'By: ${provider.mealPlan!['created_by'].split('|')[0]}',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
-                      textAlign: TextAlign.right,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
-              itemBuilder: (context, index) {
-                return _MealPlanItemCard(item: items[index]);
-              },
-            ),
-            const SizedBox(height: 24),
+            _WeeklyMealPlansView(),
+            _MealLogsView(),
+            DailyMacroReportWidget(),
           ],
         ),
       ),
