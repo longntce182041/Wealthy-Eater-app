@@ -1112,7 +1112,95 @@ class MealPlanService {
   }
 
   async scanMealImage(file) {
-    return await n8nService.scanMealImage(file);
+    const scanResult = await n8nService.scanMealImage(file);
+
+    const Recipe = require('../models/Recipe');
+    const RecipeNutrition = require('../models/RecipeNutrition');
+    const RecipeIngredient = require('../models/RecipeIngredient');
+    const Ingredient = require('../models/Ingredient');
+
+    // Attempt case-insensitive match on Recipe name
+    const matchedRecipe = await Recipe.findOne({
+      name: { $regex: new RegExp(`^${scanResult.meal_name.trim()}$`, 'i') }
+    }).lean();
+
+    if (matchedRecipe) {
+      const nutrition = await RecipeNutrition.findOne({ recipe_id: matchedRecipe._id }).lean();
+      const recipeIngredients = await RecipeIngredient.find({ recipe_id: matchedRecipe._id }).lean();
+
+      const ingredientsList = [];
+      for (const ring of recipeIngredients) {
+        const ingDetails = await Ingredient.findById(ring.ingredient_id).lean();
+        ingredientsList.push({
+          name: ingDetails ? ingDetails.name : "Ingredient",
+          estimated_amount: ring.quantity,
+          estimated_unit: ring.unit || (ingDetails ? ingDetails.unit : "g"),
+          nutrition: {
+            kcal: ring.calories || 0,
+            protein: ring.protein || 0,
+            carbs: ring.carbs || 0,
+            fats: ring.fat || 0
+          }
+        });
+      }
+
+      return {
+        meal_name: matchedRecipe.name,
+        recipe_id: matchedRecipe._id,
+        image_url: matchedRecipe.image_url || scanResult.image_url,
+        confidence: 1.0,
+        ingredients: ingredientsList,
+        totals: {
+          kcal: nutrition ? nutrition.calories : 0,
+          protein: nutrition ? nutrition.protein : 0,
+          carbs: nutrition ? nutrition.carbs : 0,
+          fats: nutrition ? nutrition.fat : 0
+        },
+        matched_in_system: true,
+        note: ""
+      };
+    }
+
+    return {
+      ...scanResult,
+      matched_in_system: false,
+      note: ""
+    };
+  }
+
+  async logCustomRecipe(userId, recipeId, actualWeight, dateStr) {
+    const CustomerMealLog = require("../models/CustomerMealLog");
+    const Recipe = require("../models/Recipe");
+
+    const recipe = await Recipe.findById(recipeId);
+    if (!recipe) {
+      throw new Error("RECIPE_NOT_FOUND");
+    }
+
+    const nutrients = await this.calculateRecipeNutrients(recipeId);
+    const weight = actualWeight || nutrients.base_weight || 100;
+    const scale = weight / (nutrients.base_weight || 1);
+
+    const calories = Math.round(nutrients.calories * scale);
+    const protein = parseFloat((nutrients.protein * scale).toFixed(1));
+    const carbs = parseFloat((nutrients.carbs * scale).toFixed(1));
+    const fat = parseFloat((nutrients.fat * scale).toFixed(1));
+
+    const newLog = new CustomerMealLog({
+      user_id: userId,
+      recipe_id: recipeId,
+      actual_weight_gram: weight,
+      actual_calories: calories,
+      actual_protein: protein,
+      actual_carbs: carbs,
+      actual_fat: fat,
+      custom_name: recipe.name,
+      meal_plan_item_id: null,
+      create_at: dateStr ? new Date(dateStr) : new Date(),
+    });
+
+    await newLog.save();
+    return newLog;
   }
 }
 

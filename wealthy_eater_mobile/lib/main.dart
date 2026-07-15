@@ -80,6 +80,7 @@ class WealthyEaterApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => ChatbotProvider(api: api)),
         ChangeNotifierProvider(create: (_) => MealImageScanProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => PantryProvider(api: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',
@@ -138,6 +139,7 @@ class _AppRootState extends State<_AppRoot> {
         context.read<NutritionistProvider>().reset();
         context.read<ConsultationProvider>().reset();
         context.read<ChatProvider>().resetChat();
+        context.read<PantryProvider>().reset();
       }
       wasAuthenticated = isAuth;
     });

@@ -19,6 +19,7 @@ const nutritionistRoute = require("./nutritionist.routes");
 const nutritionistChatRoute = require("./nutritionist.chat.routes");
 const profileRoute = require("./profile.route");
 const shoppingListRoute = require("./shopping_list.route");
+const pantryRoute = require("./pantry.routes");
 // 🌟 THÊM DÒNG NÀY VÀO ĐỂ ĐỊNH NGHĨA BIẾN DASHBOARD: 
 const systemDashboardRoute = require("./systemDashboard.routes");
 const userRecipeRoute = require("./user.recipe.route");
@@ -33,6 +34,7 @@ const userChatbotRoute = require("./user.chatbot.routes");
 // ─── AUTH & PROFILE ─────────────────────────────────────────────────────────
 router.use("/api/auth", authRoute);
 router.use("/api/profile", profileRoute);
+router.use("/api/pantry", pantryRoute);
 
 // ─── ADMIN ROUTES ───────────────────────────────────────────────────────────
 router.use("/api/admin/users", adminUserRoute);

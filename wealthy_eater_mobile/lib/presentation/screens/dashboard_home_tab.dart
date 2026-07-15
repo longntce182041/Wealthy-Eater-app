@@ -9,6 +9,7 @@ import '../../core/theme/app_colors.dart';
 import 'chatbot_screen.dart';
 import 'profile_form_screen.dart';
 import 'meal_image_scan_screen.dart';
+import 'pantry_screen.dart';
 
 class DashboardHomeTab extends StatefulWidget {
   final UserEntity? user;
@@ -369,6 +370,8 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               const SizedBox(height: 16),
               _buildMealScanBanner(context),
               const SizedBox(height: 16),
+              _buildVirtualPantryBanner(context),
+              const SizedBox(height: 16),
               _buildWeightTrackingCard(context, auth),
               const SizedBox(height: 20),
             ],
@@ -523,7 +526,79 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                   ),
                   SizedBox(height: 3),
                   Text(
-                    'Quét khay đồ ăn thực tế phân tích dinh dưỡng',
+                    'Scan your meal plate to analyze nutrition details',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white54,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVirtualPantryBanner(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const PantryScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF0D9488), Color(0xFF0F766E)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0D9488).withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.15),
+              ),
+              child: const Icon(
+                Icons.kitchen_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Virtual Fridge',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Manage your pantry ingredients',
                     style: TextStyle(
                       color: Colors.white70,
                       fontSize: 12,
