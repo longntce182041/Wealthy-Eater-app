@@ -182,7 +182,7 @@ class N8nService {
         carbs: parsed.totals?.carbs || 0,
         fats: parsed.totals?.fats || 0,
       },
-      note: "Phân tích dinh dưỡng được ước tính trực tiếp từ hình ảnh qua Gemini Vision API (Chế độ Dự phòng n8n Ngoại tuyến).",
+      note: "",
     };
   }
 }

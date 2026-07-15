@@ -90,4 +90,27 @@ class MealImageScanProvider extends ChangeNotifier {
     _imagePath = null;
     notifyListeners();
   }
+
+  /// Logs the matched scanned recipe to the user's daily meal log.
+  Future<bool> logScannedMeal(double weightGram) async {
+    if (_result == null || _result!.recipeId == null) return false;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _service.logCustomRecipe(
+        recipeId: _result!.recipeId!,
+        weightGram: weightGram,
+      );
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _isLoading = false;
+      _error = mapError(e).message;
+      notifyListeners();
+      return false;
+    }
+  }
 }

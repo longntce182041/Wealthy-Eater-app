@@ -598,6 +598,28 @@ const scanMealImageEndpoint = async (req, res, next) => {
   }
 };
 
+const logCustomRecipeEndpoint = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { recipeId, actual_weight_gram, date } = req.body;
+
+    if (!recipeId) {
+      return res.status(400).json({
+        success: false,
+        error: 'recipeId is required',
+      });
+    }
+
+    const log = await mealPlanService.logCustomRecipe(userId, recipeId, actual_weight_gram, date);
+    return res.status(201).json({ success: true, data: log });
+  } catch (error) {
+    if (error.message === 'RECIPE_NOT_FOUND') {
+      return res.status(404).json({ success: false, error: 'Recipe not found' });
+    }
+    next(error);
+  }
+};
+
 module.exports = {
   matchTemplateEndpoint,
   getMyMealPlanEndpoint,
@@ -616,4 +638,5 @@ module.exports = {
   getDailyMacroReportEndpoint,
   generateRecipeBasedPlan,
   scanMealImageEndpoint,
+  logCustomRecipeEndpoint,
 };

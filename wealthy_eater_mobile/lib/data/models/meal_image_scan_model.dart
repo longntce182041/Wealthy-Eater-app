@@ -7,6 +7,8 @@ class MealImageScanResult {
   final List<MealImageScanIngredient> ingredients;
   final MealImageScanTotals totals;
   final String note;
+  final String? recipeId;
+  final bool matchedInSystem;
 
   const MealImageScanResult({
     required this.mealName,
@@ -14,12 +16,14 @@ class MealImageScanResult {
     required this.ingredients,
     required this.totals,
     required this.note,
+    this.recipeId,
+    this.matchedInSystem = false,
   });
 
   factory MealImageScanResult.fromJson(Map<String, dynamic> json) {
     final rawIngredients = (json['ingredients'] as List?) ?? const [];
     return MealImageScanResult(
-      mealName: (json['meal_name'] as String?) ?? 'Món ăn không xác định',
+      mealName: (json['meal_name'] as String?) ?? 'Unknown Meal',
       confidence: _toDouble(json['confidence']),
       ingredients: rawIngredients
           .whereType<Map>()
@@ -30,7 +34,9 @@ class MealImageScanResult {
         Map<String, dynamic>.from((json['totals'] as Map?) ?? const {}),
       ),
       note: (json['note'] as String?) ??
-          'Giá trị dinh dưỡng được ước tính từ phân tích hình ảnh của AI.',
+          'Nutritional values are estimated from AI image analysis.',
+      recipeId: json['recipe_id']?.toString() ?? json['recipeId']?.toString(),
+      matchedInSystem: json['matched_in_system'] as bool? ?? false,
     );
   }
 }
