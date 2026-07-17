@@ -245,6 +245,19 @@ async function linkVerify(req, res, next) {
   }
 }
 
+// UC-47 reset exper password 
+async function resetPasswordNutritionist(req, res, next) {
+  try {
+    const { identifier, otp, newPassword } = req.body || {};
+    const result = await AuthService.resetPassword(identifier, otp, newPassword);
+    //Revoke sessions
+    await AuthService.revokeSessionsForUser(identifier);
+    return res.json({ success: true, data: result.message || result, error: null });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   login,
   googleLogin,
@@ -259,4 +272,5 @@ module.exports = {
   resetPassword,
   linkRequest,
   linkVerify,
+  resetPasswordNutritionist
 };

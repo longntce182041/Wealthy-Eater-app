@@ -29,6 +29,8 @@ router.post('/link-email', authenticateToken, AuthController.linkEmail);
 // Forget Password flow (Public)
 router.post('/forget-password', AuthController.forgetPassword);
 router.post('/reset-password', AuthController.resetPassword);
+// UC-47 reset password 
+router.post('/reset-password-nutritionist', AuthController.resetPasswordNutritionist);
 
 // Profile Linking flow (Authenticated)
 router.post('/link-request', authenticateToken, AuthController.linkRequest);
