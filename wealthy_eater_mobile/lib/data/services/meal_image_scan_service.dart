@@ -48,4 +48,27 @@ class MealImageScanService {
       throw mapError(e);
     }
   }
+
+  /// Logs a system-matched recipe to the user's meal log.
+  Future<void> logCustomRecipe({required String recipeId, required double weightGram}) async {
+    try {
+      final response = await _apiClient.post(
+        '/api/meal-plan/logs/custom',
+        data: {
+          'recipeId': recipeId,
+          'actual_weight_gram': weightGram,
+        },
+      );
+
+      if (response.statusCode == 201 && response.data['success'] == true) {
+        return;
+      }
+
+      throw AppError(
+        response.data['error']?['message'] ?? 'Failed to log recipe.',
+      );
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
 }
