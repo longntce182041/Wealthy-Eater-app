@@ -169,7 +169,7 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                           Flexible(
                             child: TextButton(
                               onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const ForgetPasswordScreen()),
+                                MaterialPageRoute(builder: (_) => const ForgetPasswordScreen(isNutritionist: true)),
                               ),
                               child: const Text(
                                 'Forgot Password?',

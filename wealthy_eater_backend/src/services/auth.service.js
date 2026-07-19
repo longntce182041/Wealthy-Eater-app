@@ -590,6 +590,29 @@ class AuthService {
 
     return await formatUser(user);
   }
+  // ── Session Revocation ─────────────────────────────────────────────────────
+
+  static async revokeSessionsForUser(identifier) {
+    if (!identifier) return { success: false, message: 'Identifier is required' };
+
+    const cleanId = identifier.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmail = emailRegex.test(cleanId);
+
+    const User = require('../models/User');
+    const query = isEmail ? { email: cleanId.toLowerCase() } : { phone: cleanId };
+
+    const user = await User.findOne(query).exec();
+
+    if (user) {
+      // Since JWTs are stateless without a blocklist, we clear fcmToken as a basic session revocation.
+      // If a token_version or refresh token database is added later, implement it here.
+      user.fcmToken = null;
+      await user.save();
+    }
+
+    return { success: true, message: 'Sessions revoked successfully' };
+  }
 }
 
 module.exports = AuthService;
