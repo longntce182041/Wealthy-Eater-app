@@ -12,7 +12,7 @@ class PantryController {
       if (!userId) {
         return next(new AppError('User not authenticated', 401, 'UNAUTHORIZED'));
       }
-      
+
       const pantry = await pantryService.getPantry(userId);
       return res.status(200).json({
         success: true,
@@ -66,7 +66,7 @@ class PantryController {
         return next(new AppError('No image file uploaded', 400, 'VALIDATION_ERROR'));
       }
 
-      const scannedIngredients = await pantryService.scanPantryImage(req.file);
+      const scannedIngredients = await pantryService.scanPantryImage(req.file, userId);
       return res.status(200).json({
         success: true,
         data: scannedIngredients,

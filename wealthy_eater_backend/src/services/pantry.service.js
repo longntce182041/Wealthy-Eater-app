@@ -24,13 +24,13 @@ class PantryService {
    */
   async updatePantryManual(userId, ingredients) {
     const processed = [];
-    
+
     for (const item of ingredients) {
       if (!item.name) continue;
-      
+
       // Look up master ingredient to map ID and standardize casing/name
-      const matched = await Ingredient.findOne({ 
-        name: { $regex: new RegExp(`^${item.name.trim()}$`, 'i') } 
+      const matched = await Ingredient.findOne({
+        name: { $regex: new RegExp(`^${item.name.trim()}$`, 'i') }
       });
 
       processed.push({
@@ -58,25 +58,28 @@ class PantryService {
    * Falls back to mock data if n8n is offline (ECONNREFUSED).
    * Matches scanned items against master ingredients.
    * @param {Object} file 
+   * @param {string} userId
    */
-  async scanPantryImage(file) {
-    const url = process.env.N8N_SCAN_PANTRY_WEBHOOK_URL || "http://127.0.0.1:5678/webhook/scan-pantry";
+  async scanPantryImage(file, userId) {
+    const url = process.env.N8N_SCAN_PANTRY_WEBHOOK_URL || "http://localhost:5678/webhook-test/detect-pantry";
     let rawIngredients = [];
 
     try {
-      const formData = new FormData();
-      formData.append("image", file.buffer, {
-        filename: file.originalname || "pantry.jpg",
-        contentType: file.mimetype || "image/jpeg"
-      });
+      const base64Image = file.buffer.toString('base64');
 
-      const response = await axios.post(url, formData, {
-        headers: formData.getHeaders(),
-        timeout: 15000 // 15s timeout
+      const payload = {
+        user_id: userId || "backend_user",
+        image_base64: base64Image,
+        mime_type: file.mimetype || "image/jpeg"
+      };
+
+      const response = await axios.post(url, payload, {
+        headers: { "Content-Type": "application/json" },
+        timeout: 30000 // 30s timeout
       });
 
       const data = response.data;
-      rawIngredients = data.pantry_ingredients || (Array.isArray(data) ? data : []);
+      rawIngredients = data.inventory || data.pantry_ingredients || (Array.isArray(data) ? data : []);
     } catch (error) {
       const isConnectionRefused = error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED');
       if (isConnectionRefused) {
@@ -95,18 +98,23 @@ class PantryService {
 
     // Process and match scanned items with database master records
     const processed = [];
-    for (const item of rawIngredients) {
-      if (!item.name) continue;
+    for (let item of rawIngredients) {
+      // If AI returned a raw string, normalize it to an object
+      if (typeof item === 'string') {
+        item = { name: item, quantity: 1, unit: 'units' };
+      }
 
-      const matched = await Ingredient.findOne({ 
-        name: { $regex: new RegExp(`^${item.name.trim()}$`, 'i') } 
+      if (!item || !item.name) continue;
+
+      const matched = await Ingredient.findOne({
+        name: { $regex: new RegExp(`^${item.name.trim()}$`, 'i') }
       });
 
       processed.push({
         name: matched ? matched.name : item.name.trim(),
         ingredient_id: matched ? matched._id : null,
-        quantity: Number(item.quantity) || 0,
-        unit: item.unit || (matched ? matched.unit : 'grams'),
+        quantity: Number(item.quantity) || 1,
+        unit: item.unit || (matched ? matched.unit : 'units'),
         updatedAt: new Date()
       });
     }
