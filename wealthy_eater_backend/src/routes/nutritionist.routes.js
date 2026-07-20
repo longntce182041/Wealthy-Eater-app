@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const nutritionistController = require('../controllers/nutritionist.controller');
+const biometricAuditController = require('../controllers/biometricAudit.controller');
 const { authenticateToken, authorizeRoles } = require('../middlewares/auth');
 const { uploadNutritionistCertificate } = require('../middlewares/upload.middleware');
+const validateObjectId = require('../middlewares/validateObjectId');
 
 // GET /api/nutritionists — Public endpoint to list all approved nutritionists for hire
 router.get('/', nutritionistController.getNutritionists);
@@ -58,4 +60,17 @@ router.put(
   nutritionistController.updateNutritionistProfile,
 );
 
+// ── UC-50: Review Body Metrics ─────────────────────────────────────────────
+// GET /api/nutritionists/audit-biometrics/:clientId
+// Security guardrail BR-21: enforces JWT auth + nutritionist role + valid ObjectId.
+// Business rule: nutritionist must hold an active consultation contract with the client.
+router.get(
+  '/audit-biometrics/:clientId',
+  authenticateToken,
+  authorizeRoles('nutritionist'),
+  validateObjectId('clientId'),
+  biometricAuditController.getClientBiometricHistory,
+);
+
 module.exports = router;
+

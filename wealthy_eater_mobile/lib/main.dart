@@ -15,6 +15,7 @@ import 'domain/usecases/recipe_like_usecases.dart';
 import 'domain/usecases/recipe_review_usecases.dart';
 import 'domain/usecases/get_my_reviews_list_usecase.dart';
 import 'domain/usecases/shopping_list_usecases.dart';
+import 'presentation/providers/biometric_audit_provider.dart';
 import 'presentation/providers/index.dart';
 import 'presentation/screens/index.dart';
 
@@ -81,6 +82,7 @@ class WealthyEaterApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ChatbotProvider(api: api)),
         ChangeNotifierProvider(create: (_) => MealImageScanProvider(api: api)),
         ChangeNotifierProvider(create: (_) => PantryProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => BiometricAuditProvider(apiClient: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',
@@ -140,6 +142,7 @@ class _AppRootState extends State<_AppRoot> {
         context.read<ConsultationProvider>().reset();
         context.read<ChatProvider>().resetChat();
         context.read<PantryProvider>().reset();
+        context.read<BiometricAuditProvider>().reset();
       }
       wasAuthenticated = isAuth;
     });

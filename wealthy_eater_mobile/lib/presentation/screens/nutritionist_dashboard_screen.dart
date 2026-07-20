@@ -9,6 +9,7 @@ import '../providers/nutritionist_provider.dart';
 import 'chat_screen.dart';
 import 'notification_history_screen.dart';
 import 'client_audit_screen.dart'; // Đã bổ sung import màn hình đối chiếu của ní
+import 'client_biometrics_screen.dart'; // UC-50: Biometrics history
 import 'generate_meal_plan_screen.dart';
 import 'nutritionist_profile_tab.dart';
 import 'nutritionist_meal_plans_tab.dart';
@@ -368,6 +369,22 @@ class _NutritionistClientsTabState extends State<_NutritionistClientsTab> {
                         context,
                         MaterialPageRoute(
                           builder: (_) => ClientAuditScreen(clientId: actualClientId),
+                        ),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.monitor_weight_outlined, color: Colors.blueGrey.shade600, size: 24),
+                    tooltip: 'Review Body Metrics',
+                    onPressed: () {
+                      final actualClientId = userMap?['_id']?.toString() ?? '';
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ClientBiometricsScreen(
+                            clientId: actualClientId,
+                            clientName: email,
+                          ),
                         ),
                       );
                     },
