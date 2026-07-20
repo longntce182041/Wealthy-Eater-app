@@ -59,7 +59,7 @@ class _MyNutritionistDashboardState extends State<MyNutritionistDashboard> {
                 messenger.showSnackBar(
                   const SnackBar(
                     content: Text('Request sent successfully, please wait for nutritionist response.'),
-                    backgroundColor: Colors.green,
+                    backgroundColor: AppColors.primary,
                   ),
                 );
               } else {

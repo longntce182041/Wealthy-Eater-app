@@ -7,9 +7,12 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/models/pantry_model.dart';
 import '../providers/pantry_provider.dart';
+import 'pantry_suggestions_screen.dart';
 
 class PantryScreen extends StatefulWidget {
-  const PantryScreen({super.key});
+  final bool showAppBar;
+
+  const PantryScreen({super.key, this.showAppBar = true});
 
   @override
   State<PantryScreen> createState() => _PantryScreenState();
@@ -30,10 +33,12 @@ class _PantryScreenState extends State<PantryScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Virtual Fridge'),
-        centerTitle: true,
-      ),
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: const Text('Virtual Fridge'),
+              centerTitle: true,
+            )
+          : null,
       body: Column(
         children: [
           Expanded(
@@ -42,6 +47,10 @@ class _PantryScreenState extends State<PantryScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
+                  // ── AI Recipe Suggestions Card ──
+                  _buildAiSuggestionsCard(context, provider),
+                  const SizedBox(height: 20),
+
                   // ── Section 1: AI Camera Scan ──
                   _buildCameraScanSection(context, provider),
                   const SizedBox(height: 24),
@@ -57,6 +66,84 @@ class _PantryScreenState extends State<PantryScreen> {
           // ── Fixed Bottom Save Button ──
           if (provider.tempIngredients.isNotEmpty)
             _buildBottomSaveAction(context, provider),
+        ],
+      ),
+    );
+  }
+
+  // ── AI Recipe Suggestions Card ────────────────────────────────────────────────
+
+  Widget _buildAiSuggestionsCard(BuildContext context, PantryProvider provider) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2E4E41), Color(0xFF4A9F71)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'AI Recipe Suggestions',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Get tailored recipe ideas created instantly from your virtual fridge items while respecting your dietary profile.',
+            style: TextStyle(fontSize: 13, color: Colors.white70, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                provider.suggestMeals();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PantrySuggestionsScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.restaurant_menu, size: 18),
+              label: const Text('Suggest Meals Now', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.secondary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+            ),
+          ),
         ],
       ),
     );

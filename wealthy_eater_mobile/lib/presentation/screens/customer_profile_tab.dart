@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import 'profile_form_screen.dart';
 import 'edit_profile_screen.dart';
@@ -28,7 +29,7 @@ class CustomerProfileTab extends StatelessWidget {
   Color _getBmiColor(double bmi, Color primaryColor) {
     if (bmi <= 0) return Colors.grey;
     if (bmi < 18.5) return Colors.blue;
-    if (bmi < 25.0) return Colors.green;
+    if (bmi < 25.0) return AppColors.primary;
     if (bmi < 30.0) return Colors.orange;
     return Colors.red;
   }

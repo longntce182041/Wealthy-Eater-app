@@ -1,9 +1,11 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:wealthy_eater_mobile/core/theme/app_colors.dart';
+import '../providers/pantry_provider.dart';
+import 'pantry_suggestions_screen.dart';
 
 // --- Emoji Map ---
 const Map<String, String> foodEmojiMap = {
@@ -90,13 +92,13 @@ String categorizeItem(String name) {
 enum ScannerState { upload, scanning, review, dashboard }
 
 class PantryScannerScreen extends StatefulWidget {
-  const PantryScannerScreen({Key? key}) : super(key: key);
+  const PantryScannerScreen({super.key});
 
   @override
   State<PantryScannerScreen> createState() => _PantryScannerScreenState();
 }
 
-class _PantryScannerScreenState extends State<PantryScannerScreen> with SingleTickerProviderStateMixin {
+class _PantryScannerScreenState extends State<PantryScannerScreen> {
   ScannerState _state = ScannerState.upload;
   File? _imageFile;
   List<String> _inventory = [];
@@ -105,67 +107,36 @@ class _PantryScannerScreenState extends State<PantryScannerScreen> with SingleTi
   bool _isSyncing = false;
   DateTime? _lastSynced;
 
-  final ImagePicker _picker = ImagePicker();
-  
-  late AnimationController _laserController;
-  int _msgIndex = 0;
-  Timer? _scanTimer;
-  Timer? _msgTimer;
-
-  final List<String> _scanMessages = [
-    'Uploading image to the cloud...',
-    'Gemini Vision is filtering noise (bottles, containers)...',
-    'Identifying raw food ingredients...',
-    'Parsing ingredients...',
-    'Finalizing ingredient list...',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _laserController = AnimationController(vsync: this, duration: const Duration(seconds: 2));
-  }
-
   @override
   void dispose() {
-    _laserController.dispose();
     _addItemController.dispose();
-    _scanTimer?.cancel();
-    _msgTimer?.cancel();
     super.dispose();
   }
 
+  /// Picks an image from [source] and calls the real backend scan via PantryProvider.
   Future<void> _pickImage(ImageSource source) async {
-    final XFile? image = await _picker.pickImage(source: source);
-    if (image != null) {
-      setState(() {
-        _imageFile = File(image.path);
-        _state = ScannerState.scanning;
-      });
-      _startScanningSim();
+    final provider = context.read<PantryProvider>();
+    await provider.pickAndScanPantry(source);
+    if (!mounted) return;
+
+    if (provider.error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Scan failed: ${provider.error}'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
     }
-  }
 
-  void _startScanningSim() {
-    _laserController.repeat(reverse: true);
-    _msgIndex = 0;
-    _msgTimer = Timer.periodic(const Duration(milliseconds: 1800), (timer) {
-      if (mounted) {
-        setState(() {
-          _msgIndex = (_msgIndex + 1) % _scanMessages.length;
-        });
-      }
-    });
-
-    _scanTimer = Timer(const Duration(milliseconds: 6500), () {
-      _laserController.stop();
-      _msgTimer?.cancel();
-      if (mounted) {
-        setState(() {
-          _inventory = ['apple', 'broccoli', 'eggs', 'milk', 'chicken breast', 'cheddar cheese', 'carrot'];
-          _state = ScannerState.review;
-        });
-      }
+    // Map provider tempIngredients (PantryIngredient objects) to plain strings for UI
+    setState(() {
+      _imageFile = provider.scannedImagePath != null ? File(provider.scannedImagePath!) : null;
+      _inventory = provider.tempIngredients
+          .map((i) => i.name.toLowerCase().trim())
+          .where((n) => n.isNotEmpty)
+          .toList();
+      _state = ScannerState.review;
     });
   }
 
@@ -177,56 +148,40 @@ class _PantryScannerScreenState extends State<PantryScannerScreen> with SingleTi
     }
   }
 
+  /// Saves the current inventory list to the backend (Virtual Fridge / Pantry DB).
   Future<void> _handleSync() async {
     setState(() { _isSyncing = true; });
-    await Future.delayed(const Duration(milliseconds: 1800));
-    if (mounted) {
-      setState(() {
-        _syncedInventory = List.from(_inventory);
-        _lastSynced = DateTime.now();
-        _isSyncing = false;
-        _state = ScannerState.dashboard;
-      });
+    final provider = context.read<PantryProvider>();
+
+    // Push current _inventory strings into provider as PantryIngredient objects
+    provider.setTempIngredientsFromNames(_inventory);
+    await provider.savePantry();
+
+    if (!mounted) return;
+
+    if (provider.error != null) {
+      setState(() { _isSyncing = false; });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sync failed: ${provider.error}'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
     }
+
+    setState(() {
+      _syncedInventory = List.from(_inventory);
+      _lastSynced = DateTime.now();
+      _isSyncing = false;
+      _state = ScannerState.dashboard;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Virtual Fridge Scanner', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-            Text('UC-41 · Gemini Vision', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          ],
-        ),
-        elevation: 1,
-        shadowColor: AppColors.border,
-        actions: [
-          if (_state != ScannerState.upload)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(20)),
-                alignment: Alignment.center,
-                child: Row(
-                  children: [
-                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle)),
-                    const SizedBox(width: 6),
-                    Text(
-                      _state == ScannerState.scanning ? 'Scanning...' : _state == ScannerState.review ? 'Review Mode' : 'Synced',
-                      style: const TextStyle(fontSize: 12, color: AppColors.primaryDark, fontWeight: FontWeight.bold)
-                    ),
-                  ],
-                ),
-              ),
-            )
-        ],
-      ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isDesktop = constraints.maxWidth > 600;
@@ -240,18 +195,119 @@ class _PantryScannerScreenState extends State<PantryScannerScreen> with SingleTi
   }
 
   Widget _buildCurrentState(bool isDesktop) {
+    final provider = context.watch<PantryProvider>();
+    // Scanning state: show loading indicator while provider processes image
+    if (provider.isLoading) return _buildLoadingState();
     switch (_state) {
       case ScannerState.upload: return _buildUploadState();
-      case ScannerState.scanning: return _buildScanningState();
+      case ScannerState.scanning: return _buildUploadState(); // fallback
       case ScannerState.review: return _buildReviewState(isDesktop);
       case ScannerState.dashboard: return _buildDashboardState();
     }
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: AppColors.primary),
+            SizedBox(height: 20),
+            Text(
+              'AI Vision is scanning your fridge...',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAiSuggestionsCard() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2E4E41), Color(0xFF4A9F71)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'AI Recipe Suggestions',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Get tailored recipe ideas created instantly from your virtual fridge items while respecting your dietary profile.',
+            style: TextStyle(fontSize: 13, color: Colors.white70, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                context.read<PantryProvider>().suggestMeals();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PantrySuggestionsScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.restaurant_menu, size: 18),
+              label: const Text('Suggest Meals Now', style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.secondary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildUploadState() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _buildAiSuggestionsCard(),
+        const SizedBox(height: 20),
         Container(
           padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
           decoration: BoxDecoration(
@@ -336,106 +392,10 @@ class _PantryScannerScreenState extends State<PantryScannerScreen> with SingleTi
     );
   }
 
-  Widget _buildScanningState() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AspectRatio(
-          aspectRatio: 4/3,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: Colors.black87,
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: LayoutBuilder(
-              builder: (context, boxConstraints) {
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (_imageFile != null)
-                      Opacity(opacity: 0.5, child: Image.file(_imageFile!, fit: BoxFit.cover)),
-                    // Laser animation
-                    AnimatedBuilder(
-                      animation: _laserController,
-                      builder: (context, child) {
-                        return Positioned(
-                          top: _laserController.value * (boxConstraints.maxHeight - 4),
-                          left: 0, right: 0,
-                          child: Container(
-                            height: 3,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              boxShadow: [
-                                BoxShadow(color: AppColors.primary.withOpacity(0.8), blurRadius: 10, spreadRadius: 3),
-                              ]
-                            ),
-                          ),
-                        );
-                      }
-                    ),
-                    // Corner brackets
-                    Positioned(top: 16, left: 16, child: _buildBracket(true, true)),
-                    Positioned(top: 16, right: 16, child: _buildBracket(true, false)),
-                    Positioned(bottom: 16, left: 16, child: _buildBracket(false, true)),
-                    Positioned(bottom: 16, right: 16, child: _buildBracket(false, false)),
-                  ],
-                );
-              }
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            children: [
-              const CircularProgressIndicator(color: AppColors.primary),
-              const SizedBox(height: 16),
-              const Text('AI Vision Active', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.textPrimary)),
-              const SizedBox(height: 8),
-              Text(_scanMessages[_msgIndex], style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 15), textAlign: TextAlign.center),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_scanMessages.length, (i) => 
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: i <= _msgIndex ? 24 : 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: i <= _msgIndex ? AppColors.primary : AppColors.divider,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  )
-                ),
-              ),
-            ],
-          ),
-        )
-      ],
-    );
-  }
-
-  Widget _buildBracket(bool top, bool left) {
-    return Container(
-      width: 24, height: 24,
-      decoration: BoxDecoration(
-        border: Border(
-          top: top ? const BorderSide(color: AppColors.primary, width: 3) : BorderSide.none,
-          bottom: !top ? const BorderSide(color: AppColors.primary, width: 3) : BorderSide.none,
-          left: left ? const BorderSide(color: AppColors.primary, width: 3) : BorderSide.none,
-          right: !left ? const BorderSide(color: AppColors.primary, width: 3) : BorderSide.none,
-        ),
-      ),
-    );
-  }
+  // _buildScanningState removed — scanning is now handled synchronously by
+  // pickAndScanPantry() in the provider. The screen transitions from upload
+  // directly to review when the provider completes. The loading state is shown
+  // via provider.isLoading on the upload button.
 
   Widget _buildReviewState(bool isDesktop) {
     final imageSection = _imageFile != null ? [
@@ -610,6 +570,8 @@ class _PantryScannerScreenState extends State<PantryScannerScreen> with SingleTi
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _buildAiSuggestionsCard(),
+        const SizedBox(height: 20),
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -718,10 +680,10 @@ class _PantryScannerScreenState extends State<PantryScannerScreen> with SingleTi
                   children: items.map((item) => Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
-                      border: Border.all(color: Colors.white),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))],
+                      color: Colors.white.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,

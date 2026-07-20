@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 import '../providers/nutritionist_provider.dart';
 import 'change_password_screen.dart';
@@ -304,9 +305,9 @@ class _NutritionistProfileTabState extends State<NutritionistProfileTab> {
         Color statusBorderColor = Colors.orange.shade200;
 
         if (approvalStatus.toUpperCase() == 'APPROVED' || approvalStatus.toUpperCase() == 'APPROVAL') {
-          statusBgColor = Colors.green.shade50;
-          statusTextColor = Colors.green.shade800;
-          statusBorderColor = Colors.green.shade200;
+          statusBgColor = AppColors.primaryLight;
+          statusTextColor = AppColors.primaryDark;
+          statusBorderColor = AppColors.border;
         } else if (approvalStatus.toUpperCase() == 'REJECTED' || approvalStatus.toUpperCase() == 'REJECT') {
           statusBgColor = Colors.red.shade50;
           statusTextColor = Colors.red.shade800;
