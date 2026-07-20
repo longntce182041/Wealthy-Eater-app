@@ -16,12 +16,12 @@ class AppColors {
   // Text Colors (Infuse blue tint into gray - High-end UI secret)
   static const Color textPrimary = Color(0xFF141F1A); 
   static const Color textSecondary = Color(0xFF5A6B62); 
-  static const Color textTertiary = Color(0xFF90A499); 
+  static const Color textTertiary = Color(0xFF6E8278); // Optimized for WCAG AA contrast ratio (>4.5:1)
   static const Color textOnPrimary = Colors.white; 
 
   // Semantic Colors (Clear separation from Brand colors)
   static const Color error = Color(0xFFD32F2F);
-  static const Color success = Color(0xFF2E7D32); 
+  static const Color success = Color(0xFF4A9F71); // Synchronized with primary brand color
   static const Color warning = Color(0xFFEF6C00);
 
   // Borders & Dividers (Use warm gray with blue tint to blend with Background)

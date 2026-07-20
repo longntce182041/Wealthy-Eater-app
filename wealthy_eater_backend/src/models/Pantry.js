@@ -41,13 +41,10 @@ const PantrySchema = new mongoose.Schema(
     },
     pantry_ingredients: [PantryIngredientSchema],
   },
-  { 
-    versionKey: false, 
-    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } 
+  {
+    versionKey: false,
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
   }
 );
-
-// Index to search by user_id efficiently
-PantrySchema.index({ user_id: 1 });
 
 module.exports = mongoose.model('Pantry', PantrySchema);

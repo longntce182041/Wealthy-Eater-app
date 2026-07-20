@@ -96,4 +96,25 @@ class PantryService {
       throw mapError(e);
     }
   }
+
+  /// Suggests meals based on the current pantry ingredients.
+  Future<List<Map<String, dynamic>>> suggestRecipesFromPantry() async {
+    try {
+      final response = await _apiClient.get('/api/pantry/suggest');
+
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final data = response.data['data'];
+        if (data != null && data is List) {
+          return List<Map<String, dynamic>>.from(data);
+        }
+        return [];
+      }
+
+      throw AppError(
+        response.data['error']?['message'] ?? 'Failed to generate recipe suggestions.',
+      );
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
 }

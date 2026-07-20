@@ -320,17 +320,17 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: AppColors.success.withValues(alpha: 0.1),
+                                color: AppColors.primaryLight,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.check_circle, color: AppColors.success, size: 14),
+                                  Icon(Icons.check_circle, color: AppColors.primaryDark, size: 14),
                                   SizedBox(width: 4),
                                   Text(
                                     'Completed',
-                                    style: TextStyle(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: AppColors.primaryDark, fontSize: 11, fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
@@ -463,10 +463,10 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
             child: isCompleted
                 ? OutlinedButton.icon(
                     onPressed: null,
-                    icon: const Icon(Icons.check_circle, size: 18, color: AppColors.success),
-                    label: const Text('Completed', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.check_circle, size: 18, color: AppColors.primary),
+                    label: const Text('Completed', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.success),
+                      side: const BorderSide(color: AppColors.primary, width: 1.5),
                       minimumSize: const Size.fromHeight(40),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
@@ -476,7 +476,7 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
                     icon: const Icon(Icons.check_circle_outline, size: 18),
                     label: const Text('Complete Meal'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.success,
+                      backgroundColor: AppColors.primary,
                       minimumSize: const Size.fromHeight(40),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),

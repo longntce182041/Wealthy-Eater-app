@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../providers/nutritionist_provider.dart';
 import 'meal_plan_editor_screen.dart';
 
@@ -154,10 +155,10 @@ class _NutritionistMealPlansTabState extends State<NutritionistMealPlansTab> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: isDraft ? Colors.orange.shade50 : Colors.green.shade50,
+                            color: isDraft ? Colors.orange.shade50 : AppColors.primaryLight,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: isDraft ? Colors.orange.shade200 : Colors.green.shade200,
+                              color: isDraft ? Colors.orange.shade200 : AppColors.border,
                             ),
                           ),
                           child: Text(
@@ -165,7 +166,7 @@ class _NutritionistMealPlansTabState extends State<NutritionistMealPlansTab> {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: isDraft ? Colors.orange.shade800 : Colors.green.shade800,
+                              color: isDraft ? Colors.orange.shade800 : AppColors.primaryDark,
                             ),
                           ),
                         ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 
 class ProfileFormScreen extends StatefulWidget {
@@ -222,9 +223,9 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile setup completed successfully!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Text('Profile setup completed successfully!'),
+            backgroundColor: AppColors.primary,
           ),
         );
         if (Navigator.canPop(context)) {

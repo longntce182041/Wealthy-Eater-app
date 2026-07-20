@@ -74,7 +74,7 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
             bmiMessage = 'Your body weight is lower than standard. Consider increasing calorie intake and consulting a nutritionist.';
           } else if (bmi < 25.0) {
             bmiCategory = 'Normal';
-            bmiColor = Colors.green;
+            bmiColor = AppColors.primary;
             bmiMessage = 'Great job! Your weight is in the healthy range. Keep maintaining your active lifestyle and balanced eating habits.';
           } else if (bmi < 30.0) {
             bmiCategory = 'Overweight';
@@ -767,12 +767,12 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                                     setState(() => _isSaving = false);
                                   }
                                   if (success && mounted) {
-                                    scaffoldMessenger.showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Weight logged successfully!'),
-                                        backgroundColor: Colors.green,
-                                      ),
-                                    );
+                                     scaffoldMessenger.showSnackBar(
+                                       const SnackBar(
+                                         content: Text('Weight logged successfully!'),
+                                         backgroundColor: AppColors.primary,
+                                       ),
+                                     );
                                   } else if (!success && mounted) {
                                     scaffoldMessenger.showSnackBar(
                                       SnackBar(
@@ -969,7 +969,7 @@ class _BmiGauge extends StatelessWidget {
                         ),
                         Expanded(
                           flex: 325, // 18.5 to 25 is 6.5 (32.5%)
-                          child: Container(color: Colors.green.shade400),
+                          child: Container(color: AppColors.primary),
                         ),
                         Expanded(
                           flex: 250, // 25 to 30 is 5.0 (25%)

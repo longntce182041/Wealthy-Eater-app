@@ -16,4 +16,7 @@ router.post('/manual', pantryController.updatePantry);
 // POST /api/pantry/scan - Scan pantry image (receives single file field 'image')
 router.post('/scan', uploadMealImage, pantryController.scanPantry);
 
+// GET /api/pantry/suggest - Suggest recipes from pantry
+router.get('/suggest', pantryController.suggestRecipes);
+
 module.exports = router;

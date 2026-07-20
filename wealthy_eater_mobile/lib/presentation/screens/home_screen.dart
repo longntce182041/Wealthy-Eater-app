@@ -217,13 +217,15 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
         // Sub-tab bar
         TabBar(
           controller: _tabController,
-          isScrollable: true,
+          isScrollable: false,
+          labelPadding: EdgeInsets.zero,
+          indicatorSize: TabBarIndicatorSize.label,
           tabs: const [
-            Tab(icon: Icon(Icons.kitchen_outlined),          text: 'Pantry'),
-            Tab(icon: Icon(Icons.menu_book_outlined),       text: 'Browse'),
-            Tab(icon: Icon(Icons.favorite_outline),          text: 'Liked'),
-            Tab(icon: Icon(Icons.rate_review),               text: 'Reviews'),
-            Tab(icon: Icon(Icons.shopping_cart_outlined),    text: 'Shopping'),
+            Tab(icon: Icon(Icons.kitchen_outlined),       text: 'Pantry'),
+            Tab(icon: Icon(Icons.menu_book_outlined),    text: 'Browse'),
+            Tab(icon: Icon(Icons.favorite_outline),       text: 'Liked'),
+            Tab(icon: Icon(Icons.rate_review_outlined),   text: 'Reviews'),
+            Tab(icon: Icon(Icons.shopping_cart_outlined), text: 'Shopping'),
           ],
         ),
         // Sub-tab content
