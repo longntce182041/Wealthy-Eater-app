@@ -5,7 +5,8 @@ const router = express.Router();
 const { 
   getNutritionistsList, 
   updateApprovalStatus, 
-  verifyNutritionistCertificate 
+  verifyNutritionistCertificate ,
+  getNutritionistDetails  
 } = require('../controllers/admin.nutritionist.controller');
 
 /**
@@ -15,6 +16,12 @@ const {
  */
 router.get('/', getNutritionistsList); 
 
+/**
+ * 🌟 UC-85: Inspect Expert Profile DETAILED VIEW
+ * GET /api/admin/nutritionists/:id
+ * Lấy chi tiết hồ sơ năng lực, bằng cấp, lịch sử tư vấn và review
+ */
+router.get('/:id', getNutritionistDetails);
 /**
  * 2. API Duyệt nhanh / Cập nhật trạng thái duyệt hồ sơ
  * PUT /api/admin/nutritionists/:id/approval

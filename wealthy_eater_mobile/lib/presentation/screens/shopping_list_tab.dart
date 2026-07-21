@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../domain/entities/shopping_list.dart';
 import '../providers/shopping_list_provider.dart';
 
@@ -305,7 +306,7 @@ class _ProgressHeader extends StatelessWidget {
                     theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.15),
                 valueColor: AlwaysStoppedAnimation<Color>(
                   stats.isComplete
-                      ? Colors.green.shade500
+                      ? AppColors.primary
                       : theme.colorScheme.primary,
                 ),
               ),
@@ -323,7 +324,7 @@ class _ProgressHeader extends StatelessWidget {
               _StatPill(
                 icon: Icons.check_circle_outline,
                 label: '${stats.purchased} purchased',
-                color: Colors.green.shade600,
+                color: AppColors.primaryDark,
               ),
             ],
           ),
@@ -477,7 +478,7 @@ class _GroceryItemTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(
                 color: isPurchased
-                    ? Colors.green.shade200.withValues(alpha: 0.5)
+                    ? AppColors.primaryLight
                     : theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
                 width: 1,
               ),
@@ -491,9 +492,9 @@ class _GroceryItemTile extends StatelessWidget {
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               child: isPurchased
-                  ? Icon(Icons.check_circle,
-                      key: const ValueKey('checked'),
-                      color: Colors.green.shade500,
+                  ? const Icon(Icons.check_circle,
+                      key: ValueKey('checked'),
+                      color: AppColors.primary,
                       size: 28)
                   : Icon(Icons.radio_button_unchecked,
                       key: const ValueKey('unchecked'),
@@ -556,13 +557,13 @@ class _PurchasedHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
       child: Row(
         children: [
-          Icon(Icons.check_circle_outline,
-              size: 18, color: Colors.green.shade500),
+          const Icon(Icons.check_circle_outline,
+              size: 18, color: AppColors.primary),
           const SizedBox(width: 8),
           Text(
             'Purchased ($count)',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Colors.green.shade600,
+                  color: AppColors.primaryDark,
                   fontWeight: FontWeight.w700,
                 ),
           ),
@@ -573,7 +574,7 @@ class _PurchasedHeader extends StatelessWidget {
               icon: const Icon(Icons.delete_sweep_outlined, size: 16),
               label: const Text('Clear'),
               style: TextButton.styleFrom(
-                foregroundColor: Colors.green.shade600,
+                foregroundColor: AppColors.primaryDark,
                 visualDensity: VisualDensity.compact,
               ),
             ),
@@ -605,10 +606,10 @@ class _AllDoneBanner extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.green.shade50, Colors.teal.shade50],
+          colors: [AppColors.primaryLight, AppColors.background],
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.green.shade200),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         children: [
@@ -619,7 +620,7 @@ class _AllDoneBanner extends StatelessWidget {
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700, color: Colors.green.shade700),
+                ?.copyWith(fontWeight: FontWeight.w700, color: AppColors.primaryDark),
           ),
           const SizedBox(height: 6),
           const Text(
@@ -633,7 +634,7 @@ class _AllDoneBanner extends StatelessWidget {
               icon: const Icon(Icons.delete_sweep_outlined),
               label: const Text('Clear purchased'),
               style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.green.shade700),
+                  foregroundColor: AppColors.primaryDark),
             ),
           ],
         ],

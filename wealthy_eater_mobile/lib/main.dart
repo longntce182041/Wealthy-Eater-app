@@ -15,6 +15,7 @@ import 'domain/usecases/recipe_like_usecases.dart';
 import 'domain/usecases/recipe_review_usecases.dart';
 import 'domain/usecases/get_my_reviews_list_usecase.dart';
 import 'domain/usecases/shopping_list_usecases.dart';
+import 'presentation/providers/biometric_audit_provider.dart';
 import 'presentation/providers/index.dart';
 import 'presentation/screens/index.dart';
 
@@ -34,6 +35,7 @@ class WealthyEaterApp extends StatelessWidget {
 
     return MultiProvider(
       providers: [
+        Provider<ApiClient>.value(value: api),
         ChangeNotifierProvider(create: (_) => AuthProvider(api: api)),
         ChangeNotifierProvider(
           create: (_) => RecipeProvider(
@@ -77,6 +79,10 @@ class WealthyEaterApp extends StatelessWidget {
             repository: PlanRepository(api.dio),
           ),
         ),
+        ChangeNotifierProvider(create: (_) => ChatbotProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => MealImageScanProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => PantryProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => BiometricAuditProvider(apiClient: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',
@@ -135,6 +141,8 @@ class _AppRootState extends State<_AppRoot> {
         context.read<NutritionistProvider>().reset();
         context.read<ConsultationProvider>().reset();
         context.read<ChatProvider>().resetChat();
+        context.read<PantryProvider>().reset();
+        context.read<BiometricAuditProvider>().reset();
       }
       wasAuthenticated = isAuth;
     });
@@ -169,7 +177,11 @@ class _AppRootState extends State<_AppRoot> {
       builder: (context, auth, _) {
         if (auth.isAuthenticated) {
           if (auth.user?.role == 'nutritionist') {
-            return NutritionistDashboardScreen(user: auth.user);
+            final status = auth.user?.approvalStatus;
+            if (status == 'APPROVED' || status == 'approval') {
+              return NutritionistDashboardScreen(user: auth.user);
+            }
+            return const NutritionistVerificationScreen();
           }
           return HomeScreen(user: auth.user);
         }

@@ -134,4 +134,124 @@ class NutritionistService {
       throw mapError(e);
     }
   }
+
+  /// POST /api/meal-plans/generate
+  /// Triggers AI meal plan generation pipeline for a given client.
+  /// Returns the raw response map containing mealPlanId, status, and meta info.
+  Future<Map<String, dynamic>> generateMealPlan(String clientId) async {
+    try {
+      final response = await apiClient.post(
+        '/api/meal-plans/generate',
+        data: {'clientId': clientId},
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (response.data['success'] == true || response.data['status'] != null) {
+          return Map<String, dynamic>.from(response.data as Map);
+        }
+      }
+
+      throw AppError(
+        response.data['error']?['message'] ?? 'Failed to generate meal plan.',
+      );
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// POST /api/meal-plans/generate-recipe-plan
+  /// Triggers recipe-based weekly meal plan generation for a given client.
+  /// Uses existing recipes from DB instead of AI-generated meals.
+  Future<Map<String, dynamic>> generateRecipeBasedMealPlan(String clientId) async {
+    try {
+      final response = await apiClient.post(
+        '/api/meal-plans/generate-recipe-plan',
+        data: {'clientId': clientId},
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (response.data['success'] == true || response.data['status'] != null) {
+          return Map<String, dynamic>.from(response.data as Map);
+        }
+      }
+
+      throw AppError(
+        response.data['error']?['message'] ?? 'Failed to generate recipe-based meal plan.',
+      );
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// GET /api/meal-plans/:planId/draft
+  /// Fetches a draft AI-generated meal plan.
+  Future<Map<String, dynamic>> fetchDraftMealPlan(String planId) async {
+    try {
+      final response = await apiClient.get('/api/meal-plans/$planId/draft');
+
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return Map<String, dynamic>.from(response.data['data'] as Map);
+      }
+
+      throw AppError(
+        response.data['error']?['message'] ?? 'Failed to fetch draft meal plan.',
+      );
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// PUT /api/meal-plans/:planId/draft
+  /// Updates a draft AI-generated meal plan.
+  Future<Map<String, dynamic>> updateDraftMealPlan(String planId, Map<String, dynamic> payload) async {
+    try {
+      final response = await apiClient.put(
+        '/api/meal-plans/$planId/draft',
+        data: payload,
+      );
+
+      if (response.statusCode == 200) {
+        if (response.data['success'] == true) {
+          return Map<String, dynamic>.from(response.data['data'] as Map);
+        }
+      }
+
+      throw AppError(
+        response.data['error']?['message'] ?? 'Failed to update draft meal plan.',
+      );
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// GET /api/meal-plans/nutritionist/plans
+  /// Fetches all meal plans created by the authenticated nutritionist.
+  Future<List<Map<String, dynamic>>> fetchNutritionistMealPlans() async {
+    try {
+      final response = await apiClient.get('/api/meal-plans/nutritionist/plans');
+
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final list = response.data['data'] as List? ?? const [];
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+
+      throw AppError(
+        response.data['error']?['message'] ?? 'Failed to fetch nutritionist meal plans.',
+      );
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// PATCH /api/meal-plans/:planId/publish
+  /// Publishes a draft meal plan.
+  Future<bool> publishMealPlan(String planId) async {
+    try {
+      final response = await apiClient.patch('/api/meal-plans/$planId/publish');
+
+      return response.statusCode == 200 && response.data['success'] == true;
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
 }

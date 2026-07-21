@@ -248,6 +248,7 @@ class NutritionistService {
           nutritionist.certificate_public_id = certificate.publicId;
         }
 
+        nutritionist.approval_status = "PENDING";
         await nutritionist.save();
       }
 

@@ -23,12 +23,10 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
       const response = await apiClient.get(`/admin/nutritionists/${expertId}`);
       
       if (response.data?.success) {
-        const data = response.data.data;
-        // Đồng bộ dữ liệu sạch trực tiếp từ API trả về
-        setExpertData(data);
-        // Dự phòng mảng trống nếu Backend chưa bổ sung cơ chế lưu lịch sử & đánh giá
-        setConsultationHistory(data.history || []);
-        setReviews(data.reviews || []);
+        const { consultations, reviews, ...info } = response.data.data;
+      setExpertData(info); // Toàn bộ thông tin cá nhân, title, fee, license...
+      setConsultationHistory(consultations || []); // Mảng lịch sử ca tư vấn
+      setReviews(reviews || []); // Mảng đánh giá từ cộng đồng
       }
     } catch (error) {
       console.error("⚠️ Lỗi đồng bộ hoặc phân rã hồ sơ chuyên gia:", error);

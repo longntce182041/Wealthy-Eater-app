@@ -477,11 +477,12 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> resetPassword(String identifier, String otp, String newPassword) async {
+  Future<bool> resetPassword(String identifier, String otp, String newPassword, {bool isNutritionist = false}) async {
     _setLoading();
     try {
+      final endpoint = isNutritionist ? '/api/auth/reset-password-nutritionist' : '/api/auth/reset-password';
       final res = await _api.post(
-        '/api/auth/reset-password',
+        endpoint,
         data: {
           'identifier': identifier.trim(),
           'otp': otp.trim(),

@@ -59,13 +59,13 @@ class _MyNutritionistDashboardState extends State<MyNutritionistDashboard> {
                 messenger.showSnackBar(
                   const SnackBar(
                     content: Text('Request sent successfully, please wait for nutritionist response.'),
-                    backgroundColor: Colors.green,
+                    backgroundColor: AppColors.primary,
                   ),
                 );
               } else {
                 messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Failed to send request. Please try again.'),
+                  SnackBar(
+                    content: Text(provider.requestError ?? 'Failed to send request. Please try again.'),
                     backgroundColor: Colors.red,
                   ),
                 );

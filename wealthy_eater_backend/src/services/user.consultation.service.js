@@ -774,6 +774,19 @@ class UserConsultationService {
       throw new AppError("You already have a pending meal plan request.", 400);
     }
 
+    // Check if a request was submitted in the last 5 days
+    const fiveDaysAgo = new Date();
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+
+    const recentRequest = await MealPlanRequest.findOne({
+      user_id: userId,
+      created_at: { $gte: fiveDaysAgo }
+    });
+
+    if (recentRequest) {
+      throw new AppError("You can only submit a meal plan request once every 5 days.", 400);
+    }
+
     const request = await MealPlanRequest.create({
       user_id: userId,
       nutritionist_id: activeContract.nutritionist_id,

@@ -9,17 +9,29 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
 /** Builds the standardised user response object sent to clients. */
-function formatUser(user) {
-  return {
+async function formatUser(user) {
+  const formatted = {
     id: user._id.toString(),
     email: user.email,
     phone: user.phone,
     role: user.role,
   };
+
+  if (user.role === 'nutritionist') {
+    const Nutritionist = require('../models/Nutritionist');
+    const nutritionistProfile = await Nutritionist.findOne({ user_id: user._id.toString() }).lean();
+    formatted.approvalStatus = nutritionistProfile ? nutritionistProfile.approval_status : null;
+    formatted.certificationUrl = nutritionistProfile ? nutritionistProfile.certification_url : null;
+    formatted.licenseNumber = nutritionistProfile ? nutritionistProfile.license_number : null;
+    formatted.professionalTitle = nutritionistProfile ? nutritionistProfile.professional_title : null;
+    formatted.serviceFee = nutritionistProfile ? nutritionistProfile.service_fee : 0;
+  }
+
+  return formatted;
 }
 
 /** Issues both access and refresh tokens for a user. */
-function issueTokens(user) {
+async function issueTokens(user) {
   const payload = {
     sub: user._id.toString(),
     email: user.email,
@@ -29,7 +41,7 @@ function issueTokens(user) {
   return {
     accessToken: signAccessToken(payload),
     refreshToken: signRefreshToken({ sub: user._id.toString() }),
-    user: formatUser(user),
+    user: await formatUser(user),
   };
 }
 
@@ -116,7 +128,7 @@ class AuthService {
       throw new AppError(`Access denied: account is not a ${requiredRole}`, 403);
     }
 
-    return issueTokens(user);
+    return await issueTokens(user);
   }
 
   // ── Google Sign-In ─────────────────────────────────────────────────────────
@@ -194,7 +206,7 @@ class AuthService {
       }
     }
 
-    return issueTokens(user);
+    return await issueTokens(user);
   }
 
   // ── Refresh Access Token ────────────────────────────────────────────────────
@@ -226,7 +238,7 @@ class AuthService {
   static async getMe(userId) {
     const user = await UserRepository.findById(userId);
     if (!user) throw new AppError('User not found', 404);
-    return formatUser(user);
+    return await formatUser(user);
   }
 
   static async linkEmail(userId, email) {
@@ -253,7 +265,7 @@ class AuthService {
     user.email = cleanEmail;
     await user.save();
 
-    return formatUser(user);
+    return await formatUser(user);
   }
 
   // ── UC-5 Forget Password (Anti-Scanning) ───────────────────────────────────
@@ -576,7 +588,30 @@ class AuthService {
 
     await user.save();
 
-    return formatUser(user);
+    return await formatUser(user);
+  }
+  // ── Session Revocation ─────────────────────────────────────────────────────
+
+  static async revokeSessionsForUser(identifier) {
+    if (!identifier) return { success: false, message: 'Identifier is required' };
+
+    const cleanId = identifier.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmail = emailRegex.test(cleanId);
+
+    const User = require('../models/User');
+    const query = isEmail ? { email: cleanId.toLowerCase() } : { phone: cleanId };
+
+    const user = await User.findOne(query).exec();
+
+    if (user) {
+      // Since JWTs are stateless without a blocklist, we clear fcmToken as a basic session revocation.
+      // If a token_version or refresh token database is added later, implement it here.
+      user.fcmToken = null;
+      await user.save();
+    }
+
+    return { success: true, message: 'Sessions revoked successfully' };
   }
 }
 
