@@ -168,9 +168,11 @@ class ConsultationProvider extends ChangeNotifier {
   // ── Meal Plan Request State ────────────────────────────────────────────────
   String? _mealPlanRequestStatus;
   bool _isRequestingMealPlan = false;
+  String? _requestError;
 
   String? get mealPlanRequestStatus => _mealPlanRequestStatus;
   bool get isRequestingMealPlan => _isRequestingMealPlan;
+  String? get requestError => _requestError;
 
   Future<void> loadMealPlanRequestStatus() async {
     try {
@@ -184,6 +186,7 @@ class ConsultationProvider extends ChangeNotifier {
 
   Future<bool> submitMealPlanRequest() async {
     _isRequestingMealPlan = true;
+    _requestError = null;
     notifyListeners();
 
     bool success = false;
@@ -193,6 +196,7 @@ class ConsultationProvider extends ChangeNotifier {
         _mealPlanRequestStatus = 'PENDING';
       }
     } catch (e) {
+      _requestError = e.toString().replaceFirst('Exception: ', '');
       debugPrint('Failed to submit meal plan request: $e');
     }
 
@@ -216,6 +220,7 @@ class ConsultationProvider extends ChangeNotifier {
     _isLoadingActiveContract = false;
     _mealPlanRequestStatus = null;
     _isRequestingMealPlan = false;
+    _requestError = null;
     notifyListeners();
   }
 }

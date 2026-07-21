@@ -19,11 +19,13 @@ const nutritionistRoute = require("./nutritionist.routes");
 const nutritionistChatRoute = require("./nutritionist.chat.routes");
 const profileRoute = require("./profile.route");
 const shoppingListRoute = require("./shopping_list.route");
+const pantryRoute = require("./pantry.routes");
 // 🌟 THÊM DÒNG NÀY VÀO ĐỂ ĐỊNH NGHĨA BIẾN DASHBOARD: 
 const systemDashboardRoute = require("./systemDashboard.routes");
 const userRecipeRoute = require("./user.recipe.route");
 const webhookRoute = require("./webhook.routes");
 const dietAuditRoute = require("./dietAudit.routes");
+const userChatbotRoute = require("./user.chatbot.routes");
 
 // ============================================================================
 // 2. MAPPING API ENDPOINTS (Grouped logically to minimize Git conflicts)
@@ -32,6 +34,7 @@ const dietAuditRoute = require("./dietAudit.routes");
 // ─── AUTH & PROFILE ─────────────────────────────────────────────────────────
 router.use("/api/auth", authRoute);
 router.use("/api/profile", profileRoute);
+router.use("/api/pantry", pantryRoute);
 
 // ─── ADMIN ROUTES ───────────────────────────────────────────────────────────
 router.use("/api/admin/users", adminUserRoute);
@@ -46,6 +49,7 @@ router.use("/api/admin/system-dashboard", systemDashboardRoute); // 🔥 Bây gi
 router.use("/api/nutritionists", nutritionistRoute);
 router.use("/api/nutritionist", nutritionistChatRoute);
 router.use("/api/meal-plans", mealPlanRoutes);
+router.use("/api/meal-plan", mealPlanRoutes);
 router.use("/api/diet-audit", dietAuditRoute);
 
 // ─── USER / CUSTOMER ROUTES ─────────────────────────────────────────────────
@@ -53,6 +57,7 @@ router.use("/api/user/consultations", consultationRoute);
 router.use("/api/user/notifications", notificationRoute);
 router.use("/api/user/recipes", userRecipeRoute);
 router.use("/api/user/shopping-list", shoppingListRoute);
+router.use("/api/user/chatbot", userChatbotRoute);
 
 // ─── CHAT ROUTES (shared: user + nutritionist) ───────────────────────────────
 router.use("/api/chat", chatRoute);

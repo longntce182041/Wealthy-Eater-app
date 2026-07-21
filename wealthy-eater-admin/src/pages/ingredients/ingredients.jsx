@@ -52,13 +52,17 @@ const IngredientPage = () => {
     const [showDetail, setShowDetail] = useState(false);
     const [detailData, setDetailData] = useState(null);
 
-    const blockInvalidChar = (e) => ['e', 'E', '+', '-', ',', '.'].includes(e.key) && e.preventDefault();
+    const blockInvalidChar = (e) => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault();
 
     const handleNumberChange = (field, value) => {
-        let val = value === '' ? '' : Number(value);
+        if (value === '') {
+            setFormData({ ...formData, [field]: '' });
+            return;
+        }
+        let val = Number(value);
         if (val > 10000) val = 10000;
         if (val < 0) val = 0;
-        setFormData({ ...formData, [field]: val });
+        setFormData({ ...formData, [field]: value });
     };
 
     const handleImageChange = (e) => {
@@ -238,7 +242,7 @@ const IngredientPage = () => {
             dataForm.append('micronutrients', JSON.stringify(cleanMicros));
 
             if (formData.image_file) {
-                dataForm.append('image_file', formData.image_file);
+                dataForm.append('imageFile', formData.image_file);
             }
 
             let res;
@@ -417,7 +421,7 @@ const IngredientPage = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Calories / Unit</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.calories_per_unit} onChange={e => handleNumberChange('calories_per_unit', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
+                                    <input type="number" step="any" onKeyDown={blockInvalidChar} value={formData.calories_per_unit} onChange={e => handleNumberChange('calories_per_unit', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Unit</label>
@@ -433,15 +437,15 @@ const IngredientPage = () => {
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Protein (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.protein} onChange={e => handleNumberChange('protein', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
+                                    <input type="number" step="any" onKeyDown={blockInvalidChar} value={formData.protein} onChange={e => handleNumberChange('protein', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Carbs (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.carbs} onChange={e => handleNumberChange('carbs', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
+                                    <input type="number" step="any" onKeyDown={blockInvalidChar} value={formData.carbs} onChange={e => handleNumberChange('carbs', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Fats (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.fat} onChange={e => handleNumberChange('fat', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
+                                    <input type="number" step="any" onKeyDown={blockInvalidChar} value={formData.fat} onChange={e => handleNumberChange('fat', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                             </div>
                             
@@ -473,7 +477,7 @@ const IngredientPage = () => {
                                                     })
                                                     .map(a => <option key={a._id || a.id} value={a._id || a.id}>{a.name}</option>)}
                                             </select>
-                                            <input type="number" min="0" onKeyDown={blockInvalidChar} value={m.amount}
+                                            <input type="number" min="0" step="any" onKeyDown={blockInvalidChar} value={m.amount}
                                                 onChange={e => {
                                                     const copy = [...selectedMicros];
                                                     copy[idx].amount = e.target.value;

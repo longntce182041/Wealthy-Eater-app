@@ -9,7 +9,10 @@ import '../providers/nutritionist_provider.dart';
 import 'chat_screen.dart';
 import 'notification_history_screen.dart';
 import 'client_audit_screen.dart'; // Đã bổ sung import màn hình đối chiếu của ní
+import 'client_biometrics_screen.dart'; // UC-50: Biometrics history
+import 'generate_meal_plan_screen.dart';
 import 'nutritionist_profile_tab.dart';
+import 'nutritionist_meal_plans_tab.dart';
 
 class NutritionistDashboardScreen extends StatefulWidget {
   final UserEntity? user;
@@ -63,6 +66,8 @@ class _NutritionistDashboardScreenState extends State<NutritionistDashboardScree
       case 1:
         return 'Clients';
       case 2:
+        return 'Plans';
+      case 3:
         return 'My Profile';
       default:
         return '';
@@ -131,6 +136,7 @@ class _NutritionistDashboardScreenState extends State<NutritionistDashboardScree
         children: [
           const _NutritionistRequestsTab(),
           const _NutritionistClientsTab(),
+          const NutritionistMealPlansTab(),
           const NutritionistProfileTab(),
         ],
       ),
@@ -147,6 +153,11 @@ class _NutritionistDashboardScreenState extends State<NutritionistDashboardScree
             icon: Icon(Icons.people_alt_outlined),
             selectedIcon: Icon(Icons.people),
             label: 'Clients',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.restaurant_menu_outlined),
+            selectedIcon: Icon(Icons.restaurant_menu),
+            label: 'Plans',
           ),
           NavigationDestination(
             icon: Icon(Icons.manage_accounts_outlined),
@@ -362,6 +373,22 @@ class _NutritionistClientsTabState extends State<_NutritionistClientsTab> {
                       );
                     },
                   ),
+                  IconButton(
+                    icon: Icon(Icons.monitor_weight_outlined, color: Colors.blueGrey.shade600, size: 24),
+                    tooltip: 'Review Body Metrics',
+                    onPressed: () {
+                      final actualClientId = userMap?['_id']?.toString() ?? '';
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ClientBiometricsScreen(
+                            clientId: actualClientId,
+                            clientName: email,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                   const SizedBox(width: 4),
                   const Icon(Icons.chat_bubble_outline,
                       color: Colors.grey, size: 20),
@@ -395,8 +422,8 @@ class _NutritionistRequestsTabState extends State<_NutritionistRequestsTab> {
 
   String _formatDate(String? isoString) {
     if (isoString == null) return '';
-    final date = DateTime.tryParse(isoString);
-    if (date == null) return '';
+    final date = DateTime.tryParse(isoString)?.toLocal();
+    if (date == null) return isoString;
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
@@ -597,14 +624,30 @@ class _NutritionistRequestsTabState extends State<_NutritionistRequestsTab> {
                               'APPROVED',
                             );
                             if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(success
-                                    ? 'Request approved! You can now create a meal plan for this client.'
-                                    : 'Failed to approve request.'),
-                                backgroundColor: success ? Colors.green : Colors.red,
-                              ),
-                            );
+                            if (success) {
+                              // Navigate to GenerateMealPlanScreen after approval
+                              final clientMap = req['user_id'] as Map<String, dynamic>?;
+                              final clientId = clientMap?['_id']?.toString() ?? '';
+                              final clientEmail = clientMap?['email']?.toString() ?? 'Client';
+                              if (context.mounted && clientId.isNotEmpty) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => GenerateMealPlanScreen(
+                                      clientId: clientId,
+                                      clientName: clientEmail,
+                                    ),
+                                  ),
+                                );
+                              }
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Failed to approve request.'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
                           },
                           style: FilledButton.styleFrom(
                             backgroundColor: theme.colorScheme.primary,

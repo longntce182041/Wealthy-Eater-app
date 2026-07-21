@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, Tar
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../data/models/nutritionist_model.dart';
 import '../providers/consultation_provider.dart';
 import '../providers/nutritionist_provider.dart';
@@ -714,7 +715,7 @@ class _HireConfirmationSheetState extends State<_HireConfirmationSheet> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: badge == 'POPULAR' ? Colors.orange.shade100 : Colors.green.shade100,
+                            color: badge == 'POPULAR' ? Colors.orange.shade100 : AppColors.primaryLight,
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -722,7 +723,7 @@ class _HireConfirmationSheetState extends State<_HireConfirmationSheet> {
                             style: TextStyle(
                               fontSize: 9,
                               fontWeight: FontWeight.bold,
-                              color: badge == 'POPULAR' ? Colors.orange.shade800 : Colors.green.shade800,
+                              color: badge == 'POPULAR' ? Colors.orange.shade800 : AppColors.primaryDark,
                             ),
                           ),
                         ),

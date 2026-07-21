@@ -34,8 +34,8 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
       final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
       if (!emailRegex.hasMatch(trimmed)) return 'Enter a valid email address';
     } else {
-      final phoneRegex = RegExp(r'^\+?[0-9]{7,15}$');
-      if (!phoneRegex.hasMatch(trimmed)) return 'Enter a valid phone number';
+      final phoneRegex = RegExp(r'^[0-9]{10}$');
+      if (!phoneRegex.hasMatch(trimmed)) return 'Phone number must be exactly 10 digits';
     }
     return null;
   }
@@ -169,7 +169,7 @@ class _NutritionistLoginScreenState extends State<NutritionistLoginScreen> {
                           Flexible(
                             child: TextButton(
                               onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const ForgetPasswordScreen()),
+                                MaterialPageRoute(builder: (_) => const ForgetPasswordScreen(isNutritionist: true)),
                               ),
                               child: const Text(
                                 'Forgot Password?',

@@ -1,0 +1,478 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "auto-adjust-calories",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-2400, 1200],
+      "id": "uc42-node-01-webhook",
+      "name": "On New Meal Logged",
+      "webhookId": "uc42-auto-adjust-calories-webhook",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "uc42-cond-userid",
+              "leftValue": "={{$json.body.user_id}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "uc42-cond-calories",
+              "leftValue": "={{$json.body.actual_calories}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "uc42-cond-mealtype",
+              "leftValue": "={{$json.body.meal_type}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-2160, 1200],
+      "id": "uc42-node-02-validate",
+      "name": "Validate Input Payload"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, message: 'Invalid payload. user_id, actual_calories, and meal_type are required.' }) }}",
+        "options": { "responseCode": 400 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [-2160, 1400],
+      "id": "uc42-node-03-resp-invalid",
+      "name": "Respond — Invalid Input"
+    },
+    {
+      "parameters": {
+        "operation": "findOne",
+        "collection": "mealplans",
+        "options": {},
+        "query": "={{ JSON.stringify({ user_id: $json.body.user_id, date: { $gte: new Date(new Date($json.body.logged_at || new Date()).setHours(0,0,0,0)), $lt: new Date(new Date($json.body.logged_at || new Date()).setHours(23,59,59,999)) } }) }}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.3,
+      "position": [-1880, 1080],
+      "id": "uc42-node-04-fetch-plan",
+      "name": "Fetch Active Meal Plan",
+      "credentials": {
+        "mongoDb": {
+          "id": "Zghyt3NlT8HiuKH2",
+          "name": "MongoDB account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "findOne",
+        "collection": "userprofiles",
+        "options": {},
+        "query": "={{ JSON.stringify({ user_id: $('On New Meal Logged').first().json.body.user_id }) }}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.3,
+      "position": [-1880, 1280],
+      "id": "uc42-node-05-fetch-profile",
+      "name": "Fetch User Biometrics (TDEE)",
+      "credentials": {
+        "mongoDb": {
+          "id": "Zghyt3NlT8HiuKH2",
+          "name": "MongoDB account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "find",
+        "collection": "mealplanitems",
+        "options": {},
+        "query": "={{ JSON.stringify({ meal_plan_id: $('Fetch Active Meal Plan').first().json._id }) }}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.3,
+      "position": [-1880, 1480],
+      "id": "uc42-node-06-fetch-items",
+      "name": "Fetch Meal Plan Items",
+      "credentials": {
+        "mongoDb": {
+          "id": "Zghyt3NlT8HiuKH2",
+          "name": "MongoDB account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===================================================================\n// UC-42: Calorie Adaptive Redistribution Algorithm\n// Inputs: meal log (webhook body), active meal plan, user biometrics\n// ===================================================================\n\nconst webhookBody  = $('On New Meal Logged').first().json.body;\nconst mealPlan     = $('Fetch Active Meal Plan').first().json;\nconst userProfile  = $('Fetch User Biometrics (TDEE)').first().json;\nconst allItems     = $('Fetch Meal Plan Items').all().map(i => i.json);\n\n// --- Guard: missing data ---\nif (!mealPlan || !mealPlan._id) {\n  return [{ json: { success: false, route: 'ERROR', reason: 'No active meal plan found for today.' } }];\n}\nif (!userProfile || !userProfile.tdee) {\n  return [{ json: { success: false, route: 'ERROR', reason: 'User TDEE profile not found.' } }];\n}\n\n// --- Core values ---\nconst userId       = webhookBody.user_id;\nconst mealLogId    = webhookBody.meal_log_id || '';\nconst contractId   = webhookBody.contract_id || '';\nconst mealType     = webhookBody.meal_type;          // e.g. 'breakfast', 'lunch', 'dinner', 'snack'\nconst actualCal    = Number(webhookBody.actual_calories) || 0;\nconst loggedAt     = new Date(webhookBody.logged_at || new Date());\nconst loggedHour   = loggedAt.getHours();\n\n// Find the planned target calories for this meal slot (sum across all recipe items of same meal_type)\nconst slotItems    = allItems.filter(item => item.meal_type === mealType);\nconst plannedCal   = slotItems.reduce((sum, item) => sum + (item.target_calories || 0), 0);\nconst deltaCal     = actualCal - plannedCal;         // positive = overeating, negative = undereating\n\n// TDEE thresholds\nconst tdee             = Number(userProfile.tdee);\nconst criticalThreshold = tdee * 0.15;              // 15% TDEE\n\n// --- Macro redistribution helper ---\n// Keeps macros within WHO-safe ratio: Protein 15-35%, Carbs 45-65%, Fat 20-35%\nfunction redistributeMacros(deltaCalories, numSlots) {\n  if (numSlots === 0) return { deltaPerSlot: 0, proteinDelta: 0, carbsDelta: 0, fatDelta: 0 };\n  const deltaPerSlot = deltaCalories / numSlots;\n  // Safe macro split: 30% Protein, 45% Carbs, 25% Fat (kcal ratios)\n  return {\n    deltaPerSlot: Math.round(deltaPerSlot),\n    proteinDelta: Math.round((deltaPerSlot * 0.30) / 4),  // 4 kcal/g protein\n    carbsDelta:   Math.round((deltaPerSlot * 0.45) / 4),  // 4 kcal/g carbs\n    fatDelta:     Math.round((deltaPerSlot * 0.25) / 9),  // 9 kcal/g fat\n  };\n}\n\n// --- Build base output ---\nlet output = {\n  success:       true,\n  user_id:       userId,\n  meal_log_id:   mealLogId,\n  contract_id:   contractId,\n  meal_plan_id:  String(mealPlan._id),\n  meal_type:     mealType,\n  actual_cal:    actualCal,\n  planned_cal:   plannedCal,\n  delta_cal:     deltaCal,\n  tdee:          tdee,\n  route:         'NORMAL',\n  update_payload:   [],\n  alert_payload:    null,\n  next_day_payload: null,\n  notification: {}\n};\n\n// ===================================================================\n// PHASE 1 — CRITICAL DEVIATION CHECK (>15% TDEE)\n// ===================================================================\nif (Math.abs(deltaCal) >= criticalThreshold) {\n  output.route = 'CRITICAL';\n  output.alert_payload = {\n    customer_meal_log: mealLogId,\n    contract_id:       contractId,\n    calculated_delta_calories: deltaCal,\n    nutritionist_review: '',\n    create_at: new Date().toISOString()\n  };\n  output.notification = {\n    user_id: userId,\n    title: '⚠️ Calorie Alert',\n    body: `You ${deltaCal > 0 ? 'exceeded' : 'missed'} your calorie target by ${Math.abs(Math.round(deltaCal))} kcal (>${Math.round(Math.abs(deltaCal)/tdee*100)}% of TDEE). Your nutritionist has been alerted.`,\n    type: 'alert'\n  };\n  return [{ json: output }];\n}\n\n// ===================================================================\n// PHASE 2 — FIND REMAINING INCOMPLETE MEAL SLOTS TODAY\n// meal_types ordered by typical schedule\n// ===================================================================\nconst MEAL_ORDER = ['breakfast', 'snack', 'lunch', 'dinner'];\nconst currentMealIndex = MEAL_ORDER.indexOf(mealType);\n\n// Remaining = items of a later meal_type (in standard order) that haven't been logged today\nconst completedTypes = [mealType]; // current meal is just being completed\nconst remainingItems = allItems.filter(item => {\n  const itemIndex = MEAL_ORDER.indexOf(item.meal_type);\n  return itemIndex > currentMealIndex && !completedTypes.includes(item.meal_type);\n});\n\n// Unique remaining meal types\nconst remainingTypes = [...new Set(remainingItems.map(i => i.meal_type))];\n\n// ===================================================================\n// PHASE 3 — LATE NIGHT EXCEPTION: no more meals today\n// ===================================================================\nif (remainingTypes.length === 0 || loggedHour >= 21) {\n  output.route = 'LATE_NIGHT';\n  // Calculate next day breakfast date\n  const nextDay = new Date(loggedAt);\n  nextDay.setDate(nextDay.getDate() + 1);\n  nextDay.setHours(0, 0, 0, 0);\n  output.next_day_payload = {\n    user_id:      userId,\n    target_date:  nextDay.toISOString(),\n    meal_type:    'breakfast',\n    delta_cal_carry: Math.round(deltaCal),\n    ...redistributeMacros(deltaCal, 1)\n  };\n  output.notification = {\n    user_id: userId,\n    title: '🌙 Late Night Adjustment',\n    body: `Your ${deltaCal > 0 ? 'extra' : 'missed'} ${Math.abs(Math.round(deltaCal))} kcal from tonight has been carried over to tomorrow's breakfast.`,\n    type: 'system'\n  };\n  return [{ json: output }];\n}\n\n// ===================================================================\n// PHASE 4 — NORMAL FLOW: redistribute delta across remaining slots\n// One MongoDB update payload per remaining meal_type for batch efficiency\n// ===================================================================\nconst numRemainingSlots = remainingTypes.length;\nconst macros = redistributeMacros(deltaCal, numRemainingSlots);\n\noutput.update_payload = remainingTypes.map(type => {\n  // Sum current target_calories for this slot\n  const typeItems = remainingItems.filter(i => i.meal_type === type);\n  const currentTarget = typeItems.reduce((s, i) => s + (i.target_calories || 0), 0);\n  // Subtract delta share (if overate, reduce future; if underate, increase future)\n  const newTarget = Math.max(100, currentTarget - macros.deltaPerSlot); // floor 100 kcal safety\n  return {\n    meal_type:            type,\n    item_ids:             typeItems.map(i => String(i._id)),\n    original_target_cal:  Math.round(currentTarget),\n    new_target_calories:  Math.round(newTarget),\n    protein_delta_g:      macros.proteinDelta,\n    carbs_delta_g:        macros.carbsDelta,\n    fat_delta_g:          macros.fatDelta,\n    meal_plan_id:         String(mealPlan._id)\n  };\n});\n\noutput.notification = {\n  user_id: userId,\n  title: '🔄 Meal Plan Updated',\n  body: `Your remaining ${numRemainingSlots} meal${numRemainingSlots > 1 ? 's have' : ' has'} been auto-adjusted by ${Math.abs(Math.round(macros.deltaPerSlot))} kcal each to stay on track.`,\n  type: 'system'\n};\n\nreturn [{ json: output }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1560, 1280],
+      "id": "uc42-node-07-algorithm",
+      "name": "Calorie Adaptive Redistribution"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "id": "uc42-switch-normal",
+                    "leftValue": "={{$json.route}}",
+                    "rightValue": "NORMAL",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "NORMAL"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "id": "uc42-switch-critical",
+                    "leftValue": "={{$json.route}}",
+                    "rightValue": "CRITICAL",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CRITICAL"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "id": "uc42-switch-latenight",
+                    "leftValue": "={{$json.route}}",
+                    "rightValue": "LATE_NIGHT",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "LATE_NIGHT"
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "extra" }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [-1280, 1280],
+      "id": "uc42-node-08-router",
+      "name": "Route by Deviation Type"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Batch update: update all remaining meal slot target_calories in one loop\nconst payload = $json;\nconst updates = payload.update_payload || [];\n\nconst results = [];\nfor (const slot of updates) {\n  // Build update filter and update doc for each meal_type's items\n  results.push({\n    filter: { meal_plan_id: slot.meal_plan_id, meal_type: slot.meal_type },\n    update: {\n      $set: {\n        target_calories: slot.new_target_calories,\n        'macro_targets.protein': { $ifNull: ['$macro_targets.protein', 0] },\n        adjusted_by_uc42: true,\n        adjusted_at: new Date().toISOString()\n      }\n    }\n  });\n}\n\n// Pass result forward for MongoDB update node\nreturn [{ json: { ...payload, db_updates: results, update_count: results.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1000, 1080],
+      "id": "uc42-node-09-normal-prep",
+      "name": "Prepare Normal Batch Update"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "mealplanitems",
+        "updateKey": "meal_type",
+        "options": { "upsert": false },
+        "query": "={{ JSON.stringify({ meal_plan_id: $json.meal_plan_id, meal_type: $json.update_payload[0].meal_type }) }}",
+        "update": "={{ JSON.stringify({ $set: { target_calories: $json.update_payload[0].new_target_calories, adjusted_by_uc42: true, adjusted_at: new Date().toISOString() } }) }}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.3,
+      "position": [-720, 1080],
+      "id": "uc42-node-10-normal-db",
+      "name": "Update Remaining Meal Slots",
+      "credentials": {
+        "mongoDb": {
+          "id": "Zghyt3NlT8HiuKH2",
+          "name": "MongoDB account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "macrodeviationflags",
+        "options": {},
+        "fields": "={{ JSON.stringify($json.alert_payload) }}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.3,
+      "position": [-1000, 1280],
+      "id": "uc42-node-11-critical-flag",
+      "name": "Insert MacroDeviation Flag",
+      "credentials": {
+        "mongoDb": {
+          "id": "Zghyt3NlT8HiuKH2",
+          "name": "MongoDB account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "customermeallogs",
+        "updateKey": "_id",
+        "options": { "upsert": false },
+        "query": "={{ JSON.stringify({ _id: $json.meal_log_id }) }}",
+        "update": "={{ JSON.stringify({ $set: { deviation_flag: true } }) }}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.3,
+      "position": [-720, 1280],
+      "id": "uc42-node-12-critical-flag-log",
+      "name": "Flag Meal Log as Deviated",
+      "credentials": {
+        "mongoDb": {
+          "id": "Zghyt3NlT8HiuKH2",
+          "name": "MongoDB account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "findOne",
+        "collection": "mealplans",
+        "options": {},
+        "query": "={{ JSON.stringify({ user_id: $json.user_id, date: { $gte: new Date($json.next_day_payload.target_date), $lt: new Date(new Date($json.next_day_payload.target_date).getTime() + 86400000) } }) }}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.3,
+      "position": [-1000, 1480],
+      "id": "uc42-node-13-latenight-fetch",
+      "name": "Fetch Tomorrow Breakfast Plan",
+      "credentials": {
+        "mongoDb": {
+          "id": "Zghyt3NlT8HiuKH2",
+          "name": "MongoDB account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "mealplanitems",
+        "updateKey": "meal_type",
+        "options": { "upsert": false },
+        "query": "={{ JSON.stringify({ meal_plan_id: $json._id.toString(), meal_type: 'breakfast' }) }}",
+        "update": "={{ JSON.stringify({ $inc: { target_calories: -($('Calorie Adaptive Redistribution').first().json.next_day_payload.delta_cal_carry) }, $set: { carryover_from_previous_day: true, adjusted_at: new Date().toISOString() } }) }}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.3,
+      "position": [-720, 1480],
+      "id": "uc42-node-14-latenight-db",
+      "name": "Carry Delta to Tomorrow Breakfast",
+      "credentials": {
+        "mongoDb": {
+          "id": "Zghyt3NlT8HiuKH2",
+          "name": "MongoDB account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:5000/api/internal/notifications/push",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-INTERNAL-SECRET", "value": "9a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Calorie Adaptive Redistribution').first().json.notification) }}",
+        "options": { "timeout": 5000 }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [-400, 1200],
+      "id": "uc42-node-15-notify",
+      "name": "Push Real-time Notification",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:5000/api/internal/socket/emit",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-INTERNAL-SECRET", "value": "9a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event: 'macro_rings_update', room: $('Calorie Adaptive Redistribution').first().json.user_id, payload: { route: $('Calorie Adaptive Redistribution').first().json.route, delta_cal: $('Calorie Adaptive Redistribution').first().json.delta_cal, updated_at: new Date().toISOString() } }) }}",
+        "options": { "timeout": 5000 }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [-160, 1200],
+      "id": "uc42-node-16-socket",
+      "name": "Emit Socket — macro_rings_update",
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, route: $('Calorie Adaptive Redistribution').first().json.route, delta_cal: $('Calorie Adaptive Redistribution').first().json.delta_cal, update_count: ($('Calorie Adaptive Redistribution').first().json.update_payload || []).length, message: 'Calorie targets auto-adjusted successfully.' }) }}",
+        "options": { "responseCode": 200 }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [100, 1200],
+      "id": "uc42-node-17-resp-success",
+      "name": "Respond — Adjustment Success"
+    }
+  ],
+  "connections": {
+    "On New Meal Logged": {
+      "main": [[{ "node": "Validate Input Payload", "type": "main", "index": 0 }]]
+    },
+    "Validate Input Payload": {
+      "main": [
+        [
+          { "node": "Fetch Active Meal Plan", "type": "main", "index": 0 },
+          { "node": "Fetch User Biometrics (TDEE)", "type": "main", "index": 0 }
+        ],
+        [{ "node": "Respond — Invalid Input", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Active Meal Plan": {
+      "main": [[{ "node": "Fetch Meal Plan Items", "type": "main", "index": 0 }]]
+    },
+    "Fetch Meal Plan Items": {
+      "main": [[{ "node": "Calorie Adaptive Redistribution", "type": "main", "index": 0 }]]
+    },
+    "Fetch User Biometrics (TDEE)": {
+      "main": [[{ "node": "Calorie Adaptive Redistribution", "type": "main", "index": 0 }]]
+    },
+    "Calorie Adaptive Redistribution": {
+      "main": [[{ "node": "Route by Deviation Type", "type": "main", "index": 0 }]]
+    },
+    "Route by Deviation Type": {
+      "main": [
+        [{ "node": "Prepare Normal Batch Update", "type": "main", "index": 0 }],
+        [{ "node": "Insert MacroDeviation Flag", "type": "main", "index": 0 }],
+        [{ "node": "Fetch Tomorrow Breakfast Plan", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Normal Batch Update": {
+      "main": [[{ "node": "Update Remaining Meal Slots", "type": "main", "index": 0 }]]
+    },
+    "Update Remaining Meal Slots": {
+      "main": [[{ "node": "Push Real-time Notification", "type": "main", "index": 0 }]]
+    },
+    "Insert MacroDeviation Flag": {
+      "main": [[{ "node": "Flag Meal Log as Deviated", "type": "main", "index": 0 }]]
+    },
+    "Flag Meal Log as Deviated": {
+      "main": [[{ "node": "Push Real-time Notification", "type": "main", "index": 0 }]]
+    },
+    "Fetch Tomorrow Breakfast Plan": {
+      "main": [[{ "node": "Carry Delta to Tomorrow Breakfast", "type": "main", "index": 0 }]]
+    },
+    "Carry Delta to Tomorrow Breakfast": {
+      "main": [[{ "node": "Push Real-time Notification", "type": "main", "index": 0 }]]
+    },
+    "Push Real-time Notification": {
+      "main": [[{ "node": "Emit Socket — macro_rings_update", "type": "main", "index": 0 }]]
+    },
+    "Emit Socket — macro_rings_update": {
+      "main": [[{ "node": "Respond — Adjustment Success", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "6163bac3f64be333ddc2fa2951d8461213f03dbf48df047d75aaddff96221cf7"
+  }
+}

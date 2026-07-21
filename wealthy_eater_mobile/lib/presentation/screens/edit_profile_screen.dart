@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -192,9 +193,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Text('Profile updated successfully!'),
+            backgroundColor: AppColors.primary,
           ),
         );
         Navigator.pop(context);

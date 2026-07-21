@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../providers/nutritionist_provider.dart';
 import '../../features/nutritionist/presentation/utils/validation.dart';
 import '../../features/nutritionist/presentation/widgets/certificate_upload_card.dart';
@@ -90,9 +91,9 @@ class _EditNutritionistProfileScreenState
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile updated successfully!'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: const Text('Profile updated successfully!'),
+          backgroundColor: AppColors.primary,
         ),
       );
       Navigator.pop(context);
