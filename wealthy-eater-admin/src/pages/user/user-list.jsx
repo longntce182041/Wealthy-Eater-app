@@ -26,6 +26,7 @@ export default function UserListPage() {
   });
 
   const [users, setUsers] = useState([]);
+  const [totalUsers, setTotalUsers] = useState(0); // 👈 TỔNG SỐ USER TỪ BACKEND META
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -50,20 +51,23 @@ export default function UserListPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await apiClient.get('/admin/users');
-      if (response.data?.success && Array.isArray(response.data.data)) {
-        setUsers(response.data.data);
-      } else if (Array.isArray(response.data?.data)) {
-        setUsers(response.data.data);
-      } else if (Array.isArray(response.data)) {
-        setUsers(response.data);
+      // Truyền limit lớn hoặc lấy theo pagination
+      const response = await apiClient.get('/admin/users', {
+        params: { limit: 100 } // Tăng limit nếu muốn hiển thị nhiều hơn trên 1 trang
+      });
+
+      if (response.data?.success) {
+        setUsers(response.data.data || []);
+        // 👈 LẤY CHÍNH XÁC TỔNG SỐ TỪ META
+        setTotalUsers(response.data.meta?.total || response.data.data?.length || 0);
       } else {
         setUsers([]);
+        setTotalUsers(0);
       }
     } catch (err) {
       console.error('Error fetching users:', err);
       if (err.response?.status === 401 || err.response?.data?.message?.includes('expired')) {
-        alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại!');
+        alert('Session expired. Please log in again!');
         handleForceLogout();
         return;
       }
@@ -111,20 +115,20 @@ export default function UserListPage() {
       if (editingUserId) {
         const response = await apiClient.put(`/admin/users/${editingUserId}`, formData);
         if (response.data?.success) {
-          alert('Cập nhật thông tin người dùng thành công!');
+          alert('User updated successfully!');
           setIsModalOpen(false);
           await fetchUsers();
         }
       } else {
         const response = await apiClient.post('/admin/users', formData);
         if (response.data?.success) {
-          alert('Tạo tài khoản người dùng mới thành công!');
+          alert('User created successfully!');
           setIsModalOpen(false);
           await fetchUsers();
         }
       }
     } catch (err) {
-      setFormError(err?.response?.data?.message || 'Có lỗi xảy ra khi xử lý dữ liệu.');
+      setFormError(err?.response?.data?.message || 'An error occurred while processing data.');
     } finally {
       setSubmitLoading(false);
     }
@@ -133,17 +137,17 @@ export default function UserListPage() {
   const handleToggleStatus = async (userId, currentStatus) => {
     if (!userId) return;
     const nextStatus = currentStatus === 'active' ? 'banned' : 'active';
-    if (nextStatus === 'banned' && !window.confirm('Khóa tài khoản này? Người dùng sẽ bị đăng xuất ngay lập tức!')) return;
+    if (nextStatus === 'banned' && !window.confirm('Ban this account? The user will be logged out immediately!')) return;
 
     setActionLoadingId(userId);
     try {
       const response = await apiClient.put(`/admin/users/${userId}/status`, { status: nextStatus });
       if (response.data?.success) {
-        alert(response.data.message || 'Cập nhật trạng thái thành công!');
+        alert(response.data.message || 'Status updated successfully!');
         await fetchUsers();
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi hệ thống khi cập nhật trạng thái.');
+      alert(err.response?.data?.message || 'Server error while updating status.');
     } finally {
       setActionLoadingId(null);
     }
@@ -151,17 +155,17 @@ export default function UserListPage() {
 
   const handleDeleteUser = async (userId, email) => {
     if (!userId) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn XÓA VĨNH VIỄN tài khoản [ ${email} ] khỏi cơ sở dữ liệu MongoDB?`)) return;
+    if (!window.confirm(`Are you sure you want to PERMANENTLY DELETE account [ ${email} ] from Database?`)) return;
 
     setActionLoadingId(userId);
     try {
       const response = await apiClient.delete(`/admin/users/${userId}`);
       if (response.data?.success) {
-        alert(response.data.message || 'Đã xóa người dùng thành công!');
+        alert(response.data.message || 'User deleted successfully!');
         await fetchUsers(); 
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi hệ thống khi thực hiện xóa.');
+      alert(err.response?.data?.message || 'Server error while deleting user.');
     } finally {
       setActionLoadingId(null);
     }
@@ -181,7 +185,7 @@ export default function UserListPage() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight m-0">Users Management</h1>
           <p className="text-slate-500 text-sm mt-1">
-            Đang khớp bộ lọc: <strong className="text-emerald-600">{filteredUsers.length}</strong> / Tổng số: <strong>{users.length}</strong> thành viên.
+            Matching filter: <strong className="text-emerald-600">{filteredUsers.length}</strong> / Total: <strong>{totalUsers}</strong> users.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -291,7 +295,7 @@ export default function UserListPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-slate-500">
-                        {userItem.createdAt ? new Date(userItem.createdAt).toLocaleDateString('vi-VN') : '—'}
+                        {userItem.createdAt ? new Date(userItem.createdAt).toLocaleDateString('en-US') : '—'}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -300,7 +304,7 @@ export default function UserListPage() {
                             disabled={isActionLoading}
                             onClick={() => handleOpenEditModal(userItem)}
                             className="p-1.5 bg-white border border-slate-200 text-blue-600 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
-                            title="Chỉnh sửa thông tin"
+                            title="Edit User"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
@@ -311,7 +315,7 @@ export default function UserListPage() {
                             className={`p-1.5 rounded-lg border transition-colors cursor-pointer bg-white ${
                               userItem.status === 'active' ? 'border-amber-200 text-amber-600 hover:bg-amber-50' : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'
                             }`}
-                            title="Đổi trạng thái Active/Banned"
+                            title="Toggle Status (Active/Banned)"
                           >
                             <ShieldAlert className="w-4 h-4" />
                           </button>
@@ -320,7 +324,7 @@ export default function UserListPage() {
                             disabled={isActionLoading}
                             onClick={() => handleDeleteUser(currentId, userItem.email)}
                             className="p-1.5 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                            title="Xóa vĩnh viễn"
+                            title="Delete User"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -355,7 +359,7 @@ export default function UserListPage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Password</label>
-                <input type="password" placeholder={editingUserId ? "Bỏ trống nếu không muốn đổi mật khẩu" : "Bỏ trống sẽ dùng mật khẩu mặc định"} value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500" />
+                <input type="password" placeholder={editingUserId ? "Leave blank to keep current password" : "Leave blank to use default password"} value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">System Role</label>
