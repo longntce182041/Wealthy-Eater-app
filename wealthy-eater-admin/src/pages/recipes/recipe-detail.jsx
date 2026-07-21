@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api'; 
-import { LoadingState } from '../../components/ui/LoadingState';
 
 export default function RecipeDetail() {
   const { id } = useParams();
@@ -16,7 +15,6 @@ export default function RecipeDetail() {
       setError('');
       try {
         const res = await apiClient.get(`/admin/recipes/${id}`);
-        // Kiểm tra log để xem chính xác Backend trả về cái gì
         console.log("API Response Data:", res.data?.data);
         
         if (res.data?.success) {
@@ -34,13 +32,11 @@ export default function RecipeDetail() {
     fetchDetail();
   }, [id]);
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>Loading recipe info...</div>;
-  if (error) return <div className="error-banner" style={{ margin: '20px' }}>{error}</div>;
+  if (loading) return <div className="p-10 text-center text-slate-500 font-medium">Loading recipe info...</div>;
+  if (error) return <div className="m-5 p-4 bg-red-50 border border-red-200 text-red-600 rounded-lg">{error}</div>;
   if (!recipe) return null;
 
-  // ==========================================
-  // 👉 XỬ LÝ ĐỘNG CHO CÁC BƯỚC NẤU (COOKING STEPS)
-  // ==========================================
+  // Xử lý bước nấu
   let stepsArray = [];
   const rawSteps = recipe.cooking_step || recipe.cookingStep || "";
 
@@ -49,134 +45,173 @@ export default function RecipeDetail() {
   } else if (Array.isArray(rawSteps)) {
     stepsArray = rawSteps;
   } else if (typeof rawSteps === 'string' && rawSteps.trim() !== '') {
-    // Tách dòng dựa trên ký tự xuống hàng \n hoặc dấu gạch đứng | nếu có
     const separator = rawSteps.includes('|') ? '|' : '\n';
     stepsArray = rawSteps.split(separator).filter(s => s.trim() !== '');
   }
 
-  
-
-  // ==========================================
-  // 👉 XỬ LÝ ĐỘNG CHO DINH DƯỠNG (NUTRITION)
-  // ==========================================
-  // Nếu chưa link nguyên liệu (bằng 0), tự động giả lập chỉ số dinh dưỡng tiêu chuẩn dựa trên lượng calo cơ bản để tránh hiển thị trống
+  // Xử lý chỉ số dinh dưỡng
   let calories = recipe.nutrition?.calories || 0;
   let carbs = recipe.nutrition?.carbs || 0;
   let protein = recipe.nutrition?.protein || 0;
   let fat = recipe.nutrition?.fat || 0;
 
   if (calories === 0) {
-    calories = 350; // Chỉ số tiêu chuẩn minh họa
+    calories = recipe.calories || 291;
     carbs = 45;
     protein = 18;
     fat = 12;
   }
 
-  // ==========================================
-  // 👉 XỬ LÝ ĐỘNG CHO NGUYÊN LIỆU (INGREDIENTS)
-  // ==========================================
+  // Xử lý nguyên liệu
   let ingredientsArray = recipe.ingredients || [];
-  if (ingredientsArray.length === 0) {
-    ingredientsArray = [
-      { name: "Nguyên liệu chính tổng hợp", amount: 200, unit: "g" },
-      { name: "Gia vị nêm nếm (Đường, muối, tiêu)", amount: 15, unit: "g" },
-      { name: "Dầu ăn thực vật", amount: 10, unit: "ml" }
-    ];
-  }
 
   return (
-    <div style={{ padding: '4px 2px', color: '#f8fafc' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <button onClick={() => navigate('/recipes')} className="btn-primary" style={{ background: '#334155' }}>
+    <div className="max-w-[1100px] mx-auto p-4 text-slate-800">
+      {/* Nút quay lại */}
+      <div className="mb-6">
+        <button 
+          onClick={() => navigate('/recipes')} 
+          className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm"
+        >
           ← Back to List
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px', alignItems: 'start' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         
-        {/* LEFT COLUMN */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div className="table-card" style={{ padding: '20px', textAlign: 'center' }}>
+        {/* CỘT TRÁI (Bên dưới 1 cột, lên màn lớn chiếm 1/3) */}
+        <div className="lg:col-span-1 flex flex-col gap-6">
+          
+          {/* Card Hình ảnh & Tên món */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 text-center">
             {recipe.imageUrl ? (
-              <img src={recipe.imageUrl} alt={recipe.name} style={{ width: '100%', height: '220px', objectFit: 'cover', borderRadius: '12px', marginBottom: '16px' }} />
+              <img 
+                src={recipe.imageUrl} 
+                alt={recipe.name} 
+                className="w-full h-52 object-cover rounded-lg mb-4" 
+              />
             ) : (
-              <div style={{ width: '100%', height: '220px', background: '#1e293b', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px', marginBottom: '16px' }}>🍳</div>
+              <div className="w-full h-52 bg-slate-100 rounded-lg flex items-center justify-center text-5xl mb-4">
+                🍳
+              </div>
             )}
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#fff' }}>{recipe.name}</h2>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px' }}>
-              <span className={`badge ${recipe.levelCooking || 'medium'}`}>{recipe.levelCooking || 'medium'}</span>
-              <span className="badge" style={{ background: '#1e293b' }}>⏱️ {recipe.cookingTime || 30} mins</span>
+            
+            <h2 className="text-xl font-bold text-slate-900 mb-3">{recipe.name}</h2>
+            
+            <div className="flex justify-center items-center gap-2 flex-wrap">
+              <span className="capitalize px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold rounded-full">
+                {recipe.levelCooking || 'medium'}
+              </span>
+              <span className="px-3 py-1 bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold rounded-full flex items-center gap-1">
+                ⏱️ {recipe.cookingTime || 5} mins
+              </span>
             </div>
           </div>
 
-          {/* NUTRITION BOX */}
-          <div className="table-card" style={{ padding: '20px' }}>
-            <h4 style={{ fontSize: '12px', color: '#64748b', fontWeight: 700, marginBottom: '15px' }}>NUTRITIONAL PROFILE</h4>
-            <div style={{ background: 'rgba(56, 189, 248, 0.08)', padding: '16px', borderRadius: '10px', textAlign: 'center', marginBottom: '20px', border: '1px solid rgba(56, 189, 248, 0.15)' }}>
-              <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 700, display: 'block' }}>TOTAL ENERGY</span>
-              <strong style={{ fontSize: '28px', color: '#38bdf8' }}>{calories} kcal</strong>
+          {/* Card Chỉ số Dinh dưỡng */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
+              NUTRITIONAL PROFILE
+            </h4>
+            
+            <div className="bg-sky-50 border border-sky-100 p-4 rounded-xl text-center mb-5">
+              <span className="text-xs text-sky-600 font-bold tracking-wide block mb-1">
+                TOTAL ENERGY
+              </span>
+              <strong className="text-3xl font-extrabold text-sky-600">
+                {calories} kcal
+              </strong>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div className="flex flex-col gap-3">
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span>Carbs</span><strong>{carbs}g</strong>
+                <div className="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+                  <span>Carbs</span>
+                  <span className="text-slate-900">{carbs}g</span>
                 </div>
-                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', marginTop: '5px' }}>
-                  <div style={{ width: `${Math.min((carbs / (carbs + protein + fat || 1)) * 100, 100)}%`, height: '100%', background: '#f59e0b', borderRadius: '3px' }}></div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    style={{ width: `${Math.min((carbs / (carbs + protein + fat || 1)) * 100, 100)}%` }} 
+                    className="h-full bg-amber-500 rounded-full"
+                  />
                 </div>
               </div>
+
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span>Protein</span><strong>{protein}g</strong>
+                <div className="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+                  <span>Protein</span>
+                  <span className="text-slate-900">{protein}g</span>
                 </div>
-                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', marginTop: '5px' }}>
-                  <div style={{ width: `${Math.min((protein / (carbs + protein + fat || 1)) * 100, 100)}%`, height: '100%', background: '#10b981', borderRadius: '3px' }}></div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    style={{ width: `${Math.min((protein / (carbs + protein + fat || 1)) * 100, 100)}%` }} 
+                    className="h-full bg-emerald-500 rounded-full"
+                  />
                 </div>
               </div>
+
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span>Fat</span><strong>{fat}g</strong>
+                <div className="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+                  <span>Fat</span>
+                  <span className="text-slate-900">{fat}g</span>
                 </div>
-                <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', marginTop: '5px' }}>
-                  <div style={{ width: `${Math.min((fat / (carbs + protein + fat || 1)) * 100, 100)}%`, height: '100%', background: '#ef4444', borderRadius: '3px' }}></div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    style={{ width: `${Math.min((fat / (carbs + protein + fat || 1)) * 100, 100)}%` }} 
+                    className="h-full bg-rose-500 rounded-full"
+                  />
                 </div>
               </div>
             </div>
           </div>
+
         </div>
 
-        {/* RIGHT COLUMN */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* INGREDIENTS */}
-          <div className="table-card" style={{ padding: '22px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#fff', marginBottom: '16px' }}>🛒 Ingredients</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        {/* CỘT PHẢI (Nhiều thông tin hơn - chiếm 2/3) */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          
+          {/* Card Nguyên liệu */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+              🛒 Ingredients
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {ingredientsArray.map((ing, i) => (
-                <div key={i} style={{ background: '#1e293b', padding: '10px', borderRadius: '8px', border: '1px solid #334155', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>{ing.name}</span>
-                  <span style={{ color: '#38bdf8', fontWeight: 600 }}>{ing.amount || ing.base_quantity || 0} {ing.unit || 'g'}</span>
+                <div 
+                  key={i} 
+                  className="bg-slate-50 border border-slate-200 p-3 rounded-lg flex justify-between items-center text-sm font-medium text-slate-700"
+                >
+                  <span>{ing.name || ing.ingredient_id?.name}</span>
+                  <span className="text-sky-600 font-bold">
+                    {ing.amount || ing.base_quantity || 0} {ing.unit || 'g'}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* COOKING STEPS */}
-          <div className="table-card" style={{ padding: '22px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#fff', marginBottom: '16px' }}>👨‍🍳 Preparation Steps</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Card Các bước nấu */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+              👨‍🍳 Preparation Steps
+            </h3>
+            <div className="flex flex-col gap-3">
               {stepsArray.map((step, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: '15px', background: '#1e293b', padding: '15px', borderRadius: '10px', borderLeft: '4px solid #10b981' }}>
-                  <div style={{ background: '#10b981', color: '#fff', minWidth: '24px', height: '24px', borderRadius: '50%', textAlign: 'center', fontSize: '12px', lineHeight: '24px', fontWeight: 'bold' }}>
+                <div 
+                  key={idx} 
+                  className="flex gap-4 bg-slate-50 border border-slate-200 p-4 rounded-xl border-l-4 border-l-emerald-500"
+                >
+                  <div className="bg-emerald-500 text-white min-w-[24px] h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
                     {idx + 1}
                   </div>
-                  <div style={{ fontSize: '14px', lineHeight: '1.6', color: '#cbd5e1' }}>
+                  <div className="text-sm text-slate-700 leading-relaxed font-normal">
                     {typeof step === 'object' ? step.instruction : step}
                   </div>
                 </div>
               ))}
             </div>
           </div>
+
         </div>
 
       </div>
