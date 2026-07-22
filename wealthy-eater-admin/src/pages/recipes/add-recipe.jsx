@@ -14,7 +14,7 @@ export default function AddRecipePage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    imageUrl: '',
+    imageUrl: '', // Sẽ chứa chuỗi Base64 đại diện cho tệp ảnh đã chọn
     levelCooking: 'medium',
     cookingTime: '',
     baseServings: 1,
@@ -63,6 +63,34 @@ export default function AddRecipePage() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  /**
+   * 🔥 Xử lý tải ảnh từ máy tính (File Picker -> Base64)
+   */
+  const handleImageFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Kiểm tra dung lượng (giới hạn 5MB nếu cần)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Kích thước ảnh quá lớn! Vui lòng chọn ảnh dưới 5MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // Đọc tệp thành dạng chuỗi Base64 data:image/...;base64,...
+      setFormData(prev => ({ ...prev, imageUrl: reader.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  /**
+   * Xóa ảnh đã chọn khỏi form
+   */
+  const handleRemoveImage = () => {
+    setFormData(prev => ({ ...prev, imageUrl: '' }));
   };
 
   const handleStepTextChange = (index, value) => {
@@ -122,7 +150,7 @@ export default function AddRecipePage() {
     const payload = {
       name: formData.name.trim(),
       description: formData.description,
-      image_url: formData.imageUrl,
+      image_url: formData.imageUrl, // Chứa chuỗi base64 đẩy trực tiếp lên Cloudinary ở Controller
       cooking_time: Number(formData.cookingTime) || 0,
       base_servings: Number(formData.baseServings) || 1,
       status: formData.status,
@@ -134,26 +162,24 @@ export default function AddRecipePage() {
     try {
       const response = await apiClient.post('/admin/recipes', payload);
       if (response.data?.success) {
-        // 🔥 Đã chỉnh sửa: Popup màu xanh lá, kích thước lớn và kéo dài đúng 5 giây (5000ms)
         toast.success('Create a new recipe successfully!', {
           duration: 5000,
           style: {
-            background: '#16a34a', // Màu xanh lá chuẩn (Tailwind green-600) cực nổi bật
-            color: '#ffffff',      // Chữ trắng rõ ràng
-            padding: '16px 24px',  // Tăng khoảng cách đệm bên trong giúp popup to hơn
-            fontSize: '16px',      // Cỡ chữ to hơn một chút so với mặc định
-            fontWeight: '500',     // Chữ đậm vừa phải thanh lịch
-            borderRadius: '12px',  // Bo góc mềm mại, hiện đại
-            minWidth: '360px',     // Đảm bảo chiều rộng bề thế, không bị co nhỏ
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2)' // Đổ bóng đậm chất chuyên nghiệp
+            background: '#16a34a',
+            color: '#ffffff',
+            padding: '16px 24px',
+            fontSize: '16px',
+            fontWeight: '500',
+            borderRadius: '12px',
+            minWidth: '360px',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2)'
           },
           iconTheme: {
-            primary: '#ffffff',    // Chuyển dấu tích tròn mặc định thành màu trắng cho tiệp màu nền
+            primary: '#ffffff',
             secondary: '#16a34a'
           }
         });
         
-        // Điều hướng mượt mà về trang quản lý danh sách món ăn
         navigate('/recipes');
       }
     } catch (err) {
@@ -161,7 +187,6 @@ export default function AddRecipePage() {
       const errorMsg = err?.response?.data?.message || err.message || 'Lưu thất bại, kiểm tra lại dữ liệu.';
       setError(errorMsg);
       
-      // Popup thông báo thất bại cũng được làm to tương đương cho đồng bộ, sử dụng màu đỏ hệ thống
       toast.error(errorMsg, { 
         duration: 5000,
         style: {
@@ -235,10 +260,50 @@ export default function AddRecipePage() {
                 </select>
               </div>
             </div>
+
+            {/* 🔥 KHU VỰC CHỌN TỆP HÌNH ẢNH MÓN ĂN */}
             <div>
-              <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">URL</label>
-              <input type="url" name="imageUrl" value={formData.imageUrl} onChange={handleInputChange} placeholder="https://..." className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
+              <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Recipe Image</label>
+              
+              {!formData.imageUrl ? (
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <svg className="w-8 h-8 mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <p className="text-xs text-slate-500 font-medium"><span className="font-semibold text-primary">Click to upload</span> or drag and drop</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">PNG, JPG, WEBP (Max 5MB)</p>
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleImageFileChange} 
+                      className="hidden" 
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="relative w-36 h-36 border border-slate-200 rounded-lg overflow-hidden group">
+                  <img 
+                    src={formData.imageUrl} 
+                    alt="Recipe Preview" 
+                    className="w-full h-full object-cover" 
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"
+                    title="Remove image"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
+
           </div>
         </div>
 
