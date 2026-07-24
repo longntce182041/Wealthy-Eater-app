@@ -15,6 +15,9 @@ import LoginPage from "../pages/Login.jsx";
 import AdminLayout from "../layouts/AdminLayout.jsx";
 import PlatformAnalytics from "../pages/analytics/PlatformAnalytics.jsx";
 
+// 🎯 ĐÃ SỬA ĐÚNG PATH CHUẨN THEO ẢNH CỦA NÍ:
+import TransactionLogsPage from "../pages/transaction/transaction-logs.jsx";
+
 // Route bảo vệ yêu cầu trạng thái đăng nhập hệ thống
 const PrivateRoute = () => {
   const token = localStorage.getItem("admin_session_jwt_token");
@@ -67,6 +70,9 @@ export function AppRoutes() {
 
             {/* Quản lý chuyên gia dinh dưỡng (Nutritionist) */}
             <Route path="nutritionists" element={<NutritionistListPage />} />
+
+            {/* Quản lý lịch sử giao dịch (Khớp đường dẫn URL với Sidebar của bạn) */}
+            <Route path="transactions" element={<TransactionLogsPage />} />
 
             {/* Phân hệ quản lý Công thức nấu ăn (Recipes) */}
             <Route path="recipes" element={<RecipesPage />} /> 

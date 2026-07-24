@@ -4,7 +4,7 @@ import {
   XCircle, Clock, ShieldCheck, Filter, ChevronLeft, ChevronRight,
   Eye, Copy, Check, ExternalLink, X, CreditCard, User, FileText
 } from 'lucide-react';
-import apiClient from '../../services/api'; // Điều chỉnh path tùy theo dự án của bạn (ví dụ: '../../api/axiosClient')
+import apiClient from '../../services/api';
 
 export default function TransactionLogsPage() {
   const [logs, setLogs] = useState([]);
@@ -16,6 +16,15 @@ export default function TransactionLogsPage() {
   // State quản lý Modal & Notification
   const [selectedTx, setSelectedTx] = useState(null);
   const [copiedText, setCopiedText] = useState('');
+
+  // 🛡️ Hàm hỗ trợ Render an toàn (Chống lỗi render Object thành React Child)
+  const renderSafeValue = (val) => {
+    if (val === null || val === undefined) return '—';
+    if (typeof val === 'object') {
+      return val.full_name || val.name || val.email || val._id || JSON.stringify(val);
+    }
+    return String(val);
+  };
 
   // 🔄 Fetch data từ API Backend
   const fetchLogs = useCallback(async (page = 1) => {
@@ -30,8 +39,8 @@ export default function TransactionLogsPage() {
         }
       });
       if (res.data?.success) {
-        setLogs(res.data.data);
-        setPagination(res.data.pagination);
+        setLogs(res.data.data || []);
+        setPagination(res.data.pagination || { page: 1, totalPages: 1, total: res.data.data?.length || 0 });
       }
     } catch (err) {
       console.error("Failed to fetch transaction logs:", err);
@@ -52,14 +61,16 @@ export default function TransactionLogsPage() {
   // 📋 Copy to clipboard helper
   const handleCopy = (text) => {
     if (!text) return;
-    navigator.clipboard.writeText(text);
-    setCopiedText(text);
+    const strText = typeof text === 'object' ? text._id || JSON.stringify(text) : String(text);
+    navigator.clipboard.writeText(strText);
+    setCopiedText(strText);
     setTimeout(() => setCopiedText(''), 2000);
   };
 
   // 🏷️ Format Status Badge
   const renderStatusBadge = (status) => {
-    switch (status) {
+    const statusStr = typeof status === 'string' ? status.toUpperCase() : 'PENDING';
+    switch (statusStr) {
       case 'PAID':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">
@@ -70,7 +81,7 @@ export default function TransactionLogsPage() {
       case 'CANCELLED':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 uppercase">
-            <XCircle className="w-3.5 h-3.5" /> {status}
+            <XCircle className="w-3.5 h-3.5" /> {statusStr}
           </span>
         );
       default:
@@ -84,6 +95,7 @@ export default function TransactionLogsPage() {
 
   // 📦 Format Package Name
   const formatPackageName = (type) => {
+    if (typeof type === 'object') return type?.name || 'Standard Plan';
     switch (type) {
       case '1_month': return '1 Month Plan';
       case '3_months': return '3 Months Plan';
@@ -188,82 +200,85 @@ export default function TransactionLogsPage() {
                   </td>
                 </tr>
               ) : (
-                logs.map((item) => (
-                  <tr key={item._id} className="hover:bg-slate-50/70 transition-colors">
-                    
-                    {/* Order Code */}
-                    <td className="px-5 py-4 font-mono font-bold text-slate-900">
-                      <div className="flex items-center gap-1.5">
-                        <span>{item.payos_order_code}</span>
-                        <button 
-                          onClick={() => handleCopy(item.payos_order_code)}
-                          className="text-slate-400 hover:text-slate-600 p-1 rounded"
-                          title="Copy Order Code"
-                        >
-                          {copiedText === item.payos_order_code ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </td>
-
-                    {/* PayOS Transaction ID */}
-                    <td className="px-5 py-4 font-mono text-xs text-slate-500">
-                      {item.payos_transaction_id ? (
-                        <div className="flex items-center gap-1">
-                          <span>{item.payos_transaction_id}</span>
+                logs.map((item) => {
+                  const createdDate = item.createdAt || item.create_at;
+                  return (
+                    <tr key={item._id} className="hover:bg-slate-50/70 transition-colors">
+                      
+                      {/* Order Code */}
+                      <td className="px-5 py-4 font-mono font-bold text-slate-900">
+                        <div className="flex items-center gap-1.5">
+                          <span>{renderSafeValue(item.payos_order_code)}</span>
                           <button 
-                            onClick={() => handleCopy(item.payos_transaction_id)}
-                            className="text-slate-400 hover:text-slate-600 p-0.5 rounded"
+                            onClick={() => handleCopy(item.payos_order_code)}
+                            className="text-slate-400 hover:text-slate-600 p-1 rounded"
+                            title="Copy Order Code"
                           >
-                            {copiedText === item.payos_transaction_id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                            {copiedText === String(item.payos_order_code) ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                           </button>
                         </div>
-                      ) : '—'}
-                    </td>
+                      </td>
 
-                    {/* Package */}
-                    <td className="px-5 py-4 font-medium text-slate-700">
-                      <span className="bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-xs">
-                        {formatPackageName(item.package_type)}
-                      </span>
-                    </td>
+                      {/* PayOS Transaction ID */}
+                      <td className="px-5 py-4 font-mono text-xs text-slate-500">
+                        {item.payos_transaction_id ? (
+                          <div className="flex items-center gap-1">
+                            <span>{renderSafeValue(item.payos_transaction_id)}</span>
+                            <button 
+                              onClick={() => handleCopy(item.payos_transaction_id)}
+                              className="text-slate-400 hover:text-slate-600 p-0.5 rounded"
+                            >
+                              {copiedText === String(item.payos_transaction_id) ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                            </button>
+                          </div>
+                        ) : '—'}
+                      </td>
 
-                    {/* Gross */}
-                    <td className="px-5 py-4 text-right font-bold text-slate-900">
-                      {item.amount_gross?.toLocaleString('en-US')} VND
-                    </td>
+                      {/* Package */}
+                      <td className="px-5 py-4 font-medium text-slate-700">
+                        <span className="bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-xs">
+                          {formatPackageName(item.package_type)}
+                        </span>
+                      </td>
 
-                    {/* Fee */}
-                    <td className="px-5 py-4 text-right font-semibold text-amber-600">
-                      {item.platform_fee?.toLocaleString('en-US')} VND
-                    </td>
+                      {/* Gross */}
+                      <td className="px-5 py-4 text-right font-bold text-slate-900">
+                        {item.amount_gross?.toLocaleString('en-US') || 0} VND
+                      </td>
 
-                    {/* Payout */}
-                    <td className="px-5 py-4 text-right font-semibold text-emerald-600">
-                      {item.expert_payout?.toLocaleString('en-US')} VND
-                    </td>
+                      {/* Fee */}
+                      <td className="px-5 py-4 text-right font-semibold text-amber-600">
+                        {item.platform_fee?.toLocaleString('en-US') || 0} VND
+                      </td>
 
-                    {/* Status */}
-                    <td className="px-5 py-4 text-center">
-                      {renderStatusBadge(item.status)}
-                    </td>
+                      {/* Payout */}
+                      <td className="px-5 py-4 text-right font-semibold text-emerald-600">
+                        {item.expert_payout?.toLocaleString('en-US') || 0} VND
+                      </td>
 
-                    {/* Created Date */}
-                    <td className="px-5 py-4 text-xs text-slate-400">
-                      {item.createdAt ? new Date(item.createdAt).toLocaleString('en-US') : '—'}
-                    </td>
+                      {/* Status */}
+                      <td className="px-5 py-4 text-center">
+                        {renderStatusBadge(item.status)}
+                      </td>
 
-                    {/* Action */}
-                    <td className="px-5 py-4 text-center">
-                      <button
-                        onClick={() => setSelectedTx(item)}
-                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      {/* Created Date */}
+                      <td className="px-5 py-4 text-xs text-slate-400">
+                        {createdDate ? new Date(createdDate).toLocaleString('en-US') : '—'}
+                      </td>
+
+                      {/* Action */}
+                      <td className="px-5 py-4 text-center">
+                        <button
+                          onClick={() => setSelectedTx(item)}
+                          className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -323,7 +338,7 @@ export default function TransactionLogsPage() {
               <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <div>
                   <span className="text-xs text-slate-400 font-semibold block">PAYOS ORDER CODE</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedTx.payos_order_code}</span>
+                  <span className="font-mono font-bold text-slate-900">{renderSafeValue(selectedTx.payos_order_code)}</span>
                 </div>
                 <div>
                   <span className="text-xs text-slate-400 font-semibold block">STATUS</span>
@@ -331,7 +346,7 @@ export default function TransactionLogsPage() {
                 </div>
                 <div>
                   <span className="text-xs text-slate-400 font-semibold block">PAYOS TRANSACTION ID</span>
-                  <span className="font-mono text-slate-700">{selectedTx.payos_transaction_id || 'Not generated yet'}</span>
+                  <span className="font-mono text-slate-700">{renderSafeValue(selectedTx.payos_transaction_id)}</span>
                 </div>
                 <div>
                   <span className="text-xs text-slate-400 font-semibold block">PACKAGE TYPE</span>
@@ -345,15 +360,15 @@ export default function TransactionLogsPage() {
                 <div className="space-y-2 border border-slate-200 rounded-xl p-4">
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Gross Amount (Client Paid):</span>
-                    <span className="font-bold text-slate-900">{selectedTx.amount_gross?.toLocaleString('en-US')} VND</span>
+                    <span className="font-bold text-slate-900">{selectedTx.amount_gross?.toLocaleString('en-US') || 0} VND</span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Platform Commission Fee:</span>
-                    <span className="font-bold text-amber-600">+{selectedTx.platform_fee?.toLocaleString('en-US')} VND</span>
+                    <span className="font-bold text-amber-600">+{selectedTx.platform_fee?.toLocaleString('en-US') || 0} VND</span>
                   </div>
                   <div className="border-t border-slate-100 pt-2 flex justify-between items-center">
                     <span className="font-semibold text-slate-800">Nutritionist Net Payout:</span>
-                    <span className="font-extrabold text-emerald-600 text-base">{selectedTx.expert_payout?.toLocaleString('en-US')} VND</span>
+                    <span className="font-extrabold text-emerald-600 text-base">{selectedTx.expert_payout?.toLocaleString('en-US') || 0} VND</span>
                   </div>
                 </div>
               </div>
@@ -365,18 +380,25 @@ export default function TransactionLogsPage() {
                   <div className="flex items-center gap-2">
                     <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span className="text-slate-500">Contract ID:</span>
-                    <span className="text-slate-800 font-semibold">{selectedTx.consultation_contracts_id_fk}</span>
+                    <span className="text-slate-800 font-semibold">{renderSafeValue(selectedTx.consultation_contracts_id_fk)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="text-slate-500">User ID:</span>
-                    <span className="text-slate-800 font-semibold">{selectedTx.user_id?._id || selectedTx.user_id}</span>
+                    <span className="text-slate-500">User / Client:</span>
+                    <span className="text-slate-800 font-semibold">{renderSafeValue(selectedTx.user_id)}</span>
                   </div>
+                  {selectedTx.nutritionist_id && (
+                    <div className="flex items-center gap-2">
+                      <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-slate-500">Nutritionist:</span>
+                      <span className="text-slate-800 font-semibold">{renderSafeValue(selectedTx.nutritionist_id)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* PayOS External Links */}
-              {selectedTx.payos_payment_link && (
+              {/* PayOS External Links - Chỉ cho phép bấm khi trạng thái là PENDING */}
+              {selectedTx.payos_payment_link && selectedTx.status === 'PENDING' && (
                 <div className="pt-2">
                   <a 
                     href={selectedTx.payos_payment_link} 
@@ -386,6 +408,15 @@ export default function TransactionLogsPage() {
                   >
                     Open PayOS Payment Checkout <ExternalLink className="w-3.5 h-3.5" />
                   </a>
+                </div>
+              )}
+
+              {/* Nếu đơn đã PAID thì hiển thị thông báo đã xác nhận thành công */}
+              {selectedTx.status === 'PAID' && (
+                <div className="pt-2">
+                  <div className="flex items-center justify-center gap-2 w-full py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold">
+                    <CheckCircle2 className="w-4 h-4" /> Transaction Completed & Verified
+                  </div>
                 </div>
               )}
 
