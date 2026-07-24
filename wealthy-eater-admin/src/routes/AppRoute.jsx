@@ -4,7 +4,7 @@ import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 // ĐỒNG BỘ CHUẨN CẤU TRÚC THƯ MỤC THỰC TẾ CỦA BẠN:
 import DashboardPage from "../pages/Dashboard.jsx"; // File Dashboard.jsx nằm trực tiếp trong pages
 import IngredientsPage from "../pages/ingredients/ingredients.jsx";
-import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx";
+import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx"; // Trỏ đúng vào file micronutrients.jsx chứ không phải index.jsx
 import RecipesPage from "../pages/recipes/recipes.jsx"; 
 import RecipeDetail from '../pages/recipes/recipe-detail';
 import AddRecipePage from "../pages/recipes/add-recipe";
