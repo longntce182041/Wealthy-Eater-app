@@ -8,7 +8,8 @@ import {
   LogOut,
   UtensilsCrossed,
   Users,
-  UserCheck
+  UserCheck,
+  Receipt // 🆕 Import icon cho Transaction Logs
 } from "lucide-react";
 import { useSessionGuard } from "../hooks/useSessionGuard";
 import SessionExpiredModal from "../components/common/SessionExpiredModal";
@@ -33,8 +34,7 @@ export default function AdminLayout() {
     navigate('/login');
   }
 
-  // 🆕 2. Thêm tiêu đề hiển thị ở Topbar khi bấm vào trang Users
-  // 🆕 2. Thêm tiêu đề hiển thị ở Topbar khi bấm vào trang Users
+  // 🆕 Tiêu đề hiển thị ở Topbar khi truy cập từng đường dẫn
   const getTopbarTitle = () => {
     switch(location.pathname) {
       case '/dashboard': return 'Dashboard Overview';
@@ -44,12 +44,12 @@ export default function AdminLayout() {
       case '/users': return 'Users Management'; 
       case '/nutritionists': return 'Nutritionists Directory';
       case '/recipes': return 'Recipes Management';
+      case '/transactions': return 'Transaction Audit Logs'; // 🆕 Thêm tiêu đề cho trang Giao dịch
       default: return 'Admin Panel';
     }
   };
 
-  // 🆕 3. Thêm mục điều hướng '/users' vào danh sách Menu Sidebar
-  // 🆕 3. Thêm mục điều hướng '/users' vào danh sách Menu Sidebar
+  // 🆕 Danh sách Menu Sidebar điều hướng
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Overview' },
     { path: '/analytics', icon: BarChart3, label: 'Platform Analytics' },
@@ -58,6 +58,7 @@ export default function AdminLayout() {
     { path: '/users', icon: Users, label: 'Manage Users' }, 
     { path: '/nutritionists', icon: UserCheck, label: 'Manage Nutritionists' },
     { path: '/recipes', icon: BookOpen, label: 'Manage Recipes' },
+    { path: '/transactions', icon: Receipt, label: 'Transaction Logs' }, // 🆕 Bổ sung route /transactions
   ];
 
   return (
