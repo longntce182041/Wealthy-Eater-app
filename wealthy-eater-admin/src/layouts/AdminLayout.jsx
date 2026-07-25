@@ -9,7 +9,8 @@ import {
   UtensilsCrossed,
   Users,
   UserCheck,
-  Receipt // 🆕 Import icon cho Transaction Logs
+  Receipt,
+  Percent // 🆕 Import icon Percent cho cấu hình tỷ lệ chiết khấu
 } from "lucide-react";
 import { useSessionGuard } from "../hooks/useSessionGuard";
 import SessionExpiredModal from "../components/common/SessionExpiredModal";
@@ -44,7 +45,8 @@ export default function AdminLayout() {
       case '/users': return 'Users Management'; 
       case '/nutritionists': return 'Nutritionists Directory';
       case '/recipes': return 'Recipes Management';
-      case '/transactions': return 'Transaction Audit Logs'; // 🆕 Thêm tiêu đề cho trang Giao dịch
+      case '/transactions': return 'Transaction Audit Logs';
+      case '/settings/commission': return 'Commission Rates Settings'; // 🆕 Thêm tiêu đề cho UC-81
       default: return 'Admin Panel';
     }
   };
@@ -58,7 +60,8 @@ export default function AdminLayout() {
     { path: '/users', icon: Users, label: 'Manage Users' }, 
     { path: '/nutritionists', icon: UserCheck, label: 'Manage Nutritionists' },
     { path: '/recipes', icon: BookOpen, label: 'Manage Recipes' },
-    { path: '/transactions', icon: Receipt, label: 'Transaction Logs' }, // 🆕 Bổ sung route /transactions
+    { path: '/transactions', icon: Receipt, label: 'Transaction Logs' },
+    { path: '/settings/commission', icon: Percent, label: 'Commission Rates' }, // 🆕 Bổ sung route UC-81
   ];
 
   return (
@@ -96,7 +99,7 @@ export default function AdminLayout() {
         <div className="p-4 border-t border-slate-100">
           <button 
             onClick={logout} 
-            className="flex items-center w-full px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200"
+            className="flex items-center w-full px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-200 cursor-pointer"
           >
             <LogOut className="w-5 h-5 mr-3 flex-shrink-0" />
             <span>Sign Out</span>

@@ -7,6 +7,7 @@ const router = express.Router();
 const adminNutritionistRoute = require("./admin.nutritionist.routes"); 
 const adminRecipeRoute = require("./admin.recipe.routes");
 const adminTransactionRoute = require("./admin.transaction.routes");
+const adminSettingRoutes = require('./admin.setting.routes');
 const adminUserRoute = require("./admin.user.routes");
 const analyticsRoute = require("./analytics.route");
 const authRoute = require("./auth.route");
@@ -46,6 +47,7 @@ router.use("/api/admin/recipes", adminRecipeRoute);
 router.use("/api/admin/analytics", analyticsRoute);
 router.use("/api/admin/system-dashboard", systemDashboardRoute);
 router.use("/api/admin/transactions", adminTransactionRoute);
+router.use("/api/admin/settings", adminSettingRoutes);
 
 
 // ─── NUTRITIONIST ROUTES ────────────────────────────────────────────────────
