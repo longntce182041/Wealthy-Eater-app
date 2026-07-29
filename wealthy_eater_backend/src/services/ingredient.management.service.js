@@ -60,11 +60,12 @@ class IngredientManagementService {
         const ingredient = await Ingredient.findById(stringId);
         if (!ingredient) throw new Error("Ingredient not found");
 
-        const micronValues = await IngredientMicronutrientValues.find({ ingredientId: stringId }).populate('micronutrientId', 'name unit');
+        // 🎯 FIX: Đồng bộ đúng tên field ingredient_id & micronutrient_id theo Schema
+        const micronValues = await IngredientMicronutrientValues.find({ ingredient_id: stringId }).populate('micronutrient_id', 'name unit');
         const micronutrients = micronValues.map(mv => ({
-            micronutrientId: mv.micronutrientId?._id || mv.micronutrientId,
-            name: mv.micronutrientId?.name || null,
-            unit: mv.micronutrientId?.unit || null,
+            micronutrientId: mv.micronutrient_id?._id || mv.micronutrient_id,
+            name: mv.micronutrient_id?.name || null,
+            unit: mv.micronutrient_id?.unit || null,
             amount: mv.amount,
         }));
 
@@ -102,8 +103,8 @@ class IngredientManagementService {
             const docs = data.micronutrients
                 .filter(m => m && m.micronutrientId)
                 .map(m => ({
-                    ingredientId: saved._id.toString(),
-                    micronutrientId: m.micronutrientId,
+                    ingredient_id: saved._id.toString(),      // 🎯 FIX: Dùng đúng ingredient_id theo Schema
+                    micronutrient_id: m.micronutrientId,     // 🎯 FIX: Dùng đúng micronutrient_id theo Schema
                     amount: Number(m.amount) || 0
                 }));
             if (docs.length > 0) {
@@ -141,13 +142,14 @@ class IngredientManagementService {
         const updated = await ingredient.save();
 
         if (data.micronutrients !== undefined) {
-            await IngredientMicronutrientValues.deleteMany({ ingredientId: updated._id.toString() });
+            // 🎯 FIX: Tìm và xóa theo đúng tên field ingredient_id
+            await IngredientMicronutrientValues.deleteMany({ ingredient_id: updated._id.toString() });
             if (Array.isArray(data.micronutrients) && data.micronutrients.length) {
                 const docs = data.micronutrients
                     .filter(m => m && m.micronutrientId)
                     .map(m => ({
-                        ingredientId: updated._id.toString(),
-                        micronutrientId: m.micronutrientId,
+                        ingredient_id: updated._id.toString(),    // 🎯 FIX: Dùng đúng ingredient_id theo Schema
+                        micronutrient_id: m.micronutrientId,   // 🎯 FIX: Dùng đúng micronutrient_id theo Schema
                         amount: Number(m.amount) || 0
                     }));
                 if (docs.length > 0) {
@@ -165,7 +167,8 @@ class IngredientManagementService {
         const stringId = id.toString();
         const ingredient = await Ingredient.findByIdAndDelete(stringId);
         if (!ingredient) throw new Error("Ingredient not found");
-        await IngredientMicronutrientValues.deleteMany({ ingredientId: stringId });
+        // 🎯 FIX: Dùng đúng ingredient_id
+        await IngredientMicronutrientValues.deleteMany({ ingredient_id: stringId });
         return ingredient;
     }
 
