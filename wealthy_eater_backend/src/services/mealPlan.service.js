@@ -915,6 +915,28 @@ class MealPlanService {
     item.is_completed = true;
     await item.save();
 
+    // ── TRIGGER UC-42 N8N WEBHOOK ──────────────────────────────────────────
+    try {
+      const ConsultationContract = require("../models/ConsultationContract");
+      const activeContract = await ConsultationContract.findOne({
+        user_id: userId,
+        status: 'active'
+      }).lean();
+
+      const n8nService = require('./n8n.service');
+      n8nService.triggerAutoAdjustCalories({
+        user_id: userId.toString(),
+        actual_calories: calories,
+        meal_type: item.meal_type,
+        meal_log_id: newLog._id.toString(),
+        contract_id: activeContract ? activeContract._id.toString() : '',
+        logged_at: newLog.create_at.toISOString()
+      });
+    } catch (err) {
+      console.error("❌ Failed to trigger auto-adjust calories webhook:", err);
+    }
+    // ───────────────────────────────────────────────────────────────────────
+
     return newLog;
   }
 

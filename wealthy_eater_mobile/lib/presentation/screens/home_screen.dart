@@ -16,6 +16,9 @@ import 'dashboard_home_tab.dart';
 import 'customer_profile_tab.dart';
 import 'meal_plans_tab.dart';
 import 'pantry_scanner_screen.dart';
+import 'package:socket_io_client/socket_io_client.dart' as socket_io;
+import 'package:flutter/foundation.dart';
+import '../../core/config/env_config.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserEntity? user;
@@ -28,16 +31,57 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  socket_io.Socket? _socket;
 
   @override
   void initState() {
     super.initState();
+    _initSocket();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RecipeProvider>().loadRecipes();
       context.read<NotificationProvider>().fetchSettings();
       context.read<NotificationProvider>().fetchHistory();
       context.read<ShoppingListProvider>().loadList();
     });
+  }
+
+  void _initSocket() {
+    final token = context.read<AuthProvider>().token;
+    if (token == null) return;
+    
+    final baseUrl = kIsWeb ? 'http://localhost:5000' : EnvConfig.baseUrl;
+    _socket = socket_io.io(
+      baseUrl,
+      socket_io.OptionBuilder()
+          .setTransports(['websocket', 'polling'])
+          .enableAutoConnect()
+          .setExtraHeaders({'Authorization': 'Bearer $token'})
+          .build(),
+    );
+
+    _socket?.on('macro_rings_update', (data) {
+      if (!mounted) return;
+      final payload = data['payload'] ?? {};
+      final route = payload['route'] ?? 'UNKNOWN';
+      final delta = payload['delta_cal'] ?? 0;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🔔 UC-42 Auto-Adjust: $route (Delta: $delta kcal)'),
+          backgroundColor: Colors.blueAccent,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    });
+
+    _socket?.connect();
+  }
+
+  @override
+  void dispose() {
+    _socket?.disconnect();
+    _socket?.dispose();
+    super.dispose();
   }
 
   void _selectTab(int index) => setState(() => _selectedIndex = index);

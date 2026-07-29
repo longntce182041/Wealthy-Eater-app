@@ -26,6 +26,7 @@ const userRecipeRoute = require("./user.recipe.route");
 const webhookRoute = require("./webhook.routes");
 const dietAuditRoute = require("./dietAudit.routes");
 const userChatbotRoute = require("./user.chatbot.routes");
+const internalRoutes = require("./internal.routes");
 
 // ============================================================================
 // 2. MAPPING API ENDPOINTS (Grouped logically to minimize Git conflicts)
@@ -64,5 +65,8 @@ router.use("/api/chat", chatRoute);
 
 // ─── WEBHOOK ROUTES (unauthenticated, verified via signature) ───────────────
 router.use("/api/webhooks", webhookRoute);
+
+// ─── INTERNAL API ROUTES (secured via X-INTERNAL-SECRET) ──────────────────
+router.use("/api/internal", internalRoutes);
 
 module.exports = router;

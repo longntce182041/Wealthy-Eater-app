@@ -471,15 +471,58 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   )
-                : FilledButton.icon(
-                    onPressed: _isSaving ? null : _logMeal,
-                    icon: const Icon(Icons.check_circle_outline, size: 18),
-                    label: const Text('Complete Meal'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.success,
-                      minimumSize: const Size.fromHeight(40),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
+                : Column(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _isSaving ? null : () async {
+                          final controller = TextEditingController(text: _currentGram.round().toString());
+                          final val = await showDialog<double>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Test UC-42 Deviation'),
+                              content: TextField(
+                                controller: controller,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: const InputDecoration(
+                                  labelText: 'Total Meal Weight (grams)',
+                                  hintText: 'Enter a huge value (e.g. 2000) to trigger UC-42',
+                                ),
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(context, double.tryParse(controller.text)),
+                                  child: const Text('Log Fake Meal'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (val != null && mounted) {
+                            setState(() {
+                              _currentGram = val;
+                            });
+                            _logMeal();
+                          }
+                        },
+                        icon: const Icon(Icons.science_outlined, size: 18),
+                        label: Text('Simulate Deviation ($_currentGram g)'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(40),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      FilledButton.icon(
+                        onPressed: _isSaving ? null : _logMeal,
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: const Text('Complete Meal'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.success,
+                          minimumSize: const Size.fromHeight(40),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ],
                   ),
           ),
         ],
