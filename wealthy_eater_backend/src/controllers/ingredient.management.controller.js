@@ -79,6 +79,10 @@ class IngredientManagementController {
             if (req.body.carbs !== undefined) req.body.carbs = Number(req.body.carbs) || 0;
             if (req.body.fat !== undefined) req.body.fat = Number(req.body.fat) || 0;
 
+            // 🎯 Bổ sung Validation để đồng nhất bắt lỗi sớm cho hàm update
+            const { errors, isValid } = validateIngredient(req.body);
+            if (!isValid) return next(new AppError('Validation Error', 400, errors));
+
             const updatedIngredient = await ingredientService.updateIngredient(req.params.id, req.body, req.file);
             const message = getActionMessage('update', 'Ingredient');
             res.json({ success: true, message, data: updatedIngredient });
