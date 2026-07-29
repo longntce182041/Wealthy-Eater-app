@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../domain/entities/recipe.dart';
 import '../providers/recipe_provider.dart';
 import '../providers/shopping_list_provider.dart';
@@ -246,7 +247,7 @@ class _InfoTab extends StatelessWidget {
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         backgroundColor: ok
-            ? Colors.green.shade700
+            ? AppColors.primary
             : Theme.of(context).colorScheme.error,
         content: Row(
           children: [

@@ -62,6 +62,7 @@ class AppTheme {
           foregroundColor: AppColors.textOnPrimary,
           textStyle: AppTextStyles.labelLarge,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          minimumSize: const Size(44, 48), // Touch target rule: min height 48px
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 0,
         ),
@@ -71,6 +72,7 @@ class AppTheme {
           foregroundColor: AppColors.textPrimary,
           textStyle: AppTextStyles.labelLarge,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          minimumSize: const Size(44, 48), // Touch target rule: min height 48px
           side: const BorderSide(color: AppColors.border, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
@@ -79,7 +81,47 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
           textStyle: AppTextStyles.labelLarge.copyWith(color: AppColors.primary),
+          minimumSize: const Size(44, 44),
         ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.surface,
+        selectedColor: AppColors.primaryLight,
+        disabledColor: AppColors.background,
+        labelStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
+        secondaryLabelStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.surface,
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        titleTextStyle: AppTextStyles.titleLarge,
+        contentTextStyle: AppTextStyles.bodyMedium,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: AppColors.surface,
+        modalBackgroundColor: AppColors.surface,
+        elevation: 8,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.divider,
+        thickness: 1,
+        space: 1,
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: AppColors.primary,
+        unselectedLabelColor: AppColors.textSecondary,
+        labelStyle: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+        unselectedLabelStyle: AppTextStyles.bodyMedium,
+        indicatorColor: AppColors.primary,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,

@@ -6,7 +6,7 @@ const {
   getNutritionistsList, 
   updateApprovalStatus, 
   verifyNutritionistCertificate ,
-  getNutritionistDetails
+  getNutritionistDetails  
 } = require('../controllers/admin.nutritionist.controller');
 
 /**

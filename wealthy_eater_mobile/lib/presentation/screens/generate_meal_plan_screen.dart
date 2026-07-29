@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../providers/nutritionist_provider.dart';
 import 'meal_plan_editor_screen.dart';
 
@@ -436,16 +437,16 @@ class _ResultCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.green.shade50,
+            color: AppColors.primaryLight,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(16),
               topRight: Radius.circular(16),
             ),
-            border: Border.all(color: Colors.green.shade200),
+            border: Border.all(color: AppColors.border),
           ),
           child: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green.shade600, size: 32),
+              Icon(Icons.check_circle, color: AppColors.primary, size: 32),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -456,14 +457,14 @@ class _ResultCard extends StatelessWidget {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
-                        color: Colors.green.shade800,
+                        color: AppColors.primaryDark,
                       ),
                     ),
                     Text(
                       'Status: $status',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.green.shade700,
+                        color: AppColors.primaryDark,
                       ),
                     ),
                   ],
@@ -511,8 +512,8 @@ class _ResultCard extends StatelessWidget {
             color: Colors.grey.shade50,
             border: Border(
               top: BorderSide(color: Colors.grey.shade200),
-              left: BorderSide(color: Colors.green.shade200),
-              right: BorderSide(color: Colors.green.shade200),
+              left: BorderSide(color: AppColors.border),
+              right: BorderSide(color: AppColors.border),
             ),
           ),
           child: Column(
@@ -536,7 +537,7 @@ class _ResultCard extends StatelessWidget {
               bottomLeft: Radius.circular(16),
               bottomRight: Radius.circular(16),
             ),
-            border: Border.all(color: Colors.green.shade200),
+            border: Border.all(color: AppColors.border),
           ),
           child: Row(
             children: [

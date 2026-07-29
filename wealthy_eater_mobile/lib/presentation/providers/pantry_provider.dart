@@ -25,6 +25,9 @@ class PantryProvider extends ChangeNotifier {
   List<String> _masterIngredientNames = [];
   String? _scannedImagePath;
 
+  bool _isLoadingSuggestions = false;
+  List<Map<String, dynamic>> _suggestedRecipes = [];
+
   // ── Getters ────────────────────────────────────────────────────────────────
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -32,6 +35,9 @@ class PantryProvider extends ChangeNotifier {
   List<PantryIngredient> get tempIngredients => _tempIngredients;
   List<String> get masterIngredientNames => _masterIngredientNames;
   String? get scannedImagePath => _scannedImagePath;
+
+  bool get isLoadingSuggestions => _isLoadingSuggestions;
+  List<Map<String, dynamic>> get suggestedRecipes => _suggestedRecipes;
 
   bool get supportsCameraSource {
     if (kIsWeb) return false;
@@ -106,6 +112,16 @@ class PantryProvider extends ChangeNotifier {
     }
   }
 
+  /// Converts a list of ingredient name strings (from scanner) into PantryIngredient
+  /// objects and sets them as the current temporary list ready for [savePantry].
+  void setTempIngredientsFromNames(List<String> names) {
+    _tempIngredients = names
+        .map((n) => PantryIngredient(name: n.trim(), quantity: 1.0, unit: 'units'))
+        .where((i) => i.name.isNotEmpty)
+        .toList();
+    notifyListeners();
+  }
+
   /// Saves the current manual form list to the user's virtual fridge on the backend.
   Future<void> savePantry() async {
     _isLoading = true;
@@ -175,6 +191,28 @@ class PantryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Suggests meals based on current pantry items.
+  Future<void> suggestMeals() async {
+    // Guard: prevent duplicate concurrent requests when user taps Refresh rapidly
+    if (_isLoadingSuggestions) return;
+
+    _isLoadingSuggestions = true;
+    _error = null;
+    _suggestedRecipes = [];
+    notifyListeners();
+
+    try {
+      final recipes = await _service.suggestRecipesFromPantry();
+      _suggestedRecipes = recipes;
+      _isLoadingSuggestions = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoadingSuggestions = false;
+      _error = mapError(e).message;
+      notifyListeners();
+    }
+  }
+
   /// Resets the provider states upon logging out.
   void reset() {
     _isLoading = false;
@@ -182,6 +220,8 @@ class PantryProvider extends ChangeNotifier {
     _ingredients = [];
     _tempIngredients = [];
     _scannedImagePath = null;
+    _isLoadingSuggestions = false;
+    _suggestedRecipes = [];
     notifyListeners();
   }
 }
