@@ -14,6 +14,10 @@ const UserProfileSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  avatar_url: {
+    type: String,
+    default: null
+  },
   age: {
     type: Number, required: true
   },

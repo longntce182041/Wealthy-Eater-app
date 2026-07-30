@@ -23,6 +23,7 @@ class PantryProvider extends ChangeNotifier {
   List<PantryIngredient> _ingredients = [];
   List<PantryIngredient> _tempIngredients = [];
   List<String> _masterIngredientNames = [];
+  List<Map<String, dynamic>> _masterIngredients = [];
   String? _scannedImagePath;
 
   bool _isLoadingSuggestions = false;
@@ -41,6 +42,7 @@ class PantryProvider extends ChangeNotifier {
   List<PantryIngredient> get ingredients => _ingredients;
   List<PantryIngredient> get tempIngredients => _tempIngredients;
   List<String> get masterIngredientNames => _masterIngredientNames;
+  List<Map<String, dynamic>> get masterIngredients => _masterIngredients;
   String? get scannedImagePath => _scannedImagePath;
 
   bool get isLoadingSuggestions => _isLoadingSuggestions;
@@ -86,7 +88,7 @@ class PantryProvider extends ChangeNotifier {
     }
   }
 
-  /// Fetches master ingredients list to feed into the manual input autocomplete field.
+  /// Fetches master ingredients list to feed into the manual input autocomplete field and ingredient picker grid.
   Future<void> loadMasterIngredients() async {
     try {
       final response = await _apiClient.get('/api/profile/setup-metadata');
@@ -94,14 +96,34 @@ class PantryProvider extends ChangeNotifier {
         final data = response.data['data'];
         if (data != null && data['ingredients'] != null) {
           final list = data['ingredients'] as List;
-          _masterIngredientNames = list
-              .map((item) => item['name']?.toString() ?? '')
-              .where((name) => name.isNotEmpty)
-              .toList();
+          _masterIngredients = list.map((item) {
+            return {
+              'id': item['_id']?.toString() ?? '',
+              'name': item['name']?.toString() ?? '',
+              'image_url': item['image_url']?.toString() ?? '',
+            };
+          }).where((item) => (item['name'] as String).isNotEmpty).toList();
+
+          _masterIngredientNames = _masterIngredients.map((e) => e['name'] as String).toList();
         }
       }
     } catch (e) {
       debugPrint('Failed to load master ingredients: $e');
+    }
+  }
+
+  /// Adds an ingredient directly from the ingredient picker grid.
+  void addIngredientFromPicker(String name, {double defaultQuantity = 100.0, String defaultUnit = 'g'}) {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) return;
+    
+    // Check if already in temp list
+    final exists = _tempIngredients.any(
+      (item) => item.name.trim().toLowerCase() == trimmedName.toLowerCase(),
+    );
+    if (!exists) {
+      _tempIngredients.add(PantryIngredient(name: trimmedName, quantity: defaultQuantity, unit: defaultUnit));
+      notifyListeners();
     }
   }
 

@@ -43,6 +43,13 @@ class _NutritionistRegisterScreenState extends State<NutritionistRegisterScreen>
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) return 'Password is required';
     if (value.length < 8) return 'Password must be at least 8 characters';
+    if (value.length > 32) return 'Password cannot exceed 32 characters';
+    if (!RegExp(r'[A-Z]').hasMatch(value)) {
+      return 'Password must contain at least one uppercase letter (A-Z)';
+    }
+    if (!RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(value) && !RegExp(r'[^a-zA-Z0-9]').hasMatch(value)) {
+      return r'Password must contain at least one special character (!@#$%^&*)';
+    }
     return null;
   }
 
@@ -115,9 +122,11 @@ class _NutritionistRegisterScreenState extends State<NutritionistRegisterScreen>
                       TextFormField(
                         controller: _passCtrl,
                         obscureText: _obscurePassword,
+                        maxLength: 32,
                         validator: _validatePassword,
                         decoration: InputDecoration(
                           labelText: 'Password',
+                          helperText: '8-32 chars, 1 uppercase letter & 1 special char',
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
                             icon: Icon(

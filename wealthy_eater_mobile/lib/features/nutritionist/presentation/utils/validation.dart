@@ -23,6 +23,9 @@ class ExpertRegistrationValidator {
     if (value.length < 8) {
       return 'Password must be at least 8 characters';
     }
+    if (value.length > 32) {
+      return 'Password cannot exceed 32 characters';
+    }
     if (!RegExp(r'[A-Z]').hasMatch(value)) {
       return 'Password must contain an uppercase letter';
     }

@@ -8,6 +8,7 @@ const UserSchema = new mongoose.Schema(
     },
     email:                  { type: String, unique: true, sparse: true, lowercase: true, trim: true },
     phone:                  { type: String, unique: true, sparse: true, trim: true },
+    avatar:                 { type: String, default: null },
     password_hash:          { type: String, default: null },
     role: {
       type: String,

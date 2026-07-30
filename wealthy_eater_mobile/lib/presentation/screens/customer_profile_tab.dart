@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
@@ -94,6 +95,29 @@ class CustomerProfileTab extends StatelessWidget {
                             : 'Enter the 6-digit verification code sent to ${inputController.text.trim()}',
                         style: const TextStyle(fontSize: 14, color: Colors.black54),
                       ),
+                      if (!isEmail) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Sandbox Mode: Enter master OTP 123456 (or check server terminal logs) if SMS service is unconfigured.',
+                                  style: TextStyle(fontSize: 11, color: Colors.blue),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: otpController,
@@ -206,6 +230,86 @@ class CustomerProfileTab extends StatelessWidget {
     );
   }
 
+  Future<void> _pickAndUploadAvatar(BuildContext context, ImageSource source) async {
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: source,
+      imageQuality: 80,
+      maxWidth: 1024,
+      maxHeight: 1024,
+    );
+    if (image == null || !context.mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    final success = await auth.uploadAvatar(image);
+
+    if (context.mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile picture updated successfully!')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(auth.errorMessage ?? 'Failed to update profile picture'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showAvatarOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const Text(
+                  'Change Profile Picture',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined, color: AppColors.primary),
+                  title: const Text('Choose from Gallery'),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _pickAndUploadAvatar(context, ImageSource.gallery);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                  title: const Text('Take a Photo'),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    _pickAndUploadAvatar(context, ImageSource.camera);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -299,6 +403,7 @@ class CustomerProfileTab extends StatelessWidget {
     final int tdee = (profile['tdee'] as num?)?.toInt() ?? 0;
     
     final fullName = profile['full_name']?.toString() ?? 'New User';
+    final avatarUrl = profile['avatar_url']?.toString();
     final age = (profile['age'] as num?)?.toInt() ?? 0;
     final gender = profile['gender']?.toString() ?? 'other';
     final height = (profile['height'] as num?)?.toDouble() ?? 0.0;
@@ -330,19 +435,74 @@ class CustomerProfileTab extends StatelessWidget {
             Center(
               child: Column(
                 children: [
-                  Container(
-                    width: 96,
-                    height: 96,
-                    decoration: BoxDecoration(
-                      color: primaryColor.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: primaryColor, width: 2),
-                    ),
+                  Stack(
                     alignment: Alignment.center,
-                    child: Text(
-                      fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
-                      style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: primaryColor),
-                    ),
+                    children: [
+                      GestureDetector(
+                        onTap: () => _showAvatarOptions(context),
+                        child: Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: primaryColor.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: primaryColor, width: 3),
+                            image: (avatarUrl != null && avatarUrl.isNotEmpty)
+                                ? DecorationImage(
+                                    image: NetworkImage(avatarUrl),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          alignment: Alignment.center,
+                          child: (avatarUrl == null || avatarUrl.isEmpty)
+                              ? Text(
+                                  fullName.isNotEmpty ? fullName[0].toUpperCase() : 'U',
+                                  style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: primaryColor),
+                                )
+                              : null,
+                        ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: GestureDetector(
+                          onTap: () => _showAvatarOptions(context),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: primaryColor,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (auth.isUploadingAvatar)
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: const BoxDecoration(
+                            color: Colors.black45,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -423,10 +583,39 @@ class CustomerProfileTab extends StatelessWidget {
                       ),
                     ),
                   ] else ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      user.phoneNumber!,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.phone_outlined, size: 14, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          user.phoneNumber!,
+                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: () => _showLinkDialog(context, false),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 12, color: primaryColor),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'Change',
+                                  style: TextStyle(fontSize: 11, color: primaryColor, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                   const SizedBox(height: 12),

@@ -94,8 +94,14 @@ async function register(req, res, next) {
     if (!targetId || !password || typeof targetId !== 'string' || typeof password !== 'string') {
       throw new AppError('Identifier and password are required', 400, 'VALIDATION_ERROR');
     }
-    if (password.length < 6 || password.length > 128) {
-      throw new AppError('Password must be between 6 and 128 characters', 400, 'VALIDATION_ERROR');
+    if (password.length < 8 || password.length > 32) {
+      throw new AppError('Password must be between 8 and 32 characters', 400, 'VALIDATION_ERROR');
+    }
+    if (!/[A-Z]/.test(password)) {
+      throw new AppError('Password must contain at least one uppercase letter (A-Z)', 400, 'VALIDATION_ERROR');
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]|[^a-zA-Z0-9]/.test(password)) {
+      throw new AppError('Password must contain at least one special character', 400, 'VALIDATION_ERROR');
     }
     const result = await RegistrationService.startRegistration(targetId, password, role);
     return res.json({ success: true, data: result.data || result, error: null });
