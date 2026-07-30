@@ -11,7 +11,9 @@ import {
   X,
   Trash2,      
   ShieldAlert,
-  Edit2 
+  Edit2,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 
 export default function UserListPage() {
@@ -26,20 +28,47 @@ export default function UserListPage() {
   });
 
   const [users, setUsers] = useState([]);
-  const [totalUsers, setTotalUsers] = useState(0); // 👈 TỔNG SỐ USER TỪ BACKEND META
+  const [totalUsers, setTotalUsers] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
 
+  // 🔔 TOAST POPUP STATE
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 5000);
+  };
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null); 
-  const [formData, setFormData] = useState({ email: '', password: '', role: 'customer', status: 'active' });
+  const [formData, setFormData] = useState({ fullName: '', email: '', password: '', role: 'customer', status: 'active' });
   const [submitLoading, setSubmitLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
   const [actionLoadingId, setActionLoadingId] = useState(null);
+
+  /**
+   * 🟢 HÀM BỔ TRỢ LẤY FULL NAME ĐA NĂNG
+   * Đảm bảo quét sạch tất cả các vị trí có thể chứa tên
+   */
+  const getUserFullName = (userItem) => {
+    if (!userItem) return '';
+    return (
+      userItem.profile?.fullName ||
+      userItem.profile?.full_name ||
+      userItem.profile?.name ||
+      userItem.fullName ||
+      userItem.full_name ||
+      userItem.name ||
+      ''
+    );
+  };
 
   const handleForceLogout = useCallback(() => {
     localStorage.removeItem('admin_user');
@@ -51,14 +80,12 @@ export default function UserListPage() {
     setLoading(true);
     setError('');
     try {
-      // Truyền limit lớn hoặc lấy theo pagination
       const response = await apiClient.get('/admin/users', {
-        params: { limit: 100 } // Tăng limit nếu muốn hiển thị nhiều hơn trên 1 trang
+        params: { limit: 100 }
       });
 
       if (response.data?.success) {
         setUsers(response.data.data || []);
-        // 👈 LẤY CHÍNH XÁC TỔNG SỐ TỪ META
         setTotalUsers(response.data.meta?.total || response.data.data?.length || 0);
       } else {
         setUsers([]);
@@ -67,11 +94,11 @@ export default function UserListPage() {
     } catch (err) {
       console.error('Error fetching users:', err);
       if (err.response?.status === 401 || err.response?.data?.message?.includes('expired')) {
-        alert('Session expired. Please log in again!');
+        showToast('Session expired. Please log in again!', 'error');
         handleForceLogout();
         return;
       }
-      setError(err?.response?.data?.message || err.message || 'Failed to load users list');
+      setError(err?.response?.data?.message || err.message || 'Failed to load user list.');
     } finally {
       setLoading(false);
     }
@@ -89,15 +116,23 @@ export default function UserListPage() {
 
   const handleOpenCreateModal = () => {
     setEditingUserId(null);
-    setFormData({ email: '', password: '', role: 'customer', status: 'active' });
+    setFormData({ fullName: '', email: '', password: '', role: 'customer', status: 'active' });
     setFormError('');
     setIsModalOpen(true);
   };
 
+  /**
+   * 🟢 MỞ MODAL EDIT - Đã fix gán tên chính xác
+   */
   const handleOpenEditModal = (userItem) => {
     const currentId = userItem._id || userItem.id;
     setEditingUserId(currentId);
+    
+    // Lấy tên người dùng chuẩn xác bằng helper function
+    const extractedName = getUserFullName(userItem);
+
     setFormData({
+      fullName: extractedName,
       email: userItem.email || '',
       password: '', 
       role: userItem.role?.toLowerCase() || 'customer',
@@ -115,20 +150,22 @@ export default function UserListPage() {
       if (editingUserId) {
         const response = await apiClient.put(`/admin/users/${editingUserId}`, formData);
         if (response.data?.success) {
-          alert('User updated successfully!');
+          showToast('User account updated successfully!', 'success');
           setIsModalOpen(false);
           await fetchUsers();
         }
       } else {
         const response = await apiClient.post('/admin/users', formData);
         if (response.data?.success) {
-          alert('User created successfully!');
+          showToast('New user account created successfully!', 'success');
           setIsModalOpen(false);
           await fetchUsers();
         }
       }
     } catch (err) {
-      setFormError(err?.response?.data?.message || 'An error occurred while processing data.');
+      const errMsg = err?.response?.data?.message || 'An error occurred while processing the request.';
+      setFormError(errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setSubmitLoading(false);
     }
@@ -137,17 +174,17 @@ export default function UserListPage() {
   const handleToggleStatus = async (userId, currentStatus) => {
     if (!userId) return;
     const nextStatus = currentStatus === 'active' ? 'banned' : 'active';
-    if (nextStatus === 'banned' && !window.confirm('Ban this account? The user will be logged out immediately!')) return;
+    if (nextStatus === 'banned' && !window.confirm('Are you sure you want to ban this account? The user will be logged out immediately.')) return;
 
     setActionLoadingId(userId);
     try {
       const response = await apiClient.put(`/admin/users/${userId}/status`, { status: nextStatus });
       if (response.data?.success) {
-        alert(response.data.message || 'Status updated successfully!');
+        showToast(`User status successfully changed to ${nextStatus}!`, 'success');
         await fetchUsers();
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Server error while updating status.');
+      showToast(err.response?.data?.message || 'Failed to update user status.', 'error');
     } finally {
       setActionLoadingId(null);
     }
@@ -155,24 +192,27 @@ export default function UserListPage() {
 
   const handleDeleteUser = async (userId, email) => {
     if (!userId) return;
-    if (!window.confirm(`Are you sure you want to PERMANENTLY DELETE account [ ${email} ] from Database?`)) return;
+    if (!window.confirm(`Are you sure you want to PERMANENTLY DELETE the account [ ${email} ]?`)) return;
 
     setActionLoadingId(userId);
     try {
       const response = await apiClient.delete(`/admin/users/${userId}`);
       if (response.data?.success) {
-        alert(response.data.message || 'User deleted successfully!');
+        showToast('User account deleted permanently!', 'success');
         await fetchUsers(); 
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Server error while deleting user.');
+      showToast(err.response?.data?.message || 'Failed to delete user account.', 'error');
     } finally {
       setActionLoadingId(null);
     }
   };
 
+  // 🟢 BỘ LỌC TÌM KIẾM - Cập nhật lọc theo cả Name mở rộng
   const filteredUsers = users.filter(userItem => {
-    const matchesSearch = userItem.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    const fullName = getUserFullName(userItem);
+    const matchesSearch = userItem.email?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          fullName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === '' || userItem.role === roleFilter;
     return matchesSearch && matchesRole;
   });
@@ -181,6 +221,47 @@ export default function UserListPage() {
 
   return (
     <div className="w-full space-y-6 relative overflow-hidden">
+      
+      {/* 🔔 TOAST NOTIFICATION POPUP */}
+      {toast.show && (
+        <div className="fixed top-6 right-6 z-[9999] transition-all duration-300 ease-out transform translate-y-0 opacity-100">
+          <div 
+            style={{
+              background: toast.type === 'success' ? '#16a34a' : '#dc2626',
+              color: '#ffffff',
+              padding: '16px 24px',
+              fontSize: '16px',
+              fontWeight: '500',
+              borderRadius: '12px',
+              minWidth: '360px',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2)'
+            }}
+            className="flex items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-3">
+              {toast.type === 'success' ? (
+                <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-5 h-5 text-[#16a34a]" />
+                </div>
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center shrink-0">
+                  <XCircle className="w-5 h-5 text-[#dc2626]" />
+                </div>
+              )}
+              <span className="leading-snug">{toast.message}</span>
+            </div>
+
+            <button 
+              onClick={() => setToast({ ...toast, show: false })}
+              className="p-1 text-white/80 hover:text-white rounded-lg hover:bg-black/10 transition-colors border-none bg-transparent cursor-pointer shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* HEADER SECTION */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight m-0">Users Management</h1>
@@ -200,10 +281,11 @@ export default function UserListPage() {
         </div>
       </div>
 
+      {/* SEARCH & FILTERS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-          <input type="text" placeholder="Search by email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500" />
+          <input type="text" placeholder="Search by email or name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500" />
         </div>
         <div>
           <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="w-full px-3 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500">
@@ -222,6 +304,7 @@ export default function UserListPage() {
         </div>
       )}
 
+      {/* USER TABLE */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="w-full overflow-x-auto">
           <table className="w-full border-collapse text-left text-sm text-slate-600">
@@ -255,6 +338,7 @@ export default function UserListPage() {
                 filteredUsers.map((userItem) => {
                   const currentId = userItem._id || userItem.id;
                   const isActionLoading = actionLoadingId === currentId;
+                  const fullName = getUserFullName(userItem);
 
                   let roleClass = 'bg-slate-100 text-slate-700';
                   if (userItem.role === 'admin') roleClass = 'bg-red-50 text-red-700 border border-red-100';
@@ -265,10 +349,18 @@ export default function UserListPage() {
                     <tr key={String(currentId)} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-4 font-medium text-slate-900">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 shrink-0">
                             <Users className="w-4 h-4 text-slate-500" />
                           </div>
-                          <span className="font-semibold text-slate-800">{userItem.email}</span>
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-slate-800">{userItem.email}</span>
+                            {/* 🟢 HIỂN THỊ TÊN NGƯỜI DÙNG */}
+                            {fullName ? (
+                              <span className="text-xs font-medium text-emerald-600">{fullName}</span>
+                            ) : (
+                              <span className="text-xs text-slate-400 italic">No name provided</span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -339,6 +431,7 @@ export default function UserListPage() {
         </div>
       </div>
 
+      {/* CREATE / EDIT USER MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => !submitLoading && setIsModalOpen(false)} />
@@ -353,14 +446,28 @@ export default function UserListPage() {
 
             <form id="userForm" onSubmit={handleFormSubmit} className="flex-1 p-6 space-y-5 overflow-y-auto">
               {formError && <div className="p-3 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs font-semibold">{formError}</div>}
+              
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Full Name</label>
+                <input 
+                  type="text" 
+                  placeholder="John Doe" 
+                  value={formData.fullName} 
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} 
+                  className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500" 
+                />
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Email Address</label>
                 <input type="email" required placeholder="name@wealthyeater.com" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500" />
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Password</label>
                 <input type="password" placeholder={editingUserId ? "Leave blank to keep current password" : "Leave blank to use default password"} value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500" />
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">System Role</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -369,6 +476,7 @@ export default function UserListPage() {
                   ))}
                 </div>
               </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Status</label>
                 <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-emerald-500">
