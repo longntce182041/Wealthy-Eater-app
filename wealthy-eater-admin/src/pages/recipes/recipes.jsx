@@ -98,7 +98,7 @@ export default function RecipesPage() {
     setImporting(true);
 
     const formData = new FormData();
-    formData.append('file', file); // 'file' trùng với name cấu hình ở middleware upload phía backend của bác
+    formData.append('file', file); // 'file' trùng với name cấu hình ở middleware upload phía backend
 
     try {
       const res = await apiClient.post('/admin/recipes/import-excel', formData, {
@@ -117,7 +117,7 @@ export default function RecipesPage() {
       const serverMessage = err.response?.data?.message || 'Failed to import Excel data.';
       setError(serverMessage);
 
-      // Bóc tách mảng errorLog (ở tham số thứ 4 AppError backend gán vào hoặc custom ở response)
+      // Bóc tách mảng errorLog
       if (err.response?.data?.errors && Array.isArray(err.response.data.errors)) {
         setExcelErrors(err.response.data.errors);
       } else if (err.response?.data?.errorLog && Array.isArray(err.response.data.errorLog)) {
@@ -341,111 +341,139 @@ export default function RecipesPage() {
             />
           ) : (
             <DataTable headers={['Recipe Details', 'Total Calories', 'Level', 'Time', 'Rating', 'Status', 'Actions']}>
-              {filteredRecipes.map((recipe) => (
-                <DataTableRow 
-                  key={recipe.id || recipe._id} 
-                  className={recipe.status === 'archived' ? 'opacity-65 bg-slate-50' : ''}
-                >
-                  <DataTableCell>
-                    <div className="flex items-center gap-4">
-                      {recipe.imageUrl ? (
-                        <img className="w-12 h-12 rounded-lg object-cover" src={recipe.imageUrl} alt={recipe.name} />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center text-xl">🍳</div>
-                      )}
-                      <div className="text-left">
-                        <div className="font-semibold text-slate-900 flex items-center gap-2">
-                          {recipe.name} 
-                          {recipe.status === 'archived' && (
-                            <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Archived</span>
-                          )}
+              {filteredRecipes.map((recipe) => {
+                // 1. Đọc linh hoạt tất cả các tên trường đường dẫn ảnh có thể trả về từ Backend
+                const rawImgUrl = recipe.imageUrl || recipe.image || recipe.image_url || recipe.photo || recipe.avatar;
+
+                // 2. Tối ưu Cache-Busting: dùng timestamp từ updatedAt (nếu có) hoặc fallback để force load lại ảnh mới khi đè file
+                const cacheKey = recipe.updatedAt ? new Date(recipe.updatedAt).getTime() : Date.now();
+                const freshImgUrl = rawImgUrl 
+                  ? `${rawImgUrl}${rawImgUrl.includes('?') ? '&' : '?'}v=${cacheKey}`
+                  : null;
+
+                return (
+                  <DataTableRow 
+                    key={recipe.id || recipe._id} 
+                    className={recipe.status === 'archived' ? 'opacity-65 bg-slate-50' : ''}
+                  >
+                    <DataTableCell>
+                      <div className="flex items-center gap-4">
+                        {freshImgUrl ? (
+                          <img 
+                            key={freshImgUrl} // Key động giúp React rerender lại thẻ img khi URL thay đổi
+                            className="w-12 h-12 rounded-lg object-cover bg-slate-100" 
+                            src={freshImgUrl} 
+                            alt={recipe.name}
+                            onError={(e) => {
+                              // Tự động ẩn ảnh bị hỏng và chuyển sang hiển thị icon fallback
+                              e.target.onerror = null;
+                              e.target.style.display = 'none';
+                              if (e.target.nextElementSibling) {
+                                e.target.nextElementSibling.classList.remove('hidden');
+                              }
+                            }}
+                          />
+                        ) : null}
+                        
+                        {/* Fallback khi không có URL hoặc khi tải ảnh bị lỗi */}
+                        <div className={`w-12 h-12 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center text-xl shrink-0 ${freshImgUrl ? 'hidden' : ''}`}>
+                          🍳
                         </div>
-                        <div className="text-xs text-slate-500 mt-1 line-clamp-1">{recipe.description || 'No description provided'}</div>
+
+                        <div className="text-left">
+                          <div className="font-semibold text-slate-900 flex items-center gap-2">
+                            {recipe.name} 
+                            {recipe.status === 'archived' && (
+                              <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Archived</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1 line-clamp-1">{recipe.description || 'No description provided'}</div>
+                        </div>
                       </div>
-                    </div>
-                  </DataTableCell>
-                  
-                  <DataTableCell>
-                    <div className="font-bold text-primary">
-                      {recipe.nutrition?.calories || 0} kcal
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-1 flex gap-2 font-medium">
-                      <span>C: {recipe.nutrition?.carbs || 0}g</span>
-                      <span>P: {recipe.nutrition?.protein || 0}g</span>
-                      <span>F: {recipe.nutrition?.fat || 0}g</span>
-                    </div>
-                  </DataTableCell>
+                    </DataTableCell>
+                    
+                    <DataTableCell>
+                      <div className="font-bold text-primary">
+                        {recipe.nutrition?.calories || 0} kcal
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-1 flex gap-2 font-medium">
+                        <span>C: {recipe.nutrition?.carbs || 0}g</span>
+                        <span>P: {recipe.nutrition?.protein || 0}g</span>
+                        <span>F: {recipe.nutrition?.fat || 0}g</span>
+                      </div>
+                    </DataTableCell>
 
-                  <DataTableCell>
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      recipe.levelCooking === 'easy' ? 'bg-primary/15 text-primary' :
-                      recipe.levelCooking === 'medium' ? 'bg-amber-100 text-amber-700' :
-                      'bg-rose-100 text-rose-700'
-                    }`}>
-                      {recipe.levelCooking ? recipe.levelCooking.charAt(0).toUpperCase() + recipe.levelCooking.slice(1) : '—'}
-                    </span>
-                  </DataTableCell>
-                  
-                  <DataTableCell>
-                    <span className="font-medium text-slate-700">{recipe.cookingTime} mins</span>
-                  </DataTableCell>
-                  
-                  <DataTableCell>
-                    <div className="flex items-center gap-1 font-semibold text-amber-500">
-                      <span>{recipe.reviewStats?.averageRating || '—'}</span>
-                      {recipe.reviewStats?.averageRating > 0 && <span>★</span>}
-                    </div>
-                  </DataTableCell>
-                  
-                  <DataTableCell>
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      recipe.status === 'published' ? 'bg-primary/15 text-primary' :
-                      recipe.status === 'archived' ? 'bg-slate-200 text-slate-700' :
-                      'bg-slate-100 text-slate-700'
-                    }`}>
-                      {recipe.status ? recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1) : '—'}
-                    </span>
-                  </DataTableCell>
-                  
-                  <DataTableCell>
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="p-1.5 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                        title="View Details"
-                        onClick={() => navigate(`/recipes/${recipe.id || recipe._id}`)}
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit Recipe"
-                        onClick={() => setEditingRecipeId(recipe.id || recipe._id)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-
-                      {recipe.status === 'archived' ? (
+                    <DataTableCell>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                        recipe.levelCooking === 'easy' ? 'bg-primary/15 text-primary' :
+                        recipe.levelCooking === 'medium' ? 'bg-amber-100 text-amber-700' :
+                        'bg-rose-100 text-rose-700'
+                      }`}>
+                        {recipe.levelCooking ? recipe.levelCooking.charAt(0).toUpperCase() + recipe.levelCooking.slice(1) : '—'}
+                      </span>
+                    </DataTableCell>
+                    
+                    <DataTableCell>
+                      <span className="font-medium text-slate-700">{recipe.cookingTime} mins</span>
+                    </DataTableCell>
+                    
+                    <DataTableCell>
+                      <div className="flex items-center gap-1 font-semibold text-amber-500">
+                        <span>{recipe.reviewStats?.averageRating || '—'}</span>
+                        {recipe.reviewStats?.averageRating > 0 && <span>★</span>}
+                      </div>
+                    </DataTableCell>
+                    
+                    <DataTableCell>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                        recipe.status === 'published' ? 'bg-primary/15 text-primary' :
+                        recipe.status === 'archived' ? 'bg-slate-200 text-slate-700' :
+                        'bg-slate-100 text-slate-700'
+                      }`}>
+                        {recipe.status ? recipe.status.charAt(0).toUpperCase() + recipe.status.slice(1) : '—'}
+                      </span>
+                    </DataTableCell>
+                    
+                    <DataTableCell>
+                      <div className="flex items-center gap-2">
                         <button
-                          className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                          title="Restore Recipe"
-                          onClick={() => handleRestore(recipe.id || recipe._id)}
+                          className="p-1.5 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                          title="View Details"
+                          onClick={() => navigate(`/recipes/${recipe.id || recipe._id}`)}
                         >
-                          <ArchiveRestore className="w-4 h-4" />
+                          <MoreHorizontal className="w-4 h-4" />
                         </button>
-                      ) : (
+
                         <button
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Archive Recipe"
-                          onClick={() => handleDelete(recipe.id || recipe._id)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit Recipe"
+                          onClick={() => setEditingRecipeId(recipe.id || recipe._id)}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Pencil className="w-4 h-4" />
                         </button>
-                      )}
-                    </div>
-                  </DataTableCell>
-                </DataTableRow>
-              ))}
+
+                        {recipe.status === 'archived' ? (
+                          <button
+                            className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="Restore Recipe"
+                            onClick={() => handleRestore(recipe.id || recipe._id)}
+                          >
+                            <ArchiveRestore className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Archive Recipe"
+                            onClick={() => handleDelete(recipe.id || recipe._id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </DataTableCell>
+                  </DataTableRow>
+                );
+              })}
             </DataTable>
           )}
         </div>
