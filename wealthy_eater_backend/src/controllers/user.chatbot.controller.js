@@ -25,7 +25,7 @@ class UserChatbotController {
    */
   async sendMessage(req, res, next) {
     try {
-      const userId    = req.user.id;
+      const userId = req.user.sub || req.user.id;
       const { message, session_id } = req.body;
 
       if (session_id && typeof session_id !== 'string') {
@@ -72,7 +72,7 @@ class UserChatbotController {
    */
   async getHistory(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user.sub || req.user.id;
       const limit  = req.query.limit || 20;
 
       const history = await chatbotService.getHistory(userId, limit);
@@ -98,7 +98,7 @@ class UserChatbotController {
    */
   async resetSession(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user.sub || req.user.id;
       const result = await chatbotService.resetSession(userId);
 
       return res.status(200).json({

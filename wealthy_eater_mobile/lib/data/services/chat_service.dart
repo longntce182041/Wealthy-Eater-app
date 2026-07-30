@@ -25,12 +25,14 @@ class MessageHistoryResult {
   final int total;
   final bool hasMore;
   final int page;
+  final bool isExpired;
 
   const MessageHistoryResult({
     required this.messages,
     required this.total,
     required this.hasMore,
     required this.page,
+    required this.isExpired,
   });
 }
 
@@ -72,6 +74,7 @@ class ChatService {
           total: (data['total'] as num?)?.toInt() ?? 0,
           hasMore: data['hasMore'] as bool? ?? false,
           page: (data['page'] as num?)?.toInt() ?? page,
+          isExpired: data['isExpired'] as bool? ?? false,
         );
       }
 

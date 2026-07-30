@@ -12,10 +12,11 @@ import 'recipe_likes_tab.dart';
 import 'recipe_list_view.dart';
 import 'recipe_my_reviews_tab.dart';
 import 'shopping_list_tab.dart';
+import 'ai_recipes_tab.dart';
 import 'dashboard_home_tab.dart';
 import 'customer_profile_tab.dart';
 import 'meal_plans_tab.dart';
-import 'pantry_scanner_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   final UserEntity? user;
@@ -221,11 +222,12 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
           labelPadding: EdgeInsets.zero,
           indicatorSize: TabBarIndicatorSize.label,
           tabs: const [
-            Tab(icon: Icon(Icons.kitchen_outlined),       text: 'Pantry'),
+
             Tab(icon: Icon(Icons.menu_book_outlined),    text: 'Browse'),
             Tab(icon: Icon(Icons.favorite_outline),       text: 'Liked'),
             Tab(icon: Icon(Icons.rate_review_outlined),   text: 'Reviews'),
             Tab(icon: Icon(Icons.shopping_cart_outlined), text: 'Shopping'),
+            Tab(icon: Icon(Icons.smart_toy_outlined),     text: 'AI Saved'),
           ],
         ),
         // Sub-tab content
@@ -233,11 +235,12 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
           child: TabBarView(
             controller: _tabController,
             children: const [
-              PantryScannerScreen(),
+
               RecipeListView(showHeader: false),
               RecipeLikesTab(),
               RecipeMyReviewsTab(),
               ShoppingListTab(),
+              AiRecipesTab(),
             ],
           ),
         ),

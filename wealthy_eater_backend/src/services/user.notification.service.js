@@ -1,5 +1,6 @@
 const NotificationSetting = require('../models/NotificationSetting');
 const Notification = require('../models/Notification');
+const AppError = require('../utils/AppError');
 
 class UserNotificationService {
   /**
@@ -86,10 +87,7 @@ class UserNotificationService {
       { returnDocument: 'after' }
     );
     if (!notification) {
-      const error = new Error('Notification not found');
-      error.code = 'NOT_FOUND';
-      error.statusCode = 404;
-      throw error;
+      throw new AppError('Notification not found', 404, 'NOT_FOUND');
     }
     return notification;
   }

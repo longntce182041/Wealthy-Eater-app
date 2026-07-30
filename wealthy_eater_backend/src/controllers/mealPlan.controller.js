@@ -42,7 +42,7 @@ const matchTemplateEndpoint = async (req, res) => {
 // ── Get My Meal Plan (Customer) ───────────────────────────────────────────────
 const getMyMealPlanEndpoint = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub || req.user.id;
     const plan = await mealPlanService.getMyMealPlan(userId);
     return res.status(200).json({ success: true, data: plan });
   } catch (error) {
@@ -96,7 +96,7 @@ exports.publishMealPlan = async (req, res, next) => {
 // ── FCM Token Sync ────────────────────────────────────────────────────────────
 const updateFcmTokenEndpoint = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub || req.user.id;
     const { fcmToken } = req.body;
 
     if (!fcmToken) {
@@ -367,7 +367,7 @@ const getNutritionistMealPlansEndpoint = async (req, res, next) => {
 // ── Log Meal Plan Item ────────────────────────────────────────────────────────
 const logMealPlanItemEndpoint = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub || req.user.id;
     const { itemId } = req.params;
     const { actual_weight_gram, date } = req.body;
 
@@ -387,7 +387,7 @@ const logMealPlanItemEndpoint = async (req, res, next) => {
 // ── Update Meal Log ───────────────────────────────────────────────────────────
 const updateMealLogEndpoint = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub || req.user.id;
     const { logId } = req.params;
     const { actual_weight_gram, date } = req.body;
 
@@ -408,7 +408,7 @@ const updateMealLogEndpoint = async (req, res, next) => {
 // ── Delete Meal Log ───────────────────────────────────────────────────────────
 const deleteMealLogEndpoint = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub || req.user.id;
     const { logId } = req.params;
 
     const result = await mealPlanService.deleteMealLog(userId, logId);
@@ -424,7 +424,7 @@ const deleteMealLogEndpoint = async (req, res, next) => {
 // ── Get Meal Logs ─────────────────────────────────────────────────────────────
 const getMealLogsEndpoint = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub || req.user.id;
     const { date } = req.query;
 
     const logs = await mealPlanService.getMealLogs(userId, date);
@@ -437,7 +437,7 @@ const getMealLogsEndpoint = async (req, res, next) => {
 // ── Get Daily Macro Report ───────────────────────────────────────────────────
 const getDailyMacroReportEndpoint = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub || req.user.id;
     const { date } = req.query;
 
     const report = await mealPlanService.getDailyMacroReport(userId, date);
@@ -600,7 +600,7 @@ const scanMealImageEndpoint = async (req, res, next) => {
 
 const logCustomRecipeEndpoint = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.sub || req.user.id;
     const { recipeId, actual_weight_gram, date } = req.body;
 
     if (!recipeId) {

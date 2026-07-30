@@ -22,7 +22,7 @@ const shoppingListService = require('../services/shopping_list.service');
  */
 async function addFromRecipe(req, res, next) {
   try {
-    const userId   = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const { recipeId, servings } = req.body;
 
     if (!recipeId || typeof recipeId !== 'string' || !recipeId.trim()) {
@@ -62,7 +62,7 @@ async function addFromRecipe(req, res, next) {
  */
 async function getList(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const { page = 1, limit = 200 } = req.query;
 
     const result = await shoppingListService.getUserShoppingList(userId, {
@@ -92,7 +92,7 @@ async function getList(req, res, next) {
  */
 async function togglePurchased(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const { itemId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(itemId)) {
@@ -119,7 +119,7 @@ async function togglePurchased(req, res, next) {
  */
 async function removeItem(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const { itemId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(itemId)) {
@@ -146,7 +146,7 @@ async function removeItem(req, res, next) {
  */
 async function clearPurchased(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const result = await shoppingListService.clearPurchased(userId);
 
     return res.json({
@@ -166,7 +166,7 @@ async function clearPurchased(req, res, next) {
  */
 async function clearAll(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const result = await shoppingListService.clearAll(userId);
 
     return res.json({
@@ -186,7 +186,7 @@ async function clearAll(req, res, next) {
  */
 async function getStats(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const stats  = await shoppingListService.getStats(userId);
 
     return res.json({

@@ -1,3 +1,4 @@
+const mongoose    = require('mongoose');
 const RecipeReview = require('../models/RecipeReview');
 const Recipe = require('../models/Recipe');
 const User = require('../models/User');
@@ -85,7 +86,7 @@ async function getRecipeReviews(recipeId, options = {}) {
 
   // 2. Fetch aggregate stats using MongoDB Aggregation Pipeline
   const aggResult = await RecipeReview.aggregate([
-    { $match: { recipe_id: recipeId } },
+    { $match: { recipe_id: new mongoose.Types.ObjectId(recipeId) } },
     {
       $group: {
         _id: null,

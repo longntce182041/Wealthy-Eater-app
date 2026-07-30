@@ -125,7 +125,9 @@ class _PantryScreenState extends State<PantryScreen> {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () {
-                provider.suggestMeals();
+                if (provider.suggestedRecipes.isEmpty || provider.isPantryChangedSinceLastSuggestion) {
+                  provider.suggestMeals();
+                }
                 Navigator.push(
                   context,
                   MaterialPageRoute(
