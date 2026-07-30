@@ -98,14 +98,17 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen>
       return const SizedBox.shrink();
     }
 
-    return TabBarView(
-      controller: _tabController,
-      children: [
-        _InfoTab(recipe: recipe),
-        _ReviewsTab(
-          recipeId: recipe.id,
-        ),
-      ],
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: TabBarView(
+        controller: _tabController,
+        children: [
+          _InfoTab(recipe: recipe),
+          _ReviewsTab(
+            recipeId: recipe.id,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -436,59 +439,73 @@ class _ReviewsTab extends StatelessWidget {
         final avg   = (stats['avgRating'] as num?)?.toDouble() ?? 0.0;
         final total = (stats['totalReviews'] as num?)?.toInt() ?? 0;
 
-        return ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            // Stats header
-            if (total > 0)
-              _RatingHeader(avgRating: avg, totalReviews: total, stats: stats),
+        return NotificationListener<ScrollNotification>(
+          onNotification: (ScrollNotification scrollInfo) {
+            if (scrollInfo.metrics.pixels >= scrollInfo.metrics.maxScrollExtent - 200) {
+              provider.loadMoreRecipeReviews(recipe.id);
+            }
+            return false;
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              // Stats header
+              if (total > 0)
+                _RatingHeader(avgRating: avg, totalReviews: total, stats: stats),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            // My review chip or Write review button
-            _MyReviewPreview(
-              myReview: provider.myReviewForCurrentRecipe,
-              onTap: () => showReviewSheet(),
-            ),
+              // My review chip or Write review button
+              _MyReviewPreview(
+                myReview: provider.myReviewForCurrentRecipe,
+                onTap: () => showReviewSheet(),
+              ),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            // Reviews list
-            if (provider.reviewsState == RecipeViewState.loading)
-              const Center(child: Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(),
-              ))
-            else if (provider.reviewsState == RecipeViewState.error)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(provider.reviewsError ?? 'Unable to load reviews',
-                    textAlign: TextAlign.center),
-              )
-            else if (provider.currentRecipeReviews.isEmpty)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.rate_review_outlined, size: 48),
-                      const SizedBox(height: 8),
-                      Text('No reviews yet',
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 4),
-                      const Text('Be the first to share your experience!'),
-                    ],
+              // Reviews list
+              if (provider.reviewsState == RecipeViewState.loading)
+                const Center(child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(),
+                ))
+              else if (provider.reviewsState == RecipeViewState.error)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(provider.reviewsError ?? 'Unable to load reviews',
+                      textAlign: TextAlign.center),
+                )
+              else if (provider.currentRecipeReviews.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.rate_review_outlined, size: 48),
+                        const SizedBox(height: 8),
+                        Text('No reviews yet',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 4),
+                        const Text('Be the first to share your experience!'),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ...provider.currentRecipeReviews.map(
+                  (review) => Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: _ReviewCard(review: review),
                   ),
                 ),
-              )
-            else
-              ...provider.currentRecipeReviews.map(
-                (review) => Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: _ReviewCard(review: review),
+                
+              if (provider.hasMoreRecipeReviews)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16.0),
+                  child: Center(child: CircularProgressIndicator()),
                 ),
-              ),
-          ],
+            ],
+          ),
         );
       },
     );
