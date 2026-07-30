@@ -17,15 +17,31 @@ class RecipeMyReviewsTab extends StatefulWidget {
 
 class _RecipeMyReviewsTabState extends State<RecipeMyReviewsTab>
     with AutomaticKeepAliveClientMixin {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RecipeProvider>().loadMyReviewsList();
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      context.read<RecipeProvider>().loadMoreMyReviewsList();
+    }
   }
 
   @override
@@ -51,9 +67,16 @@ class _RecipeMyReviewsTabState extends State<RecipeMyReviewsTab>
         return RefreshIndicator(
           onRefresh: provider.loadMyReviewsList,
           child: ListView.builder(
+            controller: _scrollController,
             padding: const EdgeInsets.all(16),
-            itemCount: provider.myReviewsItems.length,
+            itemCount: provider.myReviewsItems.length + (provider.hasMoreMyReviews ? 1 : 0),
             itemBuilder: (context, index) {
+              if (index == provider.myReviewsItems.length) {
+                return const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
               final reviewData = provider.myReviewsItems[index];
               final recipe     = reviewData['recipe_id'] as Map<String, dynamic>? ?? {};
               return Padding(

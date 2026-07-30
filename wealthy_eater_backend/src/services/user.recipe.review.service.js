@@ -86,7 +86,7 @@ async function getRecipeReviews(recipeId, options = {}) {
 
   // 2. Fetch aggregate stats using MongoDB Aggregation Pipeline
   const aggResult = await RecipeReview.aggregate([
-    { $match: { recipe_id: new mongoose.Types.ObjectId(recipeId) } },
+    { $match: { recipe_id: recipeId } },
     {
       $group: {
         _id: null,
@@ -117,12 +117,25 @@ async function getRecipeReviews(recipeId, options = {}) {
     };
   }
 
-  // Normalise reviewer name
+  // 3. Fetch user profiles to get full_name
+  const userIds = reviews.map((r) => r.user_id && r.user_id._id).filter(Boolean);
+  const UserProfile = require('../models/UserProfile');
+  const userProfiles = await UserProfile.find({ user_id: { $in: userIds } })
+    .select('user_id full_name')
+    .lean();
+  
+  const profileMap = {};
+  userProfiles.forEach((p) => {
+    profileMap[p.user_id] = p.full_name;
+  });
+
+  // 4. Normalise reviewer name
   const normalised = reviews.map((rev) => {
     const user = rev.user_id;
     let userName = 'User';
     if (user && typeof user === 'object') {
-      userName = user.name || (user.email ? user.email.split('@')[0] : 'User');
+      const pName = profileMap[user._id];
+      userName = pName || user.name || (user.email ? user.email.split('@')[0] : 'User');
     }
     return { ...rev, user_id: { ...user, name: userName } };
   });
