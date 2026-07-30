@@ -1,84 +1,109 @@
 /**
  * Admin Recipe Routes - UC-71 to UC-76
- * Các route quản lý công thức nấu ăn trong trang quản trị
  */
 
 const express = require('express');
 const router = express.Router();
 
-// Import Controller của bác
 const AdminRecipeController = require('../controllers/admin.recipe.controller');
 const { authenticateToken, authorizeRoles } = require('../middlewares/auth');
 const validateObjectId = require('../middlewares/validateObjectId');
 
-const { uploadExcel } = require('../config/cloudinary.config');
+// Import config cloudinary (Hỗ trợ tự lấy uploadImage, uploadSingle hoặc upload)
+const cloudinaryConfig = require('../config/cloudinary.config');
+const uploadExcel = cloudinaryConfig.uploadExcel;
+const uploadImage = cloudinaryConfig.uploadImage || cloudinaryConfig.uploadSingle || cloudinaryConfig.upload || cloudinaryConfig.uploadExcel;
 
-/**
- * Middleware kiểm tra xem người dùng có phải là admin không
- */
-function checkAdminRole(req, res, next) {
-  // Bác bổ sung logic check role thực tế ở đây nếu cần (vd: if(req.user.role !== 'admin')...)
-  next();
-}
-
-// Áp dụng xác thực (authentication) cho toàn bộ các API bên dưới
+// Áp dụng xác thực Token
 router.use(authenticateToken);
-router.use(authorizeRoles('admin'));
+
+// 🟢 Middleware check Admin linh hoạt (Chấp nhận cả 'admin', 'ADMIN', 'Admin')
+router.use((req, res, next) => {
+  const userRole = req.user?.role?.toLowerCase();
+  if (userRole === 'admin' || req.user?.isAdmin) {
+    return next();
+  }
+  return res.status(403).json({
+    success: false,
+    message: 'Truy cập bị từ chối: Bạn không có quyền Admin!'
+  });
+});
+
+// =========================================================================
+// 🚀 1. CÁC ROUTE ĐÍCH DANH (STATIC ROUTES)
+// =========================================================================
 
 /**
  * UC-71: GET /api/admin/recipes
- * Lấy danh sách tất cả công thức nấu ăn kèm phân trang và bộ lọc
  */
 router.get('/', AdminRecipeController.getRecipesList);
 
 /**
  * UC-73: POST /api/admin/recipes
- * Tạo công thức nấu ăn mới bằng tay (Đã được controller tự động bắt base64 để up Cloudinary)
  */
 router.post('/', AdminRecipeController.addRecipe);
 
-// =========================================================================
-// 🚀 ĐẨY CÁC ROUTE ĐÍCH DANH (STATIC ROUTES) LÊN TRÊN ĐẦU ĐỂ TRÁNH LỖI 404
-// =========================================================================
+/**
+ * 📸 POST /api/admin/recipes/upload-image
+ * Route upload ảnh món ăn trực tiếp lên Cloudinary
+ */
+router.post('/upload-image', uploadImage.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn file ảnh hợp lệ!' });
+    }
+
+    // Lấy đường dẫn URL trả về từ Cloudinary
+    const imageUrl = req.file.path || req.file.secure_url;
+
+    return res.status(200).json({
+      success: true,
+      message: 'Upload ảnh thành công!',
+      data: {
+        url: imageUrl
+      },
+      url: imageUrl
+    });
+  } catch (error) {
+    console.error('Error in recipe image upload:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Lỗi server khi upload ảnh!'
+    });
+  }
+});
 
 /**
  * 🛠️ UC-76: POST /api/admin/recipes/import-excel
- * API xử lý Import từ file Excel
- * Đã áp dụng middleware uploadExcel đồng bộ từ config
  */
 router.post('/import-excel', uploadExcel.single('file'), AdminRecipeController.importRecipesExcel);
 
 /**
  * GET /api/admin/recipes/stats
- * Lấy các số liệu thống kê chung về công thức nấu ăn
  */
 router.get('/stats', AdminRecipeController.getRecipesStats);
 
 /**
  * UC-75: GET /api/admin/recipes/search/advanced
- * API tìm kiếm nâng cao
  */
 router.get('/search/advanced', AdminRecipeController.searchAndFilterRecipes);
 
 // =========================================================================
-// ⚠️ HẠ CÁC ROUTE CHỨA THAM SỐ DYNAMIC (/:id) XUỐNG DƯỚI CÙNG
+// ⚠️ 2. CÁC ROUTE CHỨA THAM SỐ DYNAMIC (/:id)
 // =========================================================================
 
 /**
  * GET /api/admin/recipes/:id
- * Lấy thông tin chi tiết đầy đủ của một công thức cụ thể
  */
 router.get('/:id', validateObjectId('id'), AdminRecipeController.getRecipeDetail);
 
 /**
  * UC-74: PUT /api/admin/recipes/:id
- * Cập nhật thông tin công thức nấu ăn (Edit Recipe)
  */
 router.put('/:id', validateObjectId('id'), AdminRecipeController.updateRecipe);
 
 /**
  * UC-74: DELETE /api/admin/recipes/:id
- * Xóa mềm công thức (Soft Delete)
  */
 router.delete('/:id', validateObjectId('id'), AdminRecipeController.deleteRecipe);
 

@@ -26,39 +26,29 @@ export default function AddRecipePage() {
     { ingredient_id: '', base_quantity: '', unit: 'g' }
   ]);
 
-  useEffect(() => {
-    const fetchSystemData = async () => {
-      try {
-        const response = await apiClient.get('/admin/ingredients'); 
-        console.log("Raw Ingredients API Response:", response.data);
-        
-        if (response.data?.success) {
-          const resData = response.data.data;
-          if (Array.isArray(resData)) {
-            setSystemIngredients(resData);
-          } else if (resData && Array.isArray(resData.ingredients)) {
-            setSystemIngredients(resData.ingredients);
-          } else if (resData && typeof resData === 'object') {
-            const fallbackArray = Object.values(resData).find(val => Array.isArray(val));
-            setSystemIngredients(fallbackArray || []);
-          }
-        } else if (Array.isArray(response.data)) {
-          setSystemIngredients(response.data);
-        }
-      } catch (err) {
-        console.error('Unable to load the system ingredient list:', err);
-        setError('The system failed to load the ingredient list.');
+useEffect(() => {
+  const fetchSystemData = async () => {
+    try {
+      // 🟢 Đổi đường dẫn API tại đây
+      const response = await apiClient.get('/admin/ingredients/select-list'); 
+      
+      if (response.data?.success && Array.isArray(response.data.data)) {
+        setSystemIngredients(response.data.data);
       }
-    };
-
-    const token = localStorage.getItem('admin_session_jwt_token');
-    if (!token) {
-      localStorage.removeItem('admin_user');
-      navigate('/login');
-    } else {
-      fetchSystemData();
+    } catch (err) {
+      console.error('Unable to load the system ingredient list:', err);
+      setError('The system failed to load the ingredient list.');
     }
-  }, [navigate]);
+  };
+
+  const token = localStorage.getItem('admin_session_jwt_token');
+  if (!token) {
+    localStorage.removeItem('admin_user');
+    navigate('/login');
+  } else {
+    fetchSystemData();
+  }
+}, [navigate]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -229,7 +219,7 @@ export default function AddRecipePage() {
           <div className="flex flex-col gap-4">
             <div>
               <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Name of dish recipe *</label>
-              <input type="text" name="name" required value={formData.name} onChange={handleInputChange} placeholder="Ví dụ: Spagetti" className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
+              <input type="text" name="name" required value={formData.name} onChange={handleInputChange} placeholder="Ex: Spagetti" className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
             </div>
             <div>
               <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Description</label>
@@ -246,7 +236,7 @@ export default function AddRecipePage() {
               </div>
               <div className="flex-1 min-w-[150px]">
                 <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Cooking time (minutes) *</label>
-                <input type="number" name="cookingTime" required min="1" value={formData.cookingTime} onChange={handleInputChange} placeholder="Phút" className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
+                <input type="number" name="cookingTime" required min="1" value={formData.cookingTime} onChange={handleInputChange} placeholder="Minutes" className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
               </div>
               <div className="flex-1 min-w-[150px]">
                 <label className="block mb-1.5 text-[13px] text-slate-600 font-semibold">Serving size (per person) *</label>
@@ -377,7 +367,7 @@ export default function AddRecipePage() {
 
         <div className="flex justify-end mt-2.5">
           <AdminButton type="submit" isLoading={loading} className="min-w-[180px] h-[48px] text-[15px]">
-            Lưu công thức
+            Save Recipe
           </AdminButton>
         </div>
       </form>
