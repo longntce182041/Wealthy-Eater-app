@@ -37,6 +37,7 @@ class ChatProvider extends ChangeNotifier {
   int _currentPage = 1;
   String? _errorMessage;
   bool _isConnected = false;
+  bool _isExpired = false;
 
   // ── Getters ────────────────────────────────────────────────────────────────
   String? get contractId => _contractId;
@@ -49,6 +50,7 @@ class ChatProvider extends ChangeNotifier {
   bool get isSending => _isSendingText || _isUploadingImage;
   bool get hasMore => _hasMore;
   bool get isConnected => _isConnected;
+  bool get isExpired => _isExpired;
   String? get errorMessage => _errorMessage;
 
   // ── Nutritionist: Active Contracts List ───────────────────────────────────
@@ -81,6 +83,7 @@ class ChatProvider extends ChangeNotifier {
     _hasMore = true;
     _errorMessage = null;
     _loadState = ChatLoadState.loading;
+    _isExpired = false;
     notifyListeners();
 
     // 1. Fetch initial history
@@ -140,6 +143,7 @@ class ChatProvider extends ChangeNotifier {
 
       _hasMore = result.hasMore;
       _currentPage = result.page + 1;
+      _isExpired = result.isExpired;
     } catch (e) {
       if (isInitial) {
         _loadState = ChatLoadState.error;
@@ -265,6 +269,7 @@ class ChatProvider extends ChangeNotifier {
     _errorMessage = null;
     _loadState = ChatLoadState.initial;
     _isConnected = false;
+    _isExpired = false;
     _service.removeAllListeners();
     _service.disconnect();
     notifyListeners();

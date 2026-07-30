@@ -16,7 +16,7 @@ const reviewService = require('../services/user.recipe.review.service');
  */
 async function upsertReview(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const recipeId = req.params.id;
     const { rating, comment = '' } = req.body;
 
@@ -84,7 +84,7 @@ async function getRecipeReviews(req, res, next) {
  */
 async function getMyReview(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const recipeId = req.params.id;
 
     const review = await reviewService.getUserReviewForRecipe(userId, recipeId);
@@ -116,7 +116,7 @@ async function getMyReview(req, res, next) {
  */
 async function getAllMyReviews(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const { page = 1, limit = 10, sortOrder = 'desc' } = req.query;
 
     const result = await reviewService.getUserReviews(userId, {
@@ -142,7 +142,7 @@ async function getAllMyReviews(req, res, next) {
  */
 async function deleteReview(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const { reviewId } = req.params;
 
     await reviewService.deleteReview(reviewId, userId);

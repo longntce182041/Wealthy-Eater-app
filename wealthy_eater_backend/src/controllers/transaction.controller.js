@@ -9,94 +9,31 @@ const payos = new PayOS(
 );
 
 /**
- * 📥 1. WEBHOOK PAYOS - Nhận và xử lý phản hồi tự động từ PayOS
- * Route: POST /api/webhooks/payos
+ * ⚠️  DEPRECATED — DO NOT USE IN PRODUCTION ⚠️
+ *
+ * This webhook handler is INCOMPLETE. It only updates the Transaction document
+ * but does NOT:
+ *   - Activate the ConsultationContract (status: 'active')
+ *   - Send push notifications to user/nutritionist
+ *   - Use the idempotent atomic session pattern
+ *
+ * The canonical, production-ready PayOS webhook handler is:
+ *   src/controllers/user.consultation.controller.js → handlePayOSWebhook
+ *   Mounted at: POST /api/webhooks/payos (via webhook.routes.js)
+ *
+ * This function is kept ONLY because it is exported — transaction.routes.js
+ * (which imports it) is NOT mounted in routes/index.js and must be deleted.
  */
 const handlePayOSWebhook = async (req, res, next) => {
-  try {
-    let webhookData = req.body;
-
-    // 🟢 Chuyển đổi Buffer từ express.raw() thành Object JSON
-    if (Buffer.isBuffer(webhookData)) {
-      try {
-        webhookData = JSON.parse(webhookData.toString('utf-8'));
-      } catch (parseError) {
-        return res.status(400).json({
-          success: false,
-          data: null,
-          error: {
-            code: 'INVALID_JSON',
-            message: 'Webhook body is not valid JSON string.',
-          },
-        });
-      }
-    }
-
-    if (!webhookData) {
-      return res.status(400).json({
-        success: false,
-        data: null,
-        error: {
-          code: 'BAD_REQUEST',
-          message: 'Webhook payload is empty.',
-        },
-      });
-    }
-
-    // 🔒 Xác thực chữ ký Checksum qua PayOS SDK
-    const verifiedData = payos.verifyPaymentWebhookData(webhookData);
-
-    if (!verifiedData) {
-      return res.status(400).json({
-        success: false,
-        data: null,
-        error: {
-          code: 'INVALID_CHECKSUM',
-          message: 'Xác thực Checksum thất bại! Dữ liệu bị chỉnh sửa hoặc sai Secret Key.',
-        },
-      });
-    }
-
-    const { orderCode, reference, code } = verifiedData;
-    const rawOrderCode = String(orderCode);
-    const isSuccess = code === '00';
-
-    // 🔍 Tìm giao dịch trong DB
-    const transaction = await Transaction.findOne({
-      $or: [
-        { payos_order_code: rawOrderCode },
-        { payos_order_code: `ORD${rawOrderCode}` },
-      ],
-    });
-
-    if (!transaction) {
-      return res.status(404).json({
-        success: false,
-        data: null,
-        error: {
-          code: 'NOT_FOUND',
-          message: `Không tìm thấy giao dịch tương ứng với mã orderCode: ${orderCode}`,
-        },
-      });
-    }
-
-    // 📝 Cập nhật thông tin giao dịch
-    transaction.payos_transaction_id =
-      reference || verifiedData.paymentLinkId || transaction.payos_transaction_id;
-    transaction.status = isSuccess ? 'PAID' : 'FAILED';
-    await transaction.save();
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        orderCode: transaction.payos_order_code,
-        status: transaction.status,
-      },
-      error: null,
-    });
-  } catch (error) {
-    next(error);
-  }
+  console.error('[transaction.controller] DEPRECATED handlePayOSWebhook called! This route should not be active. Use /api/webhooks/payos instead.');
+  return res.status(410).json({
+    success: false,
+    data: null,
+    error: {
+      code: 'DEPRECATED',
+      message: 'This webhook endpoint is deprecated. The active PayOS webhook is POST /api/webhooks/payos.',
+    },
+  });
 };
 
 /**

@@ -25,7 +25,7 @@ const ConsultationContract = require('../models/ConsultationContract');
 const AppError        = require('../utils/AppError');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const GEMINI_MODEL       = 'gemini-2.5-flash';
+const GEMINI_MODEL       = 'gemini-pro-latest';
 const GEMINI_API_URL     = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // ── Key Rotation & Rate Limiting ──────────────────────────────────────────────
@@ -451,11 +451,19 @@ Always rely on the above data to personalize your answers. If there is not enoug
       safetySettings: [
         {
           category: 'HARM_CATEGORY_HARASSMENT',
-          threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+          threshold: 'BLOCK_ONLY_HIGH',
+        },
+        {
+          category: 'HARM_CATEGORY_HATE_SPEECH',
+          threshold: 'BLOCK_ONLY_HIGH',
+        },
+        {
+          category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+          threshold: 'BLOCK_ONLY_HIGH',
         },
         {
           category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-          threshold: 'BLOCK_MEDIUM_AND_ABOVE',
+          threshold: 'BLOCK_ONLY_HIGH',
         },
       ],
     };

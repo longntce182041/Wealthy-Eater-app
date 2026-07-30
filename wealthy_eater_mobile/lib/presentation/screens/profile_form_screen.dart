@@ -96,6 +96,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     try {
       final auth = context.read<AuthProvider>();
       final metadata = await auth.fetchSetupMetadata();
+      if (!mounted) return;
       if (metadata != null) {
         setState(() {
           _dbIngredients = metadata['ingredients'] ?? [];
@@ -105,9 +106,11 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     } catch (e) {
       debugPrint('Error loading metadata: $e');
     } finally {
-      setState(() {
-        _isLoadingMetadata = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingMetadata = false;
+        });
+      }
     }
   }
 
@@ -119,7 +122,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter your full name'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.error,
           ),
         );
         return;
@@ -132,7 +135,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter a valid weight (30-300 kg)'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.error,
           ),
         );
         return;
@@ -218,7 +221,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(auth.errorMessage ?? 'Save failed'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.error,
           ),
         );
       } else {
@@ -233,10 +236,11 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         }
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Save failed: $e'),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: AppColors.error,
         ),
       );
     }

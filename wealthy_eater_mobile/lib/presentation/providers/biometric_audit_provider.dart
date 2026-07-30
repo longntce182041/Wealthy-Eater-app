@@ -99,7 +99,6 @@ class BiometricAuditProvider extends ChangeNotifier {
         threshold = now.subtract(const Duration(days: 90));
         break;
       case BiometricTimeFilter.allTime:
-      default:
         _filteredLogs = List.from(_allLogs);
         return;
     }

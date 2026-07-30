@@ -219,7 +219,11 @@ async function detail(req, res, next) {
         { $group: { _id: null, count: { $sum: 1 }, avgRating: { $avg: '$rating' } } }
       ]),
       
-      RecipeReview.find({ recipe_id: recipe._id }).sort({ createdAt: -1 }).limit(10).lean(),
+      RecipeReview.find({ recipe_id: recipe._id })
+        .populate({ path: 'user_id', model: 'User', select: 'email' })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .lean(),
     ]);
 
     // Áp dụng helper mappers để định dạng đúng cấu trúc Mobile yêu cầu
@@ -250,7 +254,9 @@ async function detail(req, res, next) {
           id: review._id,
           rating: review.rating,
           comment: review.comment || '',
-          userId: review.user_id,
+          reviewerName: (review.user_id && review.user_id.email)
+            ? review.user_id.email.split('@')[0]
+            : 'User',
         })),
       }),
     });

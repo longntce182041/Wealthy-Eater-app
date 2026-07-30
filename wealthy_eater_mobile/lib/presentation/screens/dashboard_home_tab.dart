@@ -70,19 +70,19 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
         if (bmi > 0) {
           if (bmi < 18.5) {
             bmiCategory = 'Underweight';
-            bmiColor = Colors.blue;
+            bmiColor = const Color(0xFF0288D1); // Deep light blue
             bmiMessage = 'Your body weight is lower than standard. Consider increasing calorie intake and consulting a nutritionist.';
           } else if (bmi < 25.0) {
             bmiCategory = 'Normal';
-            bmiColor = AppColors.primary;
+            bmiColor = AppColors.success;
             bmiMessage = 'Great job! Your weight is in the healthy range. Keep maintaining your active lifestyle and balanced eating habits.';
           } else if (bmi < 30.0) {
             bmiCategory = 'Overweight';
-            bmiColor = Colors.orange;
+            bmiColor = AppColors.warning;
             bmiMessage = 'Your weight is slightly above standard. Combining portion control with regular exercise will help you reach a healthy range.';
           } else {
             bmiCategory = 'Obese';
-            bmiColor = Colors.red;
+            bmiColor = AppColors.error;
             bmiMessage = 'Your weight is significantly above standard. We recommend speaking with a certified nutritionist to build a structured health plan.';
           }
         }

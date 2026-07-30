@@ -6,8 +6,10 @@
  */
 
 const GEMINI_API_KEY = (process.env.GOOGLE_API_KEY || '').split(',')[0].trim();
-const GEMINI_MODEL = 'gemini-2.5-flash';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_PRO_MODEL = 'gemini-pro-latest';
+const GEMINI_FLASH_MODEL = 'gemini-flash-latest';
+const GEMINI_PRO_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_PRO_MODEL}:generateContent`;
+const GEMINI_FLASH_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_FLASH_MODEL}:generateContent`;
 
 if (!GEMINI_API_KEY) {
   console.error('[GeminiService] CRITICAL: GOOGLE_API_KEY is not set. All Gemini calls will fail.');
@@ -64,7 +66,34 @@ Required JSON schema:
         temperature: 0.3,
         maxOutputTokens: 1024,
         responseMimeType: 'application/json',
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            mealName: { type: "STRING" },
+            description: { type: "STRING" },
+            difficulty: { type: "STRING" },
+            cookingTimeMinutes: { type: "INTEGER" },
+            cookingSteps: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  stepNumber: { type: "INTEGER" },
+                  instruction: { type: "STRING" }
+                },
+                required: ["stepNumber", "instruction"]
+              }
+            }
+          },
+          required: ["mealName", "description", "difficulty", "cookingTimeMinutes", "cookingSteps"]
+        }
       },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
+      ]
     };
 
     let lastError = null;
@@ -72,7 +101,7 @@ Required JSON schema:
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`${GEMINI_PRO_URL}?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
@@ -152,11 +181,17 @@ Output ONLY the JSON array. No extra text, no markdown.`;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`${GEMINI_FLASH_URL}?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
+            safetySettings: [
+              { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+              { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
+            ],
             generationConfig: {
               temperature: 0.7,
               responseMimeType: 'application/json',

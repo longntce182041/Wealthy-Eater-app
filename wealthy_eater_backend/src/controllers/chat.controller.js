@@ -25,7 +25,7 @@ class ChatController {
    */
   async getMessages(req, res, next) {
     try {
-      const userId     = req.user.id;
+      const userId     = req.user.sub || req.user.id;
       const contractId = req.params.contractId;
       const { page, limit, before } = req.query;
 
@@ -55,7 +55,7 @@ class ChatController {
    */
   async uploadImage(req, res, next) {
     try {
-      const userId     = req.user.id;
+      const userId     = req.user.sub || req.user.id;
       const contractId = req.params.contractId;
       const file       = req.file;
 
@@ -87,7 +87,7 @@ class ChatController {
    */
   async markRead(req, res, next) {
     try {
-      const userId     = req.user.id;
+      const userId     = req.user.sub || req.user.id;
       const contractId = req.params.contractId;
 
       const result = await chatService.markMessagesRead(contractId, userId);
@@ -121,7 +121,7 @@ class ChatController {
    */
   async getNutritionistActiveContracts(req, res, next) {
     try {
-      const userId    = req.user.id;
+      const userId    = req.user.sub || req.user.id;
       const contracts = await chatService.getActiveContractsForNutritionist(userId);
 
       return res.status(200).json({

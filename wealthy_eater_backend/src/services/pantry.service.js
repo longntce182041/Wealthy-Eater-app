@@ -94,19 +94,22 @@ class PantryService {
       const data = response.data;
       rawIngredients = data.inventory || data.pantry_ingredients || (Array.isArray(data) ? data : []);
     } catch (error) {
+      const AppError = require('../utils/AppError');
       const isConnectionRefused = error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED');
       if (isConnectionRefused) {
-        console.warn("⚠️ [n8n Offline]: Connection refused. Falling back to mock pantry response.");
-      } else {
-        console.error("❌ [n8n Webhook Error]:", error.message);
+        console.error('❌ [PantryService] n8n scan service is offline. N8N_SCAN_PANTRY_WEBHOOK_URL may be misconfigured.');
+        throw new AppError(
+          'Dịch vụ quét tủ lạnh tạm thời không khả dụng. Vui lòng thử lại sau.',
+          503,
+          'SERVICE_UNAVAILABLE'
+        );
       }
-
-      // Mock data: Beef: 500g, Tomato: 3 pieces, Egg: 6 pieces
-      rawIngredients = [
-        { name: "Beef", quantity: 500, unit: "g" },
-        { name: "Tomato", quantity: 3, unit: "pieces" },
-        { name: "Egg", quantity: 6, unit: "pieces" }
-      ];
+      console.error('❌ [PantryService] n8n webhook error:', error.message);
+      throw new AppError(
+        `Lỗi khi quét hình ảnh: ${error.message}`,
+        502,
+        'SCAN_SERVICE_ERROR'
+      );
     }
 
     // Normalize all items to objects
