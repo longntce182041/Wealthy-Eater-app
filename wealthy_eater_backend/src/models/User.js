@@ -6,9 +6,10 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: () => new mongoose.Types.ObjectId().toString(),
     },
-    email:                   { type: String, unique: true, sparse: true, lowercase: true, trim: true },
-    phone:                   { type: String, unique: true, sparse: true, trim: true },
-    password_hash:           { type: String, default: null },
+    email:                  { type: String, unique: true, sparse: true, lowercase: true, trim: true },
+    phone:                  { type: String, unique: true, sparse: true, trim: true },
+    avatar:                 { type: String, default: null },
+    password_hash:          { type: String, default: null },
     role: {
       type: String,
       enum: ['customer', 'admin', 'nutritionist'],
