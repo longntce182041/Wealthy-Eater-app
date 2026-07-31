@@ -97,27 +97,57 @@ export default function NutritionistListPage() {
     setCurrentPage(1);
   }, [searchTerm, activeTab]);
 
-  // Handler for Approval / Suspension / Activation
+  // Helper đồng bộ để lấy Status chuẩn nhất của Chuyên gia
+  const getEffectiveStatus = (item) => {
+    const userStatus = item.userStatus?.toUpperCase() || item.status?.toUpperCase();
+    if (userStatus === 'SUSPENDED' || userStatus === 'BANNED') return userStatus;
+    
+    return item.approvalStatus?.toUpperCase() || userStatus || 'PENDING';
+  };
+
+  // Handler for Approval / Suspension / Activation (Đồng bộ chuẩn hóa với BE)
   async function handleProcessApproval(id, actionStatus) {
     let actionText = 'UPDATE STATUS';
     if (actionStatus === 'APPROVED') actionText = 'APPROVE PROFILE';
     if (actionStatus === 'REJECTED') actionText = 'REJECT PROFILE';
-    if (actionStatus === 'SUSPENDED' || actionStatus === 'BANNED') actionText = 'SUSPEND / BAN ACCOUNT';
+    if (actionStatus === 'SUSPENDED' || actionStatus === 'BANNED') actionText = 'SUSPEND ACCOUNT';
+    if (actionStatus === 'REACTIVATE') actionText = 'REACTIVATE ACCOUNT';
 
-    if (!window.confirm(`Are you sure you want to perform this action: ${actionText}?`)) return;
+    let rejectionReason = '';
+    // Nếu là Từ chối profile, hỏi lý do gửi mail cho người dùng
+    if (actionStatus === 'REJECTED') {
+      rejectionReason = window.prompt('Please enter the reason for rejection (will be sent via email):', 'Profile or certificates do not meet verification standards.');
+      if (rejectionReason === null) return; // Bấm Cancel thì dừng
+    } else {
+      if (!window.confirm(`Are you sure you want to perform this action: ${actionText}?`)) return;
+    }
 
     try {
-      const response = await apiClient.put(`/admin/nutritionists/${id}/approval`, {
-        approvalStatus: actionStatus
-      });
+      let endpoint = `/admin/nutritionists/${id}/verify`;
+      let payload = {};
 
-      if (response.data?.success) {
-        alert('Nutritionist status updated successfully!');
+      if (actionStatus === 'APPROVED') {
+        payload = { action: 'APPROVE', approvalStatus: 'APPROVED' };
+      } else if (actionStatus === 'REJECTED') {
+        payload = { action: 'REJECT', approvalStatus: 'REJECTED', rejectionReason };
+      } else if (actionStatus === 'SUSPENDED' || actionStatus === 'BANNED') {
+        endpoint = `/admin/nutritionists/${id}/approval`;
+        payload = { status: 'suspend', approvalStatus: 'SUSPENDED' };
+      } else if (actionStatus === 'REACTIVATE') {
+        endpoint = `/admin/nutritionists/${id}/approval`;
+        payload = { status: 'active', approvalStatus: 'APPROVED' };
+      }
+
+      const response = await apiClient.put(endpoint, payload);
+
+      if (response.data?.success || response.status === 200) {
+        alert(response.data?.message || 'Nutritionist status updated successfully!');
         fetchNutritionists();
       } else {
         alert(response.data?.message || 'An error occurred.');
       }
     } catch (err) {
+      console.error('Update status error:', err);
       alert(err?.response?.data?.message || err.message || 'Failed to update status.');
     }
   }
@@ -130,14 +160,12 @@ export default function NutritionistListPage() {
     setSortConfig({ key, direction });
   };
 
-  // Helper to extract avatar initial (strips common honorific titles)
   const getAvatarInitial = (name) => {
     if (!name) return 'N';
     const cleanName = name.replace(/^(Dr\.|Doctor|Prof\.|Bác sĩ)\s+/i, '').trim();
     return cleanName.charAt(0).toUpperCase() || 'N';
   };
 
-  // Filter combining Search term & Active status tab
   const filteredNutritionists = nutritionists.filter(item => {
     const nameStr = item.fullName || '';
     const emailStr = item.email || '';
@@ -148,13 +176,13 @@ export default function NutritionistListPage() {
     
     let matchesTab = true;
     if (activeTab !== 'ALL') {
-      matchesTab = item.approvalStatus?.toUpperCase() === activeTab;
+      const currentStatus = getEffectiveStatus(item);
+      matchesTab = currentStatus === activeTab;
     }
 
     return matchesSearch && matchesTab;
   });
 
-  // Client-side Sorting
   const sortedNutritionists = [...filteredNutritionists].sort((a, b) => {
     let aValue = a[sortConfig.key];
     let bValue = b[sortConfig.key];
@@ -176,7 +204,6 @@ export default function NutritionistListPage() {
       : (bValue || 0) - (aValue || 0);
   });
 
-  // Pagination logic
   const totalItems = sortedNutritionists.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -184,7 +211,7 @@ export default function NutritionistListPage() {
 
   const countByStatus = (statusType) => {
     if (statusType === 'ALL') return nutritionists.length;
-    return nutritionists.filter(item => item.approvalStatus?.toUpperCase() === statusType).length;
+    return nutritionists.filter(item => getEffectiveStatus(item) === statusType).length;
   };
 
   if (!user) return null;
@@ -323,7 +350,7 @@ export default function NutritionistListPage() {
               ) : (
                 paginatedNutritionists.map((expert) => {
                   const expertId = expert._id || expert.id;
-                  const appStatus = expert.approvalStatus?.toUpperCase();
+                  const appStatus = getEffectiveStatus(expert);
                   
                   let statusBadge = 'bg-slate-100 text-slate-700 border-slate-200';
                   if (appStatus === 'APPROVED' || appStatus === 'APPROVAL') statusBadge = 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -471,7 +498,7 @@ export default function NutritionistListPage() {
                               type="button"
                               title="Reactivate account"
                               className="flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-md px-2 py-1 text-xs font-bold cursor-pointer"
-                              onClick={() => handleProcessApproval(expertId, 'APPROVED')}
+                              onClick={() => handleProcessApproval(expertId, 'REACTIVATE')}
                             >
                               <Unlock className="w-3.5 h-3.5" /> Reactivate
                             </button>
