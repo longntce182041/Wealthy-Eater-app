@@ -16,7 +16,7 @@ const likeService = require('../services/user.recipe.like.service');
  */
 async function toggleLike(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const recipeId = req.params.id;
 
     const result = await likeService.toggleLike(userId, recipeId);
@@ -40,7 +40,7 @@ async function toggleLike(req, res, next) {
 
 async function getLikeStatus(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const recipeId = req.params.id;
 
     const liked      = await likeService.isLiked(userId, recipeId);
@@ -63,7 +63,7 @@ async function getLikeStatus(req, res, next) {
  */
 async function getLikedRecipes(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const { page = 1, limit = 20 } = req.query;
 
     const result = await likeService.getLikedRecipes(userId, {
@@ -85,7 +85,7 @@ async function getLikedRecipes(req, res, next) {
 
 async function getLikeCount(req, res, next) {
   try {
-    const userId = req.user.sub;
+    const userId = req.user.sub || req.user.id;
     const count  = await likeService.getUserLikeCount(userId);
     return res.json({ success: true, data: { count } });
   } catch (err) {

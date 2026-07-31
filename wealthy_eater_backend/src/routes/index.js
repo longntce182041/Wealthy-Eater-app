@@ -4,7 +4,7 @@ const router = express.Router();
 // ============================================================================
 // 1. IMPORT ROUTE FILES (Alphabetical order to minimize Git conflicts)
 // ============================================================================
-const adminNutritionistRoute = require("./admin.nutritionist.routes"); 
+const adminNutritionistRoute = require("./admin.nutritionist.routes");
 const adminRecipeRoute = require("./admin.recipe.routes");
 const adminTransactionRoute = require("./admin.transaction.routes");
 const adminSettingRoutes = require('./admin.setting.routes');
@@ -29,6 +29,7 @@ const webhookRoute = require("./webhook.routes");
 const dietAuditRoute = require("./dietAudit.routes");
 const userChatbotRoute = require("./user.chatbot.routes");
 const internalRoutes = require("./internal.routes");
+const userAiRecipeRoute = require("./user.ai_recipe.routes");
 
 // ============================================================================
 // 2. MAPPING API ENDPOINTS (Grouped logically to minimize Git conflicts)
@@ -41,7 +42,7 @@ router.use("/api/pantry", pantryRoute);
 
 // ─── ADMIN ROUTES ───────────────────────────────────────────────────────────
 router.use("/api/admin/users", adminUserRoute);
-router.use("/api/admin/nutritionists", adminNutritionistRoute); 
+router.use("/api/admin/nutritionists", adminNutritionistRoute);
 router.use("/api/admin/ingredients", ingredientRoute);
 router.use("/api/admin/micronutrients", micronutrientRoute);
 router.use("/api/admin/recipes", adminRecipeRoute);
@@ -64,6 +65,7 @@ router.use("/api/user/notifications", notificationRoute);
 router.use("/api/user/recipes", userRecipeRoute);
 router.use("/api/user/shopping-list", shoppingListRoute);
 router.use("/api/user/chatbot", userChatbotRoute);
+router.use("/api/user/ai-recipes", userAiRecipeRoute);
 
 // ─── CHAT ROUTES (shared: user + nutritionist) ───────────────────────────────
 router.use("/api/chat", chatRoute);

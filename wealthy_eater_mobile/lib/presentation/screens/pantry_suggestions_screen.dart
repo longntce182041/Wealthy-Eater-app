@@ -132,6 +132,38 @@ class PantrySuggestionsScreen extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (!provider.isAiRecipeSaved(recipe['mealName'] ?? 'Unknown Recipe'))
+                      if (provider.isSavingAiRecipe(recipe['mealName'] ?? 'Unknown Recipe'))
+                        const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.secondary),
+                          ),
+                        )
+                      else
+                        IconButton(
+                          icon: const Icon(Icons.bookmark_add_outlined),
+                          color: AppColors.secondary,
+                          tooltip: 'Save to My AI Recipes',
+                          onPressed: () async {
+                            final success = await provider.saveAiRecipe(recipe);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(success ? 'Recipe saved to AI Saved tab!' : (provider.error ?? 'Failed to save recipe.')),
+                                  backgroundColor: success ? Colors.green : AppColors.error,
+                                ),
+                              );
+                            }
+                          },
+                        )
+                    else
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(Icons.bookmark_added, color: Colors.green),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 8),

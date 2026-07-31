@@ -17,6 +17,7 @@ const uploadExcel = multer({
 });
 
 router.get("/", protect, authorize('admin'), ingredientController.getIngredients);
+router.get('/select-list', ingredientController.getAllIngredientsDropdown);
 router.get("/:id", protect, authorize('admin'), ingredientController.getIngredientDetail);
 router.delete("/delete/:id", protect, authorize('admin'), ingredientController.deleteIngredient);
 router.post("/import", protect, authorize('admin'), uploadExcel.single("file"), ingredientController.importIngredients);

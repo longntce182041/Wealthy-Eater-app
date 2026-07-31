@@ -47,9 +47,10 @@ function mapUserForAdmin(user, profile, dietary) {
     _id: user._id.toString(),
     email: user.email,
     role: user.role,
-    status: user.status || 'active',
+    status: user.status || (user.is_active === false ? 'suspended' : 'active'),
     createdAt: user.created_at || user.createdAt || new Date(),
     profile: profile ? {
+      fullName: profile.full_name || profile.fullName || profile.name || '',
       age: profile.age,
       gender: profile.gender,
       height: profile.height,
@@ -102,17 +103,30 @@ async function getUsersList(req, res, next) {
       });
     }
 
-    const userIds = users.map(u => u._id);
+    // Ép kiểu hỗ trợ query cả String lẫn ObjectId để tìm Profile không bị trượt
+    const userIdsRaw = users.map(u => u._id.toString());
+    const userObjectIds = userIdsRaw
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+    
+    const queryIds = [...new Set([...userIdsRaw, ...userObjectIds])];
+
     const [profiles, dietaries] = await Promise.all([
-      UserProfile.find({ user_id: { $in: userIds } }).lean(),
-      UserDietary.find({ user_id: { $in: userIds } }).lean(),
+      UserProfile.find({ user_id: { $in: queryIds } }).lean(),
+      UserDietary.find({ user_id: { $in: queryIds } }).lean(),
     ]);
 
     const profileMap = {};
-    profiles.forEach(p => { const uid = p.user_id?.toString(); if (uid) profileMap[uid] = p; });
+    profiles.forEach(p => { 
+      const uid = p.user_id?.toString(); 
+      if (uid) profileMap[uid] = p; 
+    });
 
     const dietaryMap = {};
-    dietaries.forEach(d => { const uid = d.user_id?.toString(); if (uid) dietaryMap[uid] = d; });
+    dietaries.forEach(d => { 
+      const uid = d.user_id?.toString(); 
+      if (uid) dietaryMap[uid] = d; 
+    });
 
     const data = users.map(u => {
       const uid = u._id.toString();
@@ -134,22 +148,26 @@ async function getUsersList(req, res, next) {
 const DEFAULT_PASSWORD = process.env.DEFAULT_USER_PASSWORD || 'ChangeMe123!';
 const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
 
+/**
+ * 🟢 ADD USER (CREATE USER) - FIXED CHÍNH XÁC
+ */
 async function createUser(req, res, next) {
   try {
-    const { email, password, role = 'customer', status = 'active' } = req.body || {};
+    const { email, password, role = 'customer', status = 'active', fullName = '', name = '' } = req.body || {};
+    
     if (!email || typeof email !== 'string') {
-      return next(new AppError('Email is required.', 400, 'VALIDATION_ERROR'));
+      return next(new AppError('Email là bắt buộc.', 400, 'VALIDATION_ERROR'));
     }
     const normalizedEmail = String(email).trim().toLowerCase();
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(normalizedEmail)) {
-      return next(new AppError('Invalid email format.', 400, 'VALIDATION_ERROR'));
+      return next(new AppError('Định dạng email không hợp lệ.', 400, 'VALIDATION_ERROR'));
     }
 
     const existing = await User.findOne({ email: normalizedEmail }).lean();
     if (existing) {
-      return next(new AppError('Email already exists.', 409, 'ALREADY_REGISTERED'));
+      return next(new AppError('Email này đã được đăng ký trên hệ thống.', 409, 'ALREADY_REGISTERED'));
     }
 
     const rawPassword = password && String(password).trim().length >= 6
@@ -159,69 +177,103 @@ async function createUser(req, res, next) {
     const salt = await bcrypt.genSalt(BCRYPT_SALT_ROUNDS);
     const passwordHash = await bcrypt.hash(rawPassword, salt);
 
-    const newUser = new User({
+    // Ưu tiên lấy fullName truyền lên từ modal Create User
+    const inputFullName = (fullName || name || '').trim();
+    const displayName = inputFullName || normalizedEmail.split('@')[0];
+    const normalizedStatus = String(status).trim().toLowerCase();
+
+    // Khởi tạo User Object
+    const userData = {
       email: normalizedEmail,
       password_hash: passwordHash,
-      role: role.toLowerCase(),
+      role: String(role).toLowerCase(),
+      status: normalizedStatus,
+      is_active: normalizedStatus === 'active',
       created_at: new Date(),
-      status: status.toLowerCase(),
-    });
+    };
 
-    let savedUser = await newUser.save();
+    const newUser = new User(userData);
+    const savedUser = await newUser.save();
 
+    // Tạo đồng bộ Profile & Dietary bằng await
+    let createdProfile = null;
     try {
-      await UserProfile.create({
+      createdProfile = await UserProfile.create({
         user_id: savedUser._id,
+        full_name: displayName,
+        fullName: displayName,
+        name: displayName,
         age: null,
         gender: null,
         height: null,
         weight: null,
         dietary_references: { activity_level: null, diet_preferences: [], allergies: [] },
       });
-    } catch (profileErr) {
-      console.warn('Warning: failed to create UserProfile for', savedUser._id, profileErr.message);
+    } catch (pErr) {
+      console.warn('⚠️ UserProfile creation warning:', pErr.message);
+    }
+
+    try {
+      await UserDietary.create({
+        user_id: savedUser._id,
+        allergies: [],
+        dislike_ingredients: [],
+      });
+    } catch (dErr) {
+      console.warn('⚠️ UserDietary creation warning:', dErr.message);
     }
 
     return res.status(201).json({
       success: true,
-      message: 'User created successfully.',
-      data: { id: savedUser._id, email: savedUser.email, role: savedUser.role, status: savedUser.status },
+      message: 'Tạo tài khoản người dùng mới thành công!',
+      data: mapUserForAdmin(savedUser, createdProfile, null),
     });
   } catch (err) {
-    return next(new AppError(err.message || 'Server error while creating user.', 500, 'INTERNAL_SERVER_ERROR'));
+    console.error('💥 Error in createUser:', err);
+    return next(new AppError(err.message || 'Lỗi hệ thống khi tạo người dùng.', 500, 'INTERNAL_SERVER_ERROR'));
   }
+}
+
+function toSafeId(id) {
+  if (!id) return null;
+  let cleanId = String(id).trim();
+  if (cleanId.startsWith(':')) cleanId = cleanId.slice(1);
+  if (cleanId.includes(':')) cleanId = cleanId.split(':')[0];
+  return cleanId;
 }
 
 async function updateUserStatus(req, res, next) {
   try {
-    const userId = req.params.id || req.params.userId;
-    const { status } = req.body || {};
+    const rawId = req.params.id || req.params.userId;
+    const cleanId = toSafeId(rawId);
 
-    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-      return next(new AppError(`Định dạng ID cấu trúc không hợp lệ: ${userId}`, 400, 'VALIDATION_ERROR'));
+    if (!cleanId) {
+      return next(new AppError(`Định dạng ID cấu trúc không hợp lệ: ${rawId}`, 400, 'VALIDATION_ERROR'));
     }
 
+    const { status } = req.body || {};
     const normalizedStatus = String(status).trim().toLowerCase();
     if (!status || !['active', 'banned', 'suspended'].includes(normalizedStatus)) {
       return next(new AppError('Trạng thái không hợp lệ. Chỉ chấp nhận active, banned hoặc suspended.', 400, 'VALIDATION_ERROR'));
     }
 
-    const user = await User.findById(new mongoose.Types.ObjectId(userId));
+    const user = await User.findById(cleanId);
     if (!user) {
-      return next(new AppError(`Không tìm thấy người dùng có ID [${userId}] trên Database.`, 404, 'NOT_FOUND'));
+      return next(new AppError(`Không tìm thấy người dùng có ID [${rawId}] trên Database.`, 404, 'NOT_FOUND'));
     }
 
     user.status = normalizedStatus;
+    user.is_active = normalizedStatus === 'active';
     await user.save();
 
-    if (normalizedStatus === 'banned') {
+    if (normalizedStatus === 'banned' || normalizedStatus === 'suspended') {
       try {
         if (redisClient.status === 'ready' || redisClient.status === 'connect') {
-          const keys = await redisClient.keys(`*${userId}*`);
+          const keys = await redisClient.keys(`*${cleanId}*`);
           if (keys && keys.length > 0) await redisClient.del(keys);
         }
       } catch (redisErr) {
-        console.error('⚠️ Lỗi Redis khi cố gắng xóa Token:', redisErr.message);
+        console.error('⚠️ Lỗi Redis khi xóa token:', redisErr.message);
       }
     }
 
@@ -235,39 +287,21 @@ async function updateUserStatus(req, res, next) {
   }
 }
 
-// Hàm tiện ích kiểm tra và ép kiểu ID an toàn
-function toSafeObjectId(id, next) {
-  if (!id) return null;
-  
-  // Dọn dẹp nếu có dấu hai chấm rác dính vào do lỗi Router Frontend
-  let cleanId = String(id).trim();
-  if (cleanId.startsWith(':')) cleanId = cleanId.slice(1);
-  if (cleanId.includes(':')) cleanId = cleanId.split(':')[0];
-
-  // Kiểm tra xem có đúng cấu trúc 24 ký tự Hex của MongoDB không
-  if (!mongoose.Types.ObjectId.isValid(cleanId)) {
-    return null;
-  }
-  
-  return new mongoose.Types.ObjectId(cleanId);
-}
-
 async function updateUser(req, res, next) {
   try {
     const rawId = req.params.id || req.params.userId;
-    const objectId = toSafeObjectId(rawId);
+    const cleanId = toSafeId(rawId);
 
-    if (!objectId) {
+    if (!cleanId) {
       return next(new AppError(`Định dạng ID người dùng không hợp lệ hoặc sai cấu trúc: ${rawId}`, 400, 'VALIDATION_ERROR'));
     }
 
-    // Tìm kiếm bằng ObjectId đã được chuẩn hóa
-    const user = await User.findById(objectId);
+    const user = await User.findById(cleanId);
     if (!user) {
       return next(new AppError(`Không tìm thấy người dùng có ID [${rawId}] trên hệ thống.`, 404, 'NOT_FOUND'));
     }
 
-    let { email, role, status, password } = req.body || {};
+    let { email, role, status, password, fullName } = req.body || {};
 
     if (email && typeof email === 'string' && email.trim()) {
       const normalizedEmail = email.trim().toLowerCase();
@@ -291,6 +325,7 @@ async function updateUser(req, res, next) {
       const normalizedStatus = status.trim().toLowerCase();
       if (['active', 'banned', 'suspended'].includes(normalizedStatus)) {
         user.status = normalizedStatus;
+        user.is_active = normalizedStatus === 'active';
       }
     }
 
@@ -301,8 +336,15 @@ async function updateUser(req, res, next) {
 
     await user.save();
 
-    // Thu hồi token nếu bị banned
-    if (user.status === 'banned') {
+    if (fullName && typeof fullName === 'string' && fullName.trim()) {
+      await UserProfile.updateOne(
+        { user_id: user._id },
+        { $set: { full_name: fullName.trim(), fullName: fullName.trim(), name: fullName.trim() } },
+        { upsert: true }
+      );
+    }
+
+    if (user.status === 'banned' || user.status === 'suspended') {
       try {
         if (redisClient.status === 'ready' || redisClient.status === 'connect') {
           const keys = await redisClient.keys(`*${user._id.toString()}*`);
@@ -327,37 +369,34 @@ async function updateUser(req, res, next) {
 async function deleteUser(req, res, next) {
   try {
     const rawId = req.params.id || req.params.userId;
-    const objectId = toSafeObjectId(rawId);
+    const cleanId = toSafeId(rawId);
 
-    if (!objectId) {
+    if (!cleanId) {
       return next(new AppError(`Định dạng ID không hợp lệ để thực hiện xóa: ${rawId}`, 400, 'VALIDATION_ERROR'));
     }
 
-    // Thực hiện xóa bằng ObjectId chuẩn
-    const deletedUser = await User.findByIdAndDelete(objectId);
+    const deletedUser = await User.findByIdAndDelete(cleanId);
     if (!deletedUser) {
-      return next(new AppError(`Không tìm thấy người dùng có ID [${rawId}] trong Database để thực hiện xóa cứng.`, 404, 'NOT_FOUND'));
+      return next(new AppError(`Không tìm thấy người dùng có ID [${rawId}] trong Database để thực hiện xóa.`, 404, 'NOT_FOUND'));
     }
 
-    // Dọn dẹp các bảng liên quan dữ liệu gốc
     await Promise.all([
       UserProfile.deleteOne({ user_id: deletedUser._id }),
       UserDietary.deleteOne({ user_id: deletedUser._id })
-    ]).catch(err => console.warn('⚠️ Gặp lỗi khi dọn dẹp profile phụ hệ thống:', err.message));
+    ]).catch(err => console.warn('⚠️ Lỗi dọn dẹp profile phụ:', err.message));
 
-    // Xóa session đăng nhập trong Redis nếu có
     try {
       if (redisClient.status === 'ready' || redisClient.status === 'connect') {
         const keys = await redisClient.keys(`*${deletedUser._id.toString()}*`);
         if (keys && keys.length > 0) await redisClient.del(keys);
       }
     } catch (redisErr) {
-      console.error('⚠️ Lỗi Redis khi dọn dẹp token user xóa:', redisErr.message);
+      console.error('⚠️ Lỗi Redis khi dọn token user bị xóa:', redisErr.message);
     }
 
     return res.json({
       success: true,
-      message: 'Đã xóa vĩnh viễn tài khoản và toàn bộ dữ liệu liên quan khỏi cơ sở dữ liệu MongoDB thành công!'
+      message: 'Đã xóa vĩnh viễn tài khoản thành công!'
     });
   } catch (err) {
     console.error('💥 Lỗi tại deleteUser:', err);
@@ -370,5 +409,5 @@ module.exports = {
   createUser,
   updateUser,
   updateUserStatus, 
-  deleteUser        
+  deleteUser         
 };

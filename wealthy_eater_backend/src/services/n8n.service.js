@@ -92,7 +92,7 @@ class N8nService {
   }
 
   async callGeminiVisionFallback(file, apiKey) {
-    const model = process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash";
+    const model = process.env.GEMINI_VISION_MODEL || "gemini-flash-latest";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt = [

@@ -8,12 +8,16 @@ const {
 } = require("../validators/nutritionist.validation");
 const { uploadNutritionistCertificate } = require("../config/cloudinary.config");
 
+// Canonical UPPERCASE enum values — the only values written by this service.
+// Legacy lowercase values ("pending", "approval") are preserved in the DB enum
+// for backwards-compat but should never be written by new code.
 const ACTIVE_REGISTRATION_STATUSES = [
-  "pending",
-  "approval",
   "PENDING",
   "APPROVED",
 ];
+
+// For approved-only queries (used in getAllApprovedNutritionists)
+const APPROVED_STATUSES = ["APPROVED", "approval"]; // keep "approval" for legacy data in DB
 
 class NutritionistService {
   async createNutritionistUserAccount(data) {
@@ -72,17 +76,35 @@ class NutritionistService {
   }
 
   /**
-   * Get all approved nutritionists with optional pagination or filters
+   * Get all approved nutritionists with pagination.
+   * @param {{ page?: number, limit?: number }} options
    */
-  async getAllApprovedNutritionists() {
+  async getAllApprovedNutritionists(options = {}) {
     try {
-      const nutritionists = await Nutritionist.find({
-        approval_status: { $in: ["approval", "APPROVED"] },
-      })
-        .populate("user_id", "email") // Optionally fetch user details like email if needed
-        .sort({ average_rating: -1 }); // Sort by rating descending
+      const page  = Math.max(parseInt(options.page,  10) || 1, 1);
+      const limit = Math.min(Math.max(parseInt(options.limit, 10) || 20, 1), 100);
+      const skip  = (page - 1) * limit;
 
-      return nutritionists;
+      const [nutritionists, total] = await Promise.all([
+        Nutritionist.find({ approval_status: { $in: APPROVED_STATUSES } })
+          .populate("user_id", "email")
+          .sort({ average_rating: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        Nutritionist.countDocuments({ approval_status: { $in: APPROVED_STATUSES } }),
+      ]);
+
+      return {
+        nutritionists,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasMore: page * limit < total,
+        },
+      };
     } catch (error) {
       console.error("Error fetching nutritionists:", error);
       throw error;

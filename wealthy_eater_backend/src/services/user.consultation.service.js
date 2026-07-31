@@ -136,7 +136,7 @@ class UserConsultationService {
     if (!nutritionist) {
       throw new AppError("Nutritionist not found.", 404);
     }
-    if (!["approval", "APPROVED"].includes(nutritionist.approval_status)) {
+    if (!["APPROVED", "approval"].includes(nutritionist.approval_status)) {
       throw new AppError("This nutritionist has not been approved yet.", 400);
     }
     if (!nutritionist.service_fee || nutritionist.service_fee <= 0) {
@@ -154,13 +154,16 @@ class UserConsultationService {
 
     if (existingContract) {
       if (existingContract.status === "active") {
-        throw new AppError(
-          "You already have an active consultation contract. You cannot hire another nutritionist.",
-          409,
-        );
-      }
-
-      // pending_payment — check if there's a still-valid (not expired) transaction
+        const isExpired = await this.enforceContractExpiration(existingContract);
+        if (!isExpired) {
+          throw new AppError(
+            "You already have an active consultation contract. You cannot hire another nutritionist.",
+            409,
+          );
+        }
+        // If expired, the contract is now completed. We can safely proceed to create a new one.
+      } else if (existingContract.status === "pending_payment") {
+        // pending_payment — check if there's a still-valid (not expired) transaction
       const pendingTx = await Transaction.findOne({
         consultation_contracts_id_fk: existingContract._id,
         status: "PENDING",
@@ -177,10 +180,7 @@ class UserConsultationService {
           } catch (e) {
             // Ignore if PayOS already cancelled it or order not found
           }
-          pendingTx.status = "CANCELLED";
-          await pendingTx.save();
-          existingContract.status = "cancelled";
-          await existingContract.save();
+          await this._cancelPendingContractAndTx(existingContract, pendingTx);
 
           // Let the code proceed to step 3 to create a new contract/transaction.
         } else {
@@ -196,11 +196,8 @@ class UserConsultationService {
                 paymentInfo.status === "EXPIRED")
             ) {
               isStillValid = false;
-              // Sync status to DB
-              pendingTx.status = "CANCELLED";
-              await pendingTx.save();
-              existingContract.status = "cancelled";
-              await existingContract.save();
+              // Sync status to DB atomically
+              await this._cancelPendingContractAndTx(existingContract, pendingTx);
             } else if (paymentInfo && paymentInfo.status === "PAID") {
               throw new AppError(
                 "You already have a paid consultation contract. Please wait for it to be activated.",
@@ -211,10 +208,7 @@ class UserConsultationService {
             // If PayOS throws (e.g., order not found or already cancelled), assume invalid
             if (e instanceof AppError) throw e;
             isStillValid = false;
-            pendingTx.status = "CANCELLED";
-            await pendingTx.save();
-            existingContract.status = "cancelled";
-            await existingContract.save();
+            await this._cancelPendingContractAndTx(existingContract, pendingTx);
           }
 
           if (isStillValid) {
@@ -234,6 +228,7 @@ class UserConsultationService {
             };
           }
         }
+      }
       }
     }
 
@@ -694,12 +689,61 @@ class UserConsultationService {
       })
       .lean();
 
+    if (activeContract) {
+      const isExpired = await this.enforceContractExpiration(activeContract);
+      if (isExpired) return null;
+    }
+
     return activeContract;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // PRIVATE HELPERS
   // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Evaluate lazy expiration for a contract.
+   * If it's active but past expire_at, mark it completed.
+   * @returns {Promise<boolean>} true if the contract is expired, false otherwise.
+   */
+  async enforceContractExpiration(contract) {
+    if (!contract || contract.status !== "active" || !contract.expire_at) {
+      return false;
+    }
+
+    if (new Date() > new Date(contract.expire_at)) {
+      await ConsultationContract.updateOne(
+        { _id: contract._id },
+        { $set: { status: "completed" } }
+      );
+      contract.status = "completed"; // Update in memory too
+      console.log(`[ConsultationService] Contract ${contract._id} automatically expired (lazy evaluation).`);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Atomically cancel a pending contract and its associated transaction
+   */
+  async _cancelPendingContractAndTx(contract, tx) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      tx.status = "CANCELLED";
+      await tx.save({ session });
+      contract.status = "cancelled";
+      await contract.save({ session });
+      await session.commitTransaction();
+    } catch (err) {
+      await session.abortTransaction();
+      console.error("[CancelSync] DB Error:", err.message);
+      throw new AppError("Failed to cancel existing contract.", 500);
+    } finally {
+      session.endSession();
+    }
+  }
 
   /**
    * Create in-app notifications for both the user and the nutritionist
@@ -752,10 +796,7 @@ class UserConsultationService {
    * Request a new meal plan from the active nutritionist.
    */
   async requestMealPlan(userId) {
-    const activeContract = await ConsultationContract.findOne({
-      user_id: userId,
-      status: "active",
-    });
+    const activeContract = await this.getActiveContract(userId);
 
     if (!activeContract) {
       throw new AppError("No active consultation contract found.", 400);

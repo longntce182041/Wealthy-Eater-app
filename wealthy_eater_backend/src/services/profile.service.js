@@ -4,6 +4,7 @@ const WeightLogRepo = require('../repositories/weightlog.repository');
 const UserDietary = require('../models/UserDietary');
 const Ingredient = require('../models/Ingredient');
 const MedicalCondition = require('../models/MedicalCondition');
+const User = require('../models/User');
 const AppError = require('../utils/AppError');
 
 function calculateBmi(weightKg, heightCm) {
@@ -69,6 +70,7 @@ class ProfileService {
   static async createOrUpdate(userId, data) {
     const { 
       full_name,
+      avatar_url,
       age, 
       gender, 
       height_cm, 
@@ -103,8 +105,14 @@ class ProfileService {
       bmr,
       tdee,
     };
+    if (avatar_url !== undefined) {
+      doc.avatar_url = avatar_url;
+    }
 
     const savedProfile = await UserProfileRepo.updateByUserId(userId, doc);
+    if (avatar_url) {
+      await User.findByIdAndUpdate(userId, { avatar: avatar_url }).exec();
+    }
 
     const dietaryDoc = {
       user_id: userId,
@@ -135,6 +143,15 @@ class ProfileService {
     profileObj.available_cooking_time = savedDietary?.available_cooking_time || null;
 
     return profileObj;
+  }
+
+  static async updateAvatar(userId, avatarUrl) {
+    if (!avatarUrl) {
+      throw new AppError('Avatar URL is required', 400);
+    }
+    const savedProfile = await UserProfileRepo.updateByUserId(userId, { avatar_url: avatarUrl });
+    await User.findByIdAndUpdate(userId, { avatar: avatarUrl }).exec();
+    return this.getProfile(userId);
   }
 
   static async logWeight(userId, weight, timestamp) {

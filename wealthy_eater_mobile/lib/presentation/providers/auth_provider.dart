@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier, debugPrint, defaultTargetPlatform, TargetPlatform;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/config/secrets.dart';
 import '../../core/error/app_error.dart';
@@ -417,6 +419,54 @@ class AuthProvider with ChangeNotifier {
       }
     } catch (e) {
       errorMessage = mapError(e).message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  bool isUploadingAvatar = false;
+
+  /// Upload customer profile picture to Cloudinary via backend API.
+  Future<bool> uploadAvatar(XFile imageFile) async {
+    isUploadingAvatar = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final fileName = imageFile.name.isNotEmpty
+          ? imageFile.name
+          : 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final bytes = await imageFile.readAsBytes();
+
+      final formData = FormData.fromMap({
+        'avatar': MultipartFile.fromBytes(
+          bytes,
+          filename: fileName,
+        ),
+      });
+
+      final res = await _api.post(
+        '/api/profile/avatar',
+        data: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      );
+
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        await _fetchUserProfile();
+        isUploadingAvatar = false;
+        errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        errorMessage = res.data['error']?['message'] ?? res.data['message'] ?? 'Failed to upload profile picture';
+        isUploadingAvatar = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      errorMessage = mapError(e).message;
+      isUploadingAvatar = false;
       notifyListeners();
       return false;
     }

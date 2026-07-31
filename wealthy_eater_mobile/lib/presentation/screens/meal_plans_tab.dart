@@ -358,8 +358,8 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
                         children: [
                           _buildNutrientStat('Calories', '$_calories kcal', AppColors.secondary),
                           _buildNutrientStat('Protein', '${_protein.toStringAsFixed(1)}g', AppColors.primary),
-                          _buildNutrientStat('Carbs', '${_carbs.toStringAsFixed(1)}g', Colors.blue),
-                          _buildNutrientStat('Fat', '${_fat.toStringAsFixed(1)}g', Colors.redAccent),
+                          _buildNutrientStat('Carbs', '${_carbs.toStringAsFixed(1)}g', const Color(0xFF0288D1)),
+                          _buildNutrientStat('Fat', '${_fat.toStringAsFixed(1)}g', AppColors.error),
                         ],
                       ),
                     ],

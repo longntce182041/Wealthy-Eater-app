@@ -140,8 +140,37 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       body: Column(
         children: [
           Expanded(child: _buildMessageList()),
-          _buildInputBar(),
+          Consumer<ChatProvider>(
+            builder: (context, chat, _) {
+              if (chat.isExpired) {
+                return _buildReadOnlyBanner();
+              }
+              return _buildInputBar();
+            },
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildReadOnlyBanner() {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFF0F4F3),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 12,
+        bottom: MediaQuery.of(context).padding.bottom + 12,
+      ),
+      child: const Text(
+        'This consultation contract has expired. You can no longer send messages.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 13,
+          fontStyle: FontStyle.italic,
+        ),
       ),
     );
   }

@@ -23,10 +23,18 @@ class PantryProvider extends ChangeNotifier {
   List<PantryIngredient> _ingredients = [];
   List<PantryIngredient> _tempIngredients = [];
   List<String> _masterIngredientNames = [];
+  List<Map<String, dynamic>> _masterIngredients = [];
   String? _scannedImagePath;
 
   bool _isLoadingSuggestions = false;
   List<Map<String, dynamic>> _suggestedRecipes = [];
+  String _lastSuggestedPantryHash = '';
+
+  // Track which recipes are currently being saved to prevent spam clicking
+  final Set<String> _savingAiRecipes = {};
+
+  bool _isLoadingSavedAiRecipes = false;
+  List<Map<String, dynamic>> _savedAiRecipes = [];
 
   // ── Getters ────────────────────────────────────────────────────────────────
   bool get isLoading => _isLoading;
@@ -34,10 +42,19 @@ class PantryProvider extends ChangeNotifier {
   List<PantryIngredient> get ingredients => _ingredients;
   List<PantryIngredient> get tempIngredients => _tempIngredients;
   List<String> get masterIngredientNames => _masterIngredientNames;
+  List<Map<String, dynamic>> get masterIngredients => _masterIngredients;
   String? get scannedImagePath => _scannedImagePath;
 
   bool get isLoadingSuggestions => _isLoadingSuggestions;
   List<Map<String, dynamic>> get suggestedRecipes => _suggestedRecipes;
+
+  bool get isLoadingSavedAiRecipes => _isLoadingSavedAiRecipes;
+  List<Map<String, dynamic>> get savedAiRecipes => _savedAiRecipes;
+
+  bool get isPantryChangedSinceLastSuggestion {
+    final currentHash = _ingredients.map((e) => '${e.name}:${e.quantity}:${e.unit}').join('|');
+    return currentHash != _lastSuggestedPantryHash;
+  }
 
   bool get supportsCameraSource {
     if (kIsWeb) return false;
@@ -71,7 +88,7 @@ class PantryProvider extends ChangeNotifier {
     }
   }
 
-  /// Fetches master ingredients list to feed into the manual input autocomplete field.
+  /// Fetches master ingredients list to feed into the manual input autocomplete field and ingredient picker grid.
   Future<void> loadMasterIngredients() async {
     try {
       final response = await _apiClient.get('/api/profile/setup-metadata');
@@ -79,14 +96,34 @@ class PantryProvider extends ChangeNotifier {
         final data = response.data['data'];
         if (data != null && data['ingredients'] != null) {
           final list = data['ingredients'] as List;
-          _masterIngredientNames = list
-              .map((item) => item['name']?.toString() ?? '')
-              .where((name) => name.isNotEmpty)
-              .toList();
+          _masterIngredients = list.map((item) {
+            return {
+              'id': item['_id']?.toString() ?? '',
+              'name': item['name']?.toString() ?? '',
+              'image_url': item['image_url']?.toString() ?? '',
+            };
+          }).where((item) => (item['name'] as String).isNotEmpty).toList();
+
+          _masterIngredientNames = _masterIngredients.map((e) => e['name'] as String).toList();
         }
       }
     } catch (e) {
       debugPrint('Failed to load master ingredients: $e');
+    }
+  }
+
+  /// Adds an ingredient directly from the ingredient picker grid.
+  void addIngredientFromPicker(String name, {double defaultQuantity = 100.0, String defaultUnit = 'g'}) {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) return;
+    
+    // Check if already in temp list
+    final exists = _tempIngredients.any(
+      (item) => item.name.trim().toLowerCase() == trimmedName.toLowerCase(),
+    );
+    if (!exists) {
+      _tempIngredients.add(PantryIngredient(name: trimmedName, quantity: defaultQuantity, unit: defaultUnit));
+      notifyListeners();
     }
   }
 
@@ -204,13 +241,91 @@ class PantryProvider extends ChangeNotifier {
     try {
       final recipes = await _service.suggestRecipesFromPantry();
       _suggestedRecipes = recipes;
+      _lastSuggestedPantryHash = _ingredients.map((e) => '${e.name}:${e.quantity}:${e.unit}').join('|');
       _isLoadingSuggestions = false;
       notifyListeners();
+      
+      // Fetch saved AI recipes in the background to correctly check isAiRecipeSaved
+      fetchSavedAiRecipes();
     } catch (e) {
       _isLoadingSuggestions = false;
       _error = mapError(e).message;
       notifyListeners();
     }
+  }
+
+  /// Fetches saved AI recipes from the backend
+  Future<void> fetchSavedAiRecipes() async {
+    _isLoadingSavedAiRecipes = true;
+    notifyListeners();
+
+    try {
+      final recipes = await _service.getSavedAiRecipes();
+      _savedAiRecipes = recipes;
+      _isLoadingSavedAiRecipes = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoadingSavedAiRecipes = false;
+      // Do not overwrite main error, just log it or handle silently
+      debugPrint('Failed to load saved AI recipes: $e');
+      notifyListeners();
+    }
+  }
+
+  /// Saves an AI recipe to the backend
+  Future<bool> saveAiRecipe(Map<String, dynamic> recipe) async {
+    final mealName = recipe['mealName'] as String?;
+    if (mealName == null || _savingAiRecipes.contains(mealName)) return false;
+
+    _savingAiRecipes.add(mealName);
+    notifyListeners();
+
+    try {
+      await _service.saveAiRecipe(recipe);
+      await fetchSavedAiRecipes();
+      _savingAiRecipes.remove(mealName);
+      return true;
+    } catch (e) {
+      _savingAiRecipes.remove(mealName);
+      _error = mapError(e).message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Deletes a saved AI recipe
+  Future<bool> deleteAiRecipe(String recipeId) async {
+    // Optimistic UI Update: remove it from local state immediately
+    final index = _savedAiRecipes.indexWhere((r) => r['_id'] == recipeId);
+    Map<String, dynamic>? backup;
+    if (index != -1) {
+      backup = _savedAiRecipes[index];
+      _savedAiRecipes.removeAt(index);
+      notifyListeners();
+    }
+
+    try {
+      await _service.deleteAiRecipe(recipeId);
+      return true;
+    } catch (e) {
+      // Revert if failed
+      if (backup != null && index != -1) {
+        _savedAiRecipes.insert(index, backup);
+      }
+      _error = mapError(e).message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Checks if a recipe is already saved based on its mealName
+  bool isAiRecipeSaved(String mealName) {
+    return _savedAiRecipes.any((r) => r['mealName'] == mealName);
+  }
+
+  /// Checks if a recipe is currently being saved
+  bool isSavingAiRecipe(String mealName) {
+    return _savingAiRecipes.contains(mealName);
   }
 
   /// Resets the provider states upon logging out.
@@ -222,6 +337,9 @@ class PantryProvider extends ChangeNotifier {
     _scannedImagePath = null;
     _isLoadingSuggestions = false;
     _suggestedRecipes = [];
+    _lastSuggestedPantryHash = '';
+    _isLoadingSavedAiRecipes = false;
+    _savedAiRecipes = [];
     notifyListeners();
   }
 }

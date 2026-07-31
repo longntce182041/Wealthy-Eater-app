@@ -71,12 +71,13 @@ class NutritionistController {
    */
   async getNutritionists(req, res, next) {
     try {
-      const nutritionists =
-        await nutritionistService.getAllApprovedNutritionists();
+      const { page, limit } = req.query;
+      const result = await nutritionistService.getAllApprovedNutritionists({ page, limit });
 
       return res.status(200).json({
         success: true,
-        data: nutritionists,
+        data: result.nutritionists,
+        meta: result.pagination,
         error: null,
       });
     } catch (error) {
@@ -105,9 +106,6 @@ class NutritionistController {
     }
   }
 
-  /**
-   * POST /api/nutritionists/meal-plan-requests/:id/respond
-   */
   /**
    * POST /api/nutritionists/meal-plan-requests/:id/respond
    */

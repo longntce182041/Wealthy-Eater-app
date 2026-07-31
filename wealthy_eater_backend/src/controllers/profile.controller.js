@@ -56,4 +56,37 @@ async function getSetupMetadata(req, res, next) {
   }
 }
 
-module.exports = { getMyProfile, createOrUpdateProfile, logWeight, getWeightHistory, getSetupMetadata };
+async function uploadAvatar(req, res, next) {
+  try {
+    const userId = req.user?.sub;
+    let avatarUrl = null;
+
+    if (req.file) {
+      avatarUrl = req.file.path || req.file.secure_url;
+    } else if (req.body?.avatar_url || req.body?.avatar) {
+      const inputStr = req.body.avatar_url || req.body.avatar;
+      if (inputStr.startsWith('data:image')) {
+        const { uploadBase64ToCloudinary } = require('../config/cloudinary.config');
+        avatarUrl = await uploadBase64ToCloudinary(inputStr);
+      } else {
+        avatarUrl = inputStr;
+      }
+    }
+
+    if (!avatarUrl) {
+      throw new AppError('No avatar file or image data provided', 400);
+    }
+
+    const updatedProfile = await ProfileService.updateAvatar(userId, avatarUrl);
+    return res.json({
+      success: true,
+      message: 'Avatar updated successfully',
+      data: updatedProfile,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { getMyProfile, createOrUpdateProfile, logWeight, getWeightHistory, getSetupMetadata, uploadAvatar };
+

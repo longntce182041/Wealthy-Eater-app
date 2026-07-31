@@ -117,4 +117,52 @@ class PantryService {
       throw mapError(e);
     }
   }
+
+  /// Save an AI generated recipe to the user's saved recipes
+  Future<void> saveAiRecipe(Map<String, dynamic> recipe) async {
+    try {
+      final response = await _apiClient.post(
+        '/api/user/ai-recipes',
+        data: recipe,
+      );
+
+      if (response.statusCode != 201 || (response.data is Map && response.data['success'] != true)) {
+        final errorMsg = response.data is Map ? (response.data['error']?['message'] ?? 'Failed to save recipe.') : 'Failed to save recipe (Server Error).';
+        throw AppError(errorMsg);
+      }
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// Get all saved AI recipes for the current user
+  Future<List<Map<String, dynamic>>> getSavedAiRecipes() async {
+    try {
+      final response = await _apiClient.get('/api/user/ai-recipes');
+
+      if (response.statusCode == 200 && response.data is Map && response.data['success'] == true) {
+        final list = response.data['data'] as List;
+        return list.cast<Map<String, dynamic>>();
+      }
+
+      final errorMsg = response.data is Map ? (response.data['error']?['message'] ?? 'Failed to fetch saved recipes.') : 'Failed to fetch saved recipes (Server Error).';
+      throw AppError(errorMsg);
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// Delete a saved AI recipe
+  Future<void> deleteAiRecipe(String recipeId) async {
+    try {
+      final response = await _apiClient.delete('/api/user/ai-recipes/$recipeId');
+      
+      if (response.statusCode != 200 || (response.data is Map && response.data['success'] != true)) {
+        final errorMsg = response.data is Map ? (response.data['error']?['message'] ?? 'Failed to delete recipe.') : 'Failed to delete recipe (Server Error).';
+        throw AppError(errorMsg);
+      }
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
 }

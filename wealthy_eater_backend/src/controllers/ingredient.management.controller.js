@@ -1,6 +1,7 @@
 const AppError = require('../utils/AppError');
 const ingredientService = require("../services/ingredient.management.service");
 const { validateIngredient } = require("../validators/ingredient.management.validators");
+const Ingredient = require('../models/Ingredient'); // Bổ sung model để query siêu tốc cho dropdown
 
 const getActionMessage = (action, modelName) => {
     const messages = {
@@ -22,6 +23,25 @@ class IngredientManagementController {
             res.json({ success: true, data: result });
         } catch (error) {
             console.error("🔥 Error in getIngredients:", error);
+            return next(new AppError(error.message, 500));
+        }
+    }
+
+    // ==========================================
+    // 🎯 [GET] LẤY TOÀN BỘ NGUYÊN LIỆU CHO DROPDOWN/SELECT (TẠO/SỬA RECIPE)
+    // Route gợi ý: GET /api/admin/ingredients/select-list (hoặc /all)
+    // ==========================================
+    async getAllIngredientsDropdown(req, res, next) {
+        try {
+            // Lấy nhẹ nhàng các trường cần dùng, không phân trang, sort A-Z
+            const ingredients = await Ingredient.find({})
+                .select('_id name unit calories_per_unit protein fat carbs')
+                .sort({ name: 1 })
+                .lean();
+
+            res.json({ success: true, data: ingredients });
+        } catch (error) {
+            console.error("🔥 Error in getAllIngredientsDropdown:", error);
             return next(new AppError(error.message, 500));
         }
     }
@@ -79,7 +99,6 @@ class IngredientManagementController {
             if (req.body.carbs !== undefined) req.body.carbs = Number(req.body.carbs) || 0;
             if (req.body.fat !== undefined) req.body.fat = Number(req.body.fat) || 0;
 
-            // 🎯 Bổ sung Validation để đồng nhất bắt lỗi sớm cho hàm update
             const { errors, isValid } = validateIngredient(req.body);
             if (!isValid) return next(new AppError('Validation Error', 400, errors));
 
@@ -113,7 +132,6 @@ class IngredientManagementController {
         try {
             if (!req.file) return next(new AppError("Please upload an Excel file", 400));
             
-            // Gọi service xử lý import
             const result = await ingredientService.importIngredientsFromExcel(req.file.buffer);
             
             res.status(200).json({

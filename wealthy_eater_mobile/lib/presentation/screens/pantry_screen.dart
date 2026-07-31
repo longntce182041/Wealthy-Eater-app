@@ -19,12 +19,21 @@ class PantryScreen extends StatefulWidget {
 }
 
 class _PantryScreenState extends State<PantryScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  bool _showAllAvailable = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<PantryProvider>().fetchPantry();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -55,8 +64,12 @@ class _PantryScreenState extends State<PantryScreen> {
                   _buildCameraScanSection(context, provider),
                   const SizedBox(height: 24),
 
-                  // ── Section 2: Manual Ingredients Form ──
+                  // ── Section 2: Manual Ingredients Form (Fridge Inventory) ──
                   _buildManualFormSection(context, provider),
+                  const SizedBox(height: 24),
+
+                  // ── Section 3: Ingredient Grid Picker with Search (Max 9 items) ──
+                  _buildIngredientPickerSection(context, provider),
                   const SizedBox(height: 80), // spacer for bottom action button
                 ],
               ),
@@ -74,10 +87,17 @@ class _PantryScreenState extends State<PantryScreen> {
   // ── AI Recipe Suggestions Card ────────────────────────────────────────────────
 
   Widget _buildAiSuggestionsCard(BuildContext context, PantryProvider provider) {
+    if (provider.ingredients.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF2E4E41), Color(0xFF4A9F71)],
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary,
+            AppColors.primary.withValues(alpha: 0.85),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -85,9 +105,9 @@ class _PantryScreenState extends State<PantryScreen> {
         boxShadow: [
           BoxShadow(
             color: AppColors.primary.withValues(alpha: 0.25),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
         ],
       ),
       padding: const EdgeInsets.all(20),
@@ -100,47 +120,80 @@ class _PantryScreenState extends State<PantryScreen> {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
               const SizedBox(width: 12),
-              const Text(
-                'AI Recipe Suggestions',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AI Meal Assistant',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'Get recipe ideas from your current ingredients',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Get tailored recipe ideas created instantly from your virtual fridge items while respecting your dietary profile.',
-            style: TextStyle(fontSize: 13, color: Colors.white70, height: 1.4),
           ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () {
-                provider.suggestMeals();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PantrySuggestionsScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.restaurant_menu, size: 18),
-              label: const Text('Suggest Meals Now', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: provider.isLoadingSuggestions
+                  ? null
+                  : () {
+                      if (provider.suggestedRecipes.isEmpty || provider.isPantryChangedSinceLastSuggestion) {
+                        provider.suggestMeals();
+                      }
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const PantrySuggestionsScreen(),
+                        ),
+                      );
+                    },
+              icon: provider.isLoadingSuggestions
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    )
+                  : const Icon(Icons.restaurant_menu_rounded, size: 18),
+              label: Text(
+                provider.isLoadingSuggestions
+                    ? 'Crafting Recipes...'
+                    : (provider.suggestedRecipes.isNotEmpty && !provider.isPantryChangedSinceLastSuggestion)
+                        ? 'View AI Recipes (${provider.suggestedRecipes.length})'
+                        : 'Generate AI Recipes',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.secondary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -149,7 +202,7 @@ class _PantryScreenState extends State<PantryScreen> {
     );
   }
 
-  // ── AI Scanner Layout ────────────────────────────────────────────────────────
+  // Section 1: AI Camera Scan ──────────────────────────────────────────────
 
   Widget _buildCameraScanSection(BuildContext context, PantryProvider provider) {
     return Container(
@@ -171,98 +224,67 @@ class _PantryScreenState extends State<PantryScreen> {
         children: [
           const Row(
             children: [
-              Icon(Icons.photo_camera_rounded, color: AppColors.secondary, size: 24),
-              SizedBox(width: 10),
-              Text(
-                'AI Fridge Scanner',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+              Icon(Icons.center_focus_strong_rounded, color: AppColors.primary, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'AI Fridge Scanner',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           const Text(
-            'Quickly update your virtual fridge by taking a photo of your shelves. The AI will detect and map your food automatically.',
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+            'Snap a photo of your fridge or grocery items to automatically identify ingredients.',
+            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Scanning preview state
           if (provider.scannedImagePath != null) ...[
-            Center(
-              child: Stack(
-                children: [
-                  Container(
-                    height: 200,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.border, width: 1.5),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: kIsWeb
-                          ? Image.network(
-                              provider.scannedImagePath!,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                            )
-                          : Image.file(
-                              File(provider.scannedImagePath!),
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                            ),
-                    ),
-                  ),
-                  if (provider.isLoading)
-                    const Positioned.fill(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.all(Radius.circular(16)),
-                        child: _ScanningOverlay(),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SizedBox(
+                height: 160,
+                width: double.infinity,
+                child: kIsWeb
+                    ? Image.network(
+                        provider.scannedImagePath!,
+                        fit: BoxFit.cover,
+                      )
+                    : Image.file(
+                        File(provider.scannedImagePath!),
+                        fit: BoxFit.cover,
                       ),
-                    ),
-                ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
           ],
 
-          if (provider.isLoading && provider.scannedImagePath == null) ...[
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Column(
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 12),
-                    Text('Detecting ingredients...', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // Gradient Capture Options
           Row(
             children: [
-              Expanded(
-                child: _ScanOptionButton(
-                  label: 'Camera',
-                  icon: Icons.camera_enhance_rounded,
-                  colors: const [AppColors.secondary, Color(0xFFC8600C)],
-                  onTap: () => provider.pickAndScanPantry(ImageSource.camera),
+              if (provider.supportsCameraSource) ...[
+                Expanded(
+                  child: _ScanOptionButton(
+                    icon: Icons.camera_alt_rounded,
+                    label: 'Take Photo',
+                    color: AppColors.primary,
+                    onTap: () => provider.pickAndScanPantry(ImageSource.camera),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
+                const SizedBox(width: 12),
+              ],
               Expanded(
                 child: _ScanOptionButton(
-                  label: 'Gallery',
                   icon: Icons.photo_library_rounded,
-                  colors: const [Color(0xFF0D9488), Color(0xFF0F766E)],
+                  label: 'Choose Gallery',
+                  color: AppColors.secondary,
                   onTap: () => provider.pickAndScanPantry(ImageSource.gallery),
                 ),
               ),
@@ -273,7 +295,267 @@ class _PantryScreenState extends State<PantryScreen> {
     );
   }
 
-  // ── Manual Entry Form Layout ───────────────────────────────────────────────
+  // ── Section 3: Ingredient Grid Picker with Dedicated Search (Max 9 items) ──
+
+  Widget _buildIngredientPickerSection(BuildContext context, PantryProvider provider) {
+    // Get existing ingredient names in current form/fridge (case-insensitive)
+    final existingNames = provider.tempIngredients
+        .map((e) => e.name.trim().toLowerCase())
+        .where((name) => name.isNotEmpty)
+        .toSet();
+
+    final query = _searchController.text.trim().toLowerCase();
+
+    // Filter master ingredients: exclude items already added to fridge
+    final availableIngredients = provider.masterIngredients.where((item) {
+      final name = (item['name'] as String? ?? '').trim().toLowerCase();
+      if (name.isEmpty || existingNames.contains(name)) {
+        return false;
+      }
+      if (query.isNotEmpty) {
+        return name.contains(query);
+      }
+      return true;
+    }).toList();
+
+    final totalAvailableCount = availableIngredients.length;
+    final displayedIngredients = (_showAllAvailable || query.isNotEmpty)
+        ? availableIngredients
+        : availableIngredients.take(9).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x06000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          )
+        ],
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.add_shopping_cart_rounded, color: AppColors.primary, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Available Ingredients',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Tap any ingredient card to quickly add it to your Virtual Fridge',
+            style: TextStyle(fontSize: 12, color: AppColors.textTertiary),
+          ),
+          const SizedBox(height: 14),
+
+          // Search Field
+          TextField(
+            controller: _searchController,
+            onChanged: (_) {
+              setState(() {});
+            },
+            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              hintText: 'Search ingredients to add...',
+              hintStyle: const TextStyle(fontSize: 13, color: AppColors.textTertiary),
+              prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textTertiary),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                      },
+                    )
+                  : null,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              filled: true,
+              fillColor: AppColors.background,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Grid View (3 items per row, max 9 items initially)
+          if (availableIngredients.isEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      query.isNotEmpty ? Icons.search_off_rounded : Icons.check_circle_outline_rounded,
+                      size: 40,
+                      color: AppColors.textTertiary.withValues(alpha: 0.6),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      query.isNotEmpty
+                          ? 'No ingredients match "$query"'
+                          : 'All available ingredients are already in your fridge!',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: displayedIngredients.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 0.72,
+              ),
+              itemBuilder: (context, index) {
+                final item = displayedIngredients[index];
+                final String name = item['name'] as String? ?? '';
+                final String imageUrl = item['image_url'] as String? ?? '';
+
+                return InkWell(
+                  onTap: () {
+                    provider.addIngredientFromPicker(name);
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Image Thumbnail or Icon
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: imageUrl.isNotEmpty
+                              ? Image.network(
+                                  imageUrl,
+                                  height: 36,
+                                  width: 36,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Icon(
+                                    Icons.restaurant_menu_rounded,
+                                    size: 30,
+                                    color: AppColors.primary,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.restaurant_menu_rounded,
+                                  size: 30,
+                                  color: AppColors.primary,
+                                ),
+                        ),
+                        const SizedBox(height: 4),
+
+                        // Name
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+
+                        // Add Pill
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add, size: 10, color: AppColors.primary),
+                              SizedBox(width: 2),
+                              Text(
+                                'Add',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            if (totalAvailableCount > 9 && query.isEmpty) ...[
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showAllAvailable = !_showAllAvailable;
+                    });
+                  },
+                  icon: Icon(
+                    _showAllAvailable ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                  ),
+                  label: Text(
+                    _showAllAvailable
+                        ? 'Show Less'
+                        : 'Show More (${totalAvailableCount - 9} remaining)',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Section 3: Manual Ingredients Form ─────────────────────────────────────
 
   Widget _buildManualFormSection(BuildContext context, PantryProvider provider) {
     return Container(
@@ -296,27 +578,36 @@ class _PantryScreenState extends State<PantryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.inventory_2_rounded, color: AppColors.primary, size: 24),
-                  SizedBox(width: 10),
-                  Text(
-                    'Fridge Inventory',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.inventory_2_rounded, color: AppColors.primary, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Fridge Inventory (${provider.tempIngredients.length})',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               TextButton.icon(
                 onPressed: () => provider.addTempRow(),
-                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
                 label: const Text('Add Row'),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -348,7 +639,7 @@ class _PantryScreenState extends State<PantryScreen> {
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Press "Add Row" to enter ingredients manually or scan a photo to populate it automatically.',
+                      'Tap available ingredients above or press "Add Blank Row" to populate your fridge.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
@@ -361,7 +652,6 @@ class _PantryScreenState extends State<PantryScreen> {
               ),
             ),
           ] else ...[
-            // Rows List
             Column(
               children: List.generate(provider.tempIngredients.length, (index) {
                 final item = provider.tempIngredients[index];
@@ -369,7 +659,6 @@ class _PantryScreenState extends State<PantryScreen> {
                   padding: const EdgeInsets.only(bottom: 12.0),
                   child: _IngredientRow(
                     item: item,
-                    suggestions: provider.masterIngredientNames,
                     onChanged: (updatedItem) {
                       provider.updateTempRow(index, updatedItem);
                     },
@@ -407,47 +696,37 @@ class _PantryScreenState extends State<PantryScreen> {
         child: SizedBox(
           width: double.infinity,
           height: 52,
-          child: ElevatedButton(
+          child: ElevatedButton.icon(
             onPressed: provider.isLoading
                 ? null
                 : () async {
                     await provider.savePantry();
-                    if (!context.mounted) return;
-                    if (provider.error != null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(provider.error!),
-                          backgroundColor: AppColors.error,
-                        ),
-                      );
-                    } else {
+                    if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Virtual fridge successfully updated!'),
-                          backgroundColor: AppColors.success,
-                          duration: Duration(seconds: 2),
+                          content: Text('Virtual Fridge saved successfully!'),
+                          backgroundColor: AppColors.primary,
                         ),
                       );
                     }
                   },
+            icon: provider.isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.cloud_upload_rounded, color: Colors.white),
+            label: Text(
+              provider.isLoading ? 'Saving...' : 'Save Virtual Fridge',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
               ),
-              elevation: 2,
             ),
-            child: provider.isLoading
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                  )
-                : const Text(
-                    'Save to Virtual Fridge',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
           ),
         ),
       ),
@@ -455,127 +734,49 @@ class _PantryScreenState extends State<PantryScreen> {
   }
 }
 
-// ── Gradient Scan Trigger Button Widget ──────────────────────────────────────
+// ── Helper Button Widget for Scan Options ────────────────────────────────────
 
 class _ScanOptionButton extends StatelessWidget {
-  final String label;
   final IconData icon;
-  final List<Color> colors;
+  final String label;
+  final Color color;
   final VoidCallback onTap;
 
   const _ScanOptionButton({
-    required this.label,
     required this.icon,
-    required this.colors,
+    required this.label,
+    required this.color,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: colors.first.withValues(alpha: 0.25),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          )
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Laser Scanning Overlay Widget ───────────────────────────────────────────
-
-class _ScanningOverlay extends StatefulWidget {
-  const _ScanningOverlay();
-
-  @override
-  State<_ScanningOverlay> createState() => _ScanningOverlayState();
-}
-
-class _ScanningOverlayState extends State<_ScanningOverlay>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Stack(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.35),
-              ),
-            ),
-            Positioned(
-              top: _controller.value * 196,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.secondary.withValues(alpha: 0.8),
-                      blurRadius: 12,
-                      spreadRadius: 3,
-                    ),
-                  ],
-                ),
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: color,
               ),
             ),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
@@ -584,13 +785,11 @@ class _ScanningOverlayState extends State<_ScanningOverlay>
 
 class _IngredientRow extends StatefulWidget {
   final PantryIngredient item;
-  final List<String> suggestions;
   final Function(PantryIngredient) onChanged;
   final VoidCallback onDelete;
 
   const _IngredientRow({
     required this.item,
-    required this.suggestions,
     required this.onChanged,
     required this.onDelete,
   });
@@ -633,170 +832,131 @@ class _IngredientRowState extends State<_IngredientRow> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // Name (Autocomplete)
-        Expanded(
-          flex: 4,
-          child: Autocomplete<String>(
-            optionsBuilder: (TextEditingValue textEditingValue) {
-              if (textEditingValue.text.isEmpty) {
-                return const Iterable<String>.empty();
-              }
-              return widget.suggestions.where((String option) {
-                return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
-              });
-            },
-            optionsViewBuilder: (context, onSelected, options) {
-              return Align(
-                alignment: Alignment.topLeft,
-                child: Material(
-                  elevation: 6.0,
-                  color: AppColors.surface,
-                  shape: RoundedRectangleBorder(
-                    side: const BorderSide(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: SizedBox(
-                    width: 180,
-                    child: ListView.builder(
-                      padding: EdgeInsets.zero,
-                      shrinkWrap: true,
-                      itemCount: options.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        final String option = options.elementAt(index);
-                        return ListTile(
-                          title: Text(option, style: const TextStyle(fontSize: 13)),
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          onTap: () {
-                            onSelected(option);
-                          },
-                        );
-                      },
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          // Row 1: Name Field & Delete Button
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _nameController,
+                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                  decoration: InputDecoration(
+                    hintText: 'Ingredient Name',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.primary),
                     ),
                   ),
+                  onChanged: (val) {
+                    widget.onChanged(widget.item.copyWith(name: val));
+                  },
                 ),
-              );
-            },
-            onSelected: (String selection) {
-              _nameController.text = selection;
-              widget.onChanged(widget.item.copyWith(name: selection));
-            },
-            fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-              // Keep text sync in autocomplete controller
-              if (textEditingController.text != widget.item.name) {
-                textEditingController.text = widget.item.name;
-              }
-              return TextField(
-                controller: textEditingController,
-                focusNode: focusNode,
-                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Name',
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppColors.primary),
-                  ),
-                ),
-                onChanged: (val) {
-                  widget.onChanged(widget.item.copyWith(name: val));
-                },
-              );
-            },
-          ),
-        ),
-        const SizedBox(width: 8),
-
-        // Qty
-        Expanded(
-          flex: 2,
-          child: TextField(
-            controller: _qtyController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              hintText: 'Qty',
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
+              IconButton(
+                onPressed: widget.onDelete,
+                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 20),
+                padding: const EdgeInsets.all(4),
+                constraints: const BoxConstraints(),
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.primary),
-              ),
-            ),
-            onChanged: (val) {
-              final double? parsed = double.tryParse(val);
-              if (parsed != null) {
-                widget.onChanged(widget.item.copyWith(quantity: parsed));
-              } else if (val.isEmpty) {
-                widget.onChanged(widget.item.copyWith(quantity: 0.0));
-              }
-            },
-          ),
-        ),
-        const SizedBox(width: 8),
-
-        // Unit Dropdown
-        Expanded(
-          flex: 3,
-          child: DropdownButtonFormField<String>(
-            key: ValueKey('${widget.item.name}_${widget.item.unit}'),
-            initialValue: widget.item.unit.isEmpty ? 'g' : widget.item.unit,
-            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
-            decoration: InputDecoration(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.primary),
-              ),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'g', child: Text('g')),
-              DropdownMenuItem(value: 'ml', child: Text('ml')),
-              DropdownMenuItem(value: 'pieces', child: Text('pcs')),
-              DropdownMenuItem(value: 'units', child: Text('unit')),
             ],
-            onChanged: (val) {
-              if (val != null) {
-                widget.onChanged(widget.item.copyWith(unit: val));
-              }
-            },
           ),
-        ),
+          const SizedBox(height: 8),
 
-        // Delete Row
-        IconButton(
-          onPressed: widget.onDelete,
-          icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-        ),
-      ],
+          // Row 2: Qty Field & Unit Dropdown
+          Row(
+            children: [
+              Expanded(
+                flex: 1,
+                child: TextField(
+                  controller: _qtyController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Quantity',
+                    labelText: 'Qty',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                  onChanged: (val) {
+                    final double? parsed = double.tryParse(val);
+                    if (parsed != null) {
+                      widget.onChanged(widget.item.copyWith(quantity: parsed));
+                    } else if (val.isEmpty) {
+                      widget.onChanged(widget.item.copyWith(quantity: 0.0));
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 1,
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('${widget.item.name}_${widget.item.unit}'),
+                  initialValue: widget.item.unit.isEmpty ? 'g' : widget.item.unit,
+                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'g', child: Text('g')),
+                    DropdownMenuItem(value: 'ml', child: Text('ml')),
+                    DropdownMenuItem(value: 'pieces', child: Text('pcs')),
+                    DropdownMenuItem(value: 'units', child: Text('unit')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      widget.onChanged(widget.item.copyWith(unit: val));
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
