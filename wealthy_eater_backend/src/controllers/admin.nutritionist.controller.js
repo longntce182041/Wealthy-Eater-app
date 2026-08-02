@@ -4,8 +4,7 @@ const User = require("../models/User");
 const AppError = require("../utils/AppError");
 const { sendApprovalEmail, sendRejectionEmail } = require("../services/email.service");
 
-
-// Thêm hàm tiện ích dọn ID rác ở đầu file nếu chưa có
+// Hàm tiện ích dọn ID rác ở đầu file
 function cleanIdParam(id) {
   if (!id) return null;
   let cleanId = String(id).trim();
@@ -13,9 +12,9 @@ function cleanIdParam(id) {
   if (cleanId.startsWith(':')) cleanId = cleanId.slice(1);
   return cleanId;
 }
+
 /**
  * 1. UC-84: LẤY DANH SÁCH CHUYÊN GIA (CÓ ĐỒNG BỘ ID CHUẨN)
- * Sử dụng Aggregate $lookup để né lỗi lệch kiểu dữ liệu giữa các collection
  */
 async function getNutritionistsList(req, res, next) {
   try {
@@ -46,14 +45,13 @@ async function getNutritionistsList(req, res, next) {
       });
     }
 
-    // Đảm bảo mapping cả trường id lẫn _id sang String cho Frontend không bị lệch pha
     const formattedData = nutritionists.map(item => {
       return {
         id: item._id.toString(),
         _id: item._id.toString(),
         userId: item.user_id ? item.user_id.toString() : null,
         email: item.user_info?.email || "N/A (Tài khoản ẩn/đã xóa)",
-        userStatus: item.user_info?.status || (item.user_info?.is_active !== false ? "active" : "banned"), 
+        userStatus: item.user_info?.status || (item.user_info?.is_active === false ? "banned" : "active"), 
         fullName: item.full_name || "Chưa cập nhật họ tên",
         specialization: item.specialization || "Dinh dưỡng tổng quát",
         professionalTitle: item.professional_title || "Chuyên gia",
@@ -77,23 +75,22 @@ async function getNutritionistsList(req, res, next) {
 }
 
 /**
- * 🆕 BỔ SUNG: 2. GET /api/admin/nutritionists/:id
- * Lấy chi tiết hồ sơ một chuyên gia - Cứu cánh cho file expert-profile-detail.jsx bị 404
+ * 2. GET /api/admin/nutritionists/:id
  */
 async function getNutritionistById(req, res, next) {
   try {
     const { id } = req.params;
+    const cleanId = cleanIdParam(id);
 
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!cleanId || !mongoose.Types.ObjectId.isValid(cleanId)) {
       return next(new AppError(`Định dạng ID cấu trúc không hợp lệ: ${id}`, 400, 'VALIDATION_ERROR'));
     }
 
-    const nutritionist = await Nutritionist.findById(new mongoose.Types.ObjectId(id)).lean();
+    const nutritionist = await Nutritionist.findById(new mongoose.Types.ObjectId(cleanId)).lean();
     if (!nutritionist) {
-      return next(new AppError(`Không tìm thấy hồ sơ chuyên gia dinh dưỡng với ID [${id}].`, 404, 'NOT_FOUND'));
+      return next(new AppError(`Không tìm thấy hồ sơ chuyên gia dinh dưỡng với ID [${cleanId}].`, 404, 'NOT_FOUND'));
     }
 
-    // Tiện tay bốc thêm thông tin User liên kết luôn cho Frontend hiển thị
     const user = await User.findById(nutritionist.user_id).lean();
 
     const formattedDetail = {
@@ -124,81 +121,127 @@ async function getNutritionistById(req, res, next) {
 }
 
 /**
- * 3. API DUYỆT NHANH TRẠNG THÁI HỒ SƠ CHUYÊN GIA (APPROVED / REJECTED)
+ * 3. API CẬP NHẬT TRẠNG THÁI HỒ SƠ & SUSPEND/BAN CHUYÊN GIA
  */
 async function updateApprovalStatus(req, res, next) {
   try {
-    const { id } = req.params;
-    const { approvalStatus } = req.body;
+    const rawId = req.params.id;
+    const cleanId = cleanIdParam(rawId);
+    const { approvalStatus, status } = req.body;
 
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return next(new AppError(`Định dạng ID cấu trúc không hợp lệ: ${id}`, 400, 'VALIDATION_ERROR'));
-    }
+    const inputStatus = (approvalStatus || status || '').toString().toLowerCase();
 
-    const validStatuses = ['pending', 'approval', 'reject', 'PENDING', 'APPROVED', 'REJECTED'];
-    if (!validStatuses.includes(approvalStatus)) {
+    if (!cleanId || !mongoose.Types.ObjectId.isValid(cleanId)) {
       return res.status(400).json({
         success: false,
-        message: "Trạng thái duyệt hồ sơ không hợp lệ."
+        message: `Định dạng ID không hợp lệ: ${rawId}`
       });
     }
 
-    const finalStatus = approvalStatus.toUpperCase();
-
-    const updatedNutritionist = await Nutritionist.findByIdAndUpdate(
-      new mongoose.Types.ObjectId(id),
-      { approval_status: finalStatus },
-      { new: true }
-    );
-
-    if (!updatedNutritionist) {
+    const nutritionist = await Nutritionist.findById(new mongoose.Types.ObjectId(cleanId));
+    if (!nutritionist) {
       return res.status(404).json({
         success: false,
-        message: `Không tìm thấy hồ sơ chuyên gia dinh dưỡng có ID [${id}].`
+        message: `Không tìm thấy hồ sơ chuyên gia dinh dưỡng có ID [${cleanId}].`
       });
     }
 
-    if (finalStatus === "APPROVED") {
-      await User.findByIdAndUpdate(updatedNutritionist.user_id, { role: "nutritionist" });
-    } else if (finalStatus === "REJECTED") {
-      await User.findByIdAndUpdate(updatedNutritionist.user_id, { role: "customer" }); 
+    // --- TRƯỜNG HỢP 1: TẠM NGƯNG TÀI KHOẢN (SUSPEND / BAN) ---
+    if (['suspend', 'suspended', 'ban', 'banned'].includes(inputStatus)) {
+      const userStatusTarget = inputStatus.includes('suspend') ? 'suspended' : 'banned';
+      
+      if (nutritionist.user_id) {
+        await User.findByIdAndUpdate(nutritionist.user_id, { 
+          status: userStatusTarget, 
+          is_active: false 
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Đã tạm ngưng (Suspend) tài khoản chuyên gia thành công!`,
+        data: nutritionist
+      });
+    }
+
+    // --- TRƯỜNG HỢP 2: KÍCH HOẠT LẠI TÀI KHOẢN (UNSUSPEND / ACTIVE) ---
+    if (inputStatus === 'active' || inputStatus === 'unsuspend') {
+      if (nutritionist.user_id) {
+        await User.findByIdAndUpdate(nutritionist.user_id, { 
+          status: 'active', 
+          is_active: true 
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Đã kích hoạt lại (Active) tài khoản chuyên gia thành công!`,
+        data: nutritionist
+      });
+    }
+
+    // --- TRƯỜNG HỢP 3: DUYỆT HỒ SƠ (APPROVED / REJECTED / PENDING) ---
+    let finalStatus = 'PENDING';
+    if (inputStatus.includes('appr')) finalStatus = 'APPROVED';
+    if (inputStatus.includes('rej')) finalStatus = 'REJECTED';
+
+    nutritionist.approval_status = finalStatus;
+    await nutritionist.save();
+
+    if (nutritionist.user_id) {
+      if (finalStatus === "APPROVED") {
+        await User.findByIdAndUpdate(nutritionist.user_id, { role: "nutritionist", status: "active", is_active: true });
+      } else if (finalStatus === "REJECTED") {
+        await User.findByIdAndUpdate(nutritionist.user_id, { role: "customer" }); 
+      }
     }
 
     return res.status(200).json({
       success: true,
-      message: `Đã cập nhật trạng thái duyệt thành: ${finalStatus}`,
-      data: updatedNutritionist
+      message: `Đã cập nhật trạng thái duyệt hồ sơ thành: ${finalStatus}`,
+      data: nutritionist
     });
+
   } catch (error) {
+    console.error("❌ Lỗi updateApprovalStatus:", error);
     return next(new AppError('Failed to update approval status.', 500, 'INTERNAL_SERVER_ERROR'));
   }
 }
 
 /**
  * 4. UC-84: XÁC THỰC VÀ THẨM ĐỊNH CHỨNG CHỈ CHUYÊN MÔN CHUYÊN SÂU
+ * (Tối ưu nhận diện action/approvalStatus & bọc try-catch Mail)
  */
 async function verifyNutritionistCertificate(req, res, next) {
   try {
     const { id } = req.params; 
-    const { approvalStatus, rejectionReason } = req.body; 
+    const cleanId = cleanIdParam(id);
+    const { action, approvalStatus, rejectionReason } = req.body; 
 
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    if (!cleanId || !mongoose.Types.ObjectId.isValid(cleanId)) {
       return res.status(400).json({ success: false, message: "Cấu trúc ID chuyên gia không hợp lệ." });
     }
 
-    const allowedStatuses = ["APPROVED", "REJECTED"];
-    if (!allowedStatuses.includes(approvalStatus?.toUpperCase())) {
+    // Nhận diện trạng thái linh hoạt từ FE (Hỗ trợ cả 'action' và 'approvalStatus')
+    const rawAction = (action || approvalStatus || '').toString().toUpperCase();
+    
+    let finalStatus = '';
+    if (['APPROVE', 'APPROVED'].includes(rawAction)) {
+      finalStatus = 'APPROVED';
+    } else if (['REJECT', 'REJECTED'].includes(rawAction)) {
+      finalStatus = 'REJECTED';
+    } else {
       return res.status(400).json({
         success: false,
-        message: "Trạng thái phê duyệt không hợp lệ. Chỉ chấp nhận APPROVED hoặc REJECTED."
+        message: "Trạng thái phê duyệt không hợp lệ. Chỉ chấp nhận APPROVE/APPROVED hoặc REJECT/REJECTED."
       });
     }
 
-    const nutritionist = await Nutritionist.findById(new mongoose.Types.ObjectId(id));
+    const nutritionist = await Nutritionist.findById(new mongoose.Types.ObjectId(cleanId));
     if (!nutritionist) {
       return res.status(404).json({
         success: false,
-        message: `Không tìm thấy hồ sơ chuyên gia dinh dưỡng cần xác thực với ID [${id}].`
+        message: `Không tìm thấy hồ sơ chuyên gia dinh dưỡng cần xác thực với ID [${cleanId}].`
       });
     }
 
@@ -210,11 +253,12 @@ async function verifyNutritionistCertificate(req, res, next) {
       });
     }
 
-    const finalStatus = approvalStatus.toUpperCase();
-
+    // Cập nhật trạng thái kiểm duyệt và Vai trò (Role)
     if (finalStatus === "APPROVED") {
       nutritionist.approval_status = "APPROVED";
       user.role = "nutritionist"; 
+      user.status = "active";
+      user.is_active = true;
     } else {
       nutritionist.approval_status = "REJECTED";
       user.role = "customer"; 
@@ -222,18 +266,23 @@ async function verifyNutritionistCertificate(req, res, next) {
 
     await Promise.all([nutritionist.save(), user.save()]);
 
+    // Gửi email thông báo (Bọc try-catch riêng để tránh làm gãy Response API nếu mail thất bại)
     const userEmail = user.email;
     const displayName = nutritionist.full_name || "Chuyên gia dinh dưỡng";
 
     if (userEmail) {
-      if (finalStatus === "APPROVED") {
-        sendApprovalEmail(userEmail, displayName).catch(err => 
-          console.error("❌ Lỗi gửi email phê duyệt:", err)
-        );
-      } else {
-        sendRejectionEmail(userEmail, displayName, rejectionReason || "Hồ sơ hoặc bằng cấp chuyên môn chưa đạt yêu cầu kiểm định hệ thống.").catch(err => 
-          console.error("❌ Lỗi gửi email từ chối:", err)
-        );
+      try {
+        if (finalStatus === "APPROVED") {
+          await sendApprovalEmail(userEmail, displayName);
+        } else {
+          await sendRejectionEmail(
+            userEmail, 
+            displayName, 
+            rejectionReason || "Hồ sơ hoặc bằng cấp chuyên môn chưa đạt yêu cầu kiểm định hệ thống."
+          );
+        }
+      } catch (emailErr) {
+        console.error("❌ [UC-84] Gửi email thông báo thất bại (Đã bỏ qua để hoàn tất Verify):", emailErr.message);
       }
     }
 
@@ -259,9 +308,7 @@ async function verifyNutritionistCertificate(req, res, next) {
 }
 
 /**
- * UC-85: INSPECT EXPERT PROFILE
- * GET /api/admin/nutritionists/:id
- * Lấy chi tiết hồ sơ năng lực chuyên gia kèm Bằng cấp, Lịch sử tư vấn và Đánh giá
+ * 5. UC-85: INSPECT EXPERT PROFILE
  */
 async function getNutritionistDetails(req, res) {
   try {
@@ -275,12 +322,8 @@ async function getNutritionistDetails(req, res) {
       });
     }
 
-    // Tiến hành kích hoạt bộ ba Pipeline liên kết dữ liệu siêu tốc
     const details = await Nutritionist.aggregate([
-      // 1. Tìm đúng chuyên gia theo ID
       { $match: { _id: cleanId } },
-
-      // 2. Lookup thông tin tài khoản (Email, Trạng thái hoạt động)
       {
         $lookup: {
           from: "users",
@@ -290,8 +333,6 @@ async function getNutritionistDetails(req, res) {
         }
       },
       { $unwind: { path: "$user_info", preserveNullAndEmptyArrays: true } },
-
-      // 3. Lookup lịch sử tư vấn từ bộ sưu tập NutritionAssessment
       {
         $lookup: {
           from: "nutritionassessments",
@@ -300,11 +341,9 @@ async function getNutritionistDetails(req, res) {
           as: "consultation_history"
         }
       },
-
-      // 4. Lookup danh sách đánh giá từ cộng đồng (bảng reviews)
       {
         $lookup: {
-          from: "reviews", // Tên collection chứa review của bác trong DB
+          from: "reviews",
           localField: "_id",
           foreignField: "nutritionist_id",
           as: "community_reviews"
@@ -312,7 +351,6 @@ async function getNutritionistDetails(req, res) {
       }
     ]);
 
-    // Nếu mảng trả về rỗng chứng tỏ ID không tồn tại trên hệ thống
     if (!details || details.length === 0) {
       return res.status(404).json({
         success: false,
@@ -322,7 +360,6 @@ async function getNutritionistDetails(req, res) {
 
     const expertData = details[0];
 
-    // Định dạng dữ liệu đầu ra hoàn hảo cho UI Frontend dễ map()
     const formattedResult = {
       id: expertData._id,
       userId: expertData.user_id,
@@ -331,13 +368,12 @@ async function getNutritionistDetails(req, res) {
       specialization: expertData.specialization || "Dinh dưỡng tổng quát",
       professionalTitle: expertData.professional_title || "Chuyên gia",
       licenseNumber: expertData.license_number || "Chưa cấp số",
-      certificationUrl: expertData.certification_url || "", // Link ảnh bằng cấp chứng chỉ
+      certificationUrl: expertData.certification_url || "",
       serviceFee: expertData.service_fee || 0,
       approvalStatus: expertData.approval_status || "PENDING",
       averageRating: expertData.average_rating || 5.0,
       createdAt: expertData.createdAt,
       
-      // Mảng danh sách lịch sử tư vấn
       consultations: (expertData.consultation_history || []).map(c => ({
         id: c._id,
         diagnosis: c.diagnosis || "Chưa có chẩn đoán",
@@ -345,7 +381,6 @@ async function getNutritionistDetails(req, res) {
         notes: c.notes || "Không có ghi chú thêm"
       })),
 
-      // Mảng danh sách đánh giá cộng đồng
       reviews: (expertData.community_reviews || []).map(r => ({
         id: r._id,
         reviewerName: r.reviewer_name || "Người dùng ẩn danh",
@@ -373,7 +408,7 @@ async function getNutritionistDetails(req, res) {
 
 module.exports = {
   getNutritionistsList,
-  getNutritionistById, // Đã xuất khẩu hàm mới ra ngoài Route
+  getNutritionistById,
   updateApprovalStatus,
   verifyNutritionistCertificate,
   getNutritionistDetails

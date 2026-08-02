@@ -247,8 +247,8 @@ const IngredientPage = () => {
             dataForm.append('micronutrients', JSON.stringify(cleanMicros));
 
             if (formData.image_file) {
-                dataForm.append('image_file', formData.image_file);
-            }
+                dataForm.append('imageFile', formData.image_file); 
+        }
 
             let res;
             const config = { headers: { 'Content-Type': 'multipart/form-data' } };
