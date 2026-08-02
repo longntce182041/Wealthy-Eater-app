@@ -224,34 +224,34 @@ class MealPlanService {
       })
       .lean();
 
-    // Assign fallback day_number & is_completed
+    // Assign fallback day_of_week & is_completed
     items.forEach((item, index) => {
-      if (item.day_number === undefined || item.day_number === null) {
-        item.day_number = Math.floor(index / 3) + 1;
+      if (item.day_of_week === undefined || item.day_of_week === null) {
+        item.day_of_week = Math.floor(index / 3) + 1;
       }
       if (item.is_completed === undefined || item.is_completed === null) {
         item.is_completed = false;
       }
     });
 
-    // Sort items by day_number and meal_type order
+    // Sort items by day_of_week and meal_type order
     const orderMap = { 'breakfast': 1, 'lunch': 2, 'dinner': 3, 'snack': 4 };
     function getMealTypeOrder(mealType) {
       return orderMap[(mealType || '').toLowerCase()] || 99;
     }
     items.sort((a, b) => {
-      if (a.day_number !== b.day_number) {
-        return a.day_number - b.day_number;
+      if (a.day_of_week !== b.day_of_week) {
+        return a.day_of_week - b.day_of_week;
       }
       return getMealTypeOrder(a.meal_type) - getMealTypeOrder(b.meal_type);
     });
 
     // Calculate active_day
     let activeDay = 1;
-    const dayNumbers = [...new Set(items.map(item => item.day_number))].sort((a, b) => a - b);
+    const dayNumbers = [...new Set(items.map(item => item.day_of_week))].sort((a, b) => a - b);
     if (dayNumbers.length > 0) {
       const firstUncompletedDay = dayNumbers.find(dayNum => {
-        const dayItems = items.filter(item => item.day_number === dayNum);
+        const dayItems = items.filter(item => item.day_of_week === dayNum);
         return dayItems.some(item => !item.is_completed);
       });
       if (firstUncompletedDay) {
@@ -300,7 +300,6 @@ class MealPlanService {
         _id: item._id,
         meal_type: item.meal_type,
         day_of_week: item.day_of_week || null,
-        day_number: item.day_number,
         is_completed: item.is_completed || false,
         recipe: recipe && recipe._id
           ? {
@@ -357,34 +356,34 @@ class MealPlanService {
       })
       .lean();
 
-    // Assign fallback day_number & is_completed
+    // Assign fallback day_of_week & is_completed
     items.forEach((item, index) => {
-      if (item.day_number === undefined || item.day_number === null) {
-        item.day_number = Math.floor(index / 3) + 1;
+      if (item.day_of_week === undefined || item.day_of_week === null) {
+        item.day_of_week = Math.floor(index / 3) + 1;
       }
       if (item.is_completed === undefined || item.is_completed === null) {
         item.is_completed = false;
       }
     });
 
-    // Sort items by day_number and meal_type order
+    // Sort items by day_of_week and meal_type order
     const orderMap = { 'breakfast': 1, 'lunch': 2, 'dinner': 3, 'snack': 4 };
     function getMealTypeOrder(mealType) {
       return orderMap[(mealType || '').toLowerCase()] || 99;
     }
     items.sort((a, b) => {
-      if (a.day_number !== b.day_number) {
-        return a.day_number - b.day_number;
+      if (a.day_of_week !== b.day_of_week) {
+        return a.day_of_week - b.day_of_week;
       }
       return getMealTypeOrder(a.meal_type) - getMealTypeOrder(b.meal_type);
     });
 
     // Calculate active_day
     let activeDay = 1;
-    const dayNumbers = [...new Set(items.map(item => item.day_number))].sort((a, b) => a - b);
+    const dayNumbers = [...new Set(items.map(item => item.day_of_week))].sort((a, b) => a - b);
     if (dayNumbers.length > 0) {
       const firstUncompletedDay = dayNumbers.find(dayNum => {
-        const dayItems = items.filter(item => item.day_number === dayNum);
+        const dayItems = items.filter(item => item.day_of_week === dayNum);
         return dayItems.some(item => !item.is_completed);
       });
       if (firstUncompletedDay) {
@@ -431,7 +430,6 @@ class MealPlanService {
         _id: item._id,
         meal_type: item.meal_type,
         day_of_week: item.day_of_week || null,
-        day_number: item.day_number,
         is_completed: item.is_completed || false,
         recipe: recipe && recipe._id
           ? {
@@ -1096,6 +1094,8 @@ class MealPlanService {
       throw new AppError('Invalid payload: clientId and assignments are required.', 400);
     }
 
+    const RecipeIngredient = require('../models/RecipeIngredient');
+
     // 1. Create the MealPlan header document
     const newPlan = new MealPlan({
       user_id: clientId,
@@ -1107,15 +1107,32 @@ class MealPlanService {
     await newPlan.save();
 
     // 2. Create MealPlanItem entries — one per recipe assignment
-    const planItems = assignments.map((assignment) => new MealPlanItem({
-      meal_plan_id: newPlan._id,
-      recipe_id: assignment.recipeId,
-      meal_type: assignment.mealType,
-      day_of_week: assignment.dayOfWeek,
-      customized_servings_gram: Math.round(assignment.scaledWeight),
-      target_calories: Math.round(assignment.scaledCalories),
-      custom_ingredients: [], // Using existing recipe, no custom ingredients
-    }));
+    //    Scale RecipeIngredient quantities by portionScale and save as custom_ingredients
+    //    so the mobile app can display ingredient breakdown and compute nutrition on the fly.
+    const planItems = [];
+
+    for (const assignment of assignments) {
+      // Fetch base recipe ingredients and scale them by portionScale
+      const recipeIngredients = await RecipeIngredient.find({
+        recipe_id: assignment.recipeId,
+      }).lean();
+
+      const scaledIngredients = recipeIngredients.map(ri => ({
+        ingredient_id: ri.ingredient_id,
+        amount_gram: parseFloat(((ri.base_quantity || 0) * assignment.portionScale).toFixed(1)),
+      }));
+
+      planItems.push(new MealPlanItem({
+        meal_plan_id: newPlan._id,
+        recipe_id: assignment.recipeId,
+        meal_type: assignment.mealType,
+        day_of_week: assignment.dayOfWeek,
+        customized_servings_gram: Math.round(assignment.scaledWeight),
+        target_calories: Math.round(assignment.scaledCalories),
+        // Persist scaled ingredients so the app can compute nutrition without re-querying
+        custom_ingredients: scaledIngredients,
+      }));
+    }
 
     await MealPlanItem.insertMany(planItems);
 

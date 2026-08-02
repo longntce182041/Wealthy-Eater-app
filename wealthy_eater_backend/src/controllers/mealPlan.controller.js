@@ -448,9 +448,29 @@ const getDailyMacroReportEndpoint = async (req, res, next) => {
 };
 
 // ── Generate Recipe-Based Weekly Meal Plan ────────────────────────────────────
+/**
+ * Business Rules:
+ * 1. target_calories = TDEE × multiplier per health_goal
+ * 2. Macro targets derived from weight_kg + health_goal
+ * 3. Recipes filtered by: allergies, dislike_ingredients, cooking_time, skill_level
+ * 4. Passes portion_scale bounds [0.6, 1.8] and max_repeat_per_week to MILP solver
+ */
+
+// Mapping health_goal → TDEE multiplier (business rule §2)
+const GOAL_CALORIE_MULTIPLIERS = {
+  LOSE_WEIGHT:     0.85,
+  FAT_LOSS:        0.90,
+  MAINTAIN_WEIGHT: 1.00,
+  GAIN_WEIGHT:     1.10,
+  MUSCLE_GAIN:     1.08,
+};
+
+// Cooking skill order for comparison
+const SKILL_LEVEL_ORDER = { beginner: 1, intermediate: 2, advanced: 3 };
+
 const generateRecipeBasedPlan = async (req, res, next) => {
   try {
-    const { clientId } = req.body;
+    const { clientId, days = 7, mealsPerDay = 3, maxRepeatPerWeekPerRecipe = 2 } = req.body;
     const nutritionistId = req.user?.id || null;
 
     if (!clientId) {
@@ -464,7 +484,6 @@ const generateRecipeBasedPlan = async (req, res, next) => {
     const UserDietary = require('../models/UserDietary');
     const Recipe = require('../models/Recipe');
     const RecipeIngredient = require('../models/RecipeIngredient');
-    const Ingredient = require('../models/Ingredient');
 
     // 1. Fetch client biometric profile
     const profile = await UserProfile.findOne({ user_id: clientId }).lean();
@@ -477,25 +496,70 @@ const generateRecipeBasedPlan = async (req, res, next) => {
 
     // 2. Fetch client dietary preferences
     const dietary = await UserDietary.findOne({ user_id: clientId }).lean();
-    const dietType = dietary?.diet_preferences?.[0] || 'BALANCED';
+
+    // ── Business Rule §2: Compute target_calories from TDEE × health_goal multiplier ──
+    const healthGoal = profile.health_goal || 'MAINTAIN_WEIGHT';
+    const calorieMultiplier = GOAL_CALORIE_MULTIPLIERS[healthGoal] ?? 1.0;
+    const targetCalories = Math.round(profile.tdee * calorieMultiplier);
+
+    // ── Business Rule §3: Derive macros from weight_kg + health_goal ──
+    const weightKg = profile.weight || 70;
+    const isHighProteinGoal = ['LOSE_WEIGHT', 'FAT_LOSS', 'GAIN_WEIGHT', 'MUSCLE_GAIN'].includes(healthGoal);
+    const targetProtein = Math.round(weightKg * (isHighProteinGoal ? 2.0 : 1.6));
+    const targetFat     = Math.round(weightKg * 0.8);
+    const targetCarbs   = Math.max(50, Math.round((targetCalories - targetProtein * 4 - targetFat * 9) / 4));
+
+    // ── Business Rule §4 & §5: Build banned ingredient + skill sets ──
+    const bannedIngredientIds = new Set([
+      ...(dietary?.allergies || []),
+      ...(dietary?.dislike_ingredients || []),
+    ]);
+    const availableCookingTimeMin = dietary?.available_cooking_time ?? 9999;
+    const userSkillLevel = SKILL_LEVEL_ORDER[dietary?.cooking_skill_level?.toLowerCase()] || 3;
 
     // 3. Load all published recipes from DB
-    const allRecipes = await Recipe.find({}).lean();
+    const allRecipes = await Recipe.find({ status: 'PUBLISHED' }).lean();
 
-    if (allRecipes.length === 0) {
+    // Also include recipes with no status set (backwards compat)
+    const allRecipesWithFallback = allRecipes.length > 0
+      ? allRecipes
+      : await Recipe.find({}).lean();
+
+    if (allRecipesWithFallback.length === 0) {
       return res.status(422).json({
         success: false,
         error: { message: 'No recipes found in the database.' },
       });
     }
 
-    // 4. For each recipe, calculate total nutrition via RecipeIngredient + Ingredient
+    // 4. For each recipe, calculate total nutrition and apply filters
     const availableRecipes = [];
 
-    for (const recipe of allRecipes) {
+    for (const recipe of allRecipesWithFallback) {
+      // ── Filter: cooking_time ──
+      if (recipe.cooking_time && recipe.cooking_time > availableCookingTimeMin) {
+        continue;
+      }
+
+      // ── Filter: cooking_skill_level ──
+      const recipeSkill = SKILL_LEVEL_ORDER[recipe.level_cooking?.toLowerCase()] || 1;
+      if (recipeSkill > userSkillLevel) {
+        continue;
+      }
+
+      // ── Filter: allergies + dislike_ingredients ──
+      if (bannedIngredientIds.size > 0) {
+        const recipeIngredients = await RecipeIngredient.find({ recipe_id: recipe._id }).lean();
+        const hasBannedIngredient = recipeIngredients.some(ri =>
+          bannedIngredientIds.has(ri.ingredient_id?.toString())
+        );
+        if (hasBannedIngredient) continue;
+      }
+
+      // Calculate nutrition via RecipeIngredient + Ingredient
       const nutrients = await mealPlanService.calculateRecipeNutrients(recipe._id);
 
-      // Skip recipes with 0 calories
+      // Skip recipes with 0 calories (incomplete data)
       if (nutrients.calories <= 0) continue;
 
       availableRecipes.push({
@@ -509,14 +573,16 @@ const generateRecipeBasedPlan = async (req, res, next) => {
       });
     }
 
-    if (availableRecipes.length < 3) {
+    if (availableRecipes.length < mealsPerDay) {
       return res.status(422).json({
         success: false,
-        error: { message: `Need at least 3 recipes with nutrition data, found ${availableRecipes.length}.` },
+        error: {
+          message: `Need at least ${mealsPerDay} valid recipes after applying filters (allergies, cooking time, skill level), found ${availableRecipes.length}.`
+        },
       });
     }
 
-    // 5. Call FastAPI recipe solver
+    // 5. Call FastAPI MILP solver
     const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
     const internalSecret = process.env.N8N_INTERNAL_SECRET || '9a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a';
 
@@ -527,14 +593,17 @@ const generateRecipeBasedPlan = async (req, res, next) => {
         'X-INTERNAL-SECRET': internalSecret,
       },
       body: JSON.stringify({
-        targetCalories: profile.tdee,
-        targetProtein: 140,
-        targetCarbs: 200,
-        targetFat: 65,
-        days: 7,
-        mealsPerDay: 3,
+        targetCalories,
+        targetProtein,
+        targetCarbs,
+        targetFat,
+        days,
+        mealsPerDay,
         mealCalorieSplit: [0.25, 0.40, 0.35],
         allowRepeatSameDay: false,
+        maxRepeatPerWeekPerRecipe,
+        portionScaleMin: 0.6,
+        portionScaleMax: 1.8,
         availableRecipes,
       }),
     });
@@ -571,12 +640,23 @@ const generateRecipeBasedPlan = async (req, res, next) => {
       success: true,
       status: 'SUCCESS_RECIPE_PLAN_GENERATED',
       message: 'Recipe-based weekly meal plan generated and saved successfully.',
-      meta: result,
+      meta: {
+        ...result,
+        targetSummary: {
+          healthGoal,
+          tdee: profile.tdee,
+          targetCalories,
+          targetProtein,
+          targetCarbs,
+          targetFat,
+        },
+      },
     });
   } catch (error) {
     next(error);
   }
 };
+
 
 const scanMealImageEndpoint = async (req, res, next) => {
   try {

@@ -723,7 +723,7 @@ class _WeeklyMealPlansViewState extends State<_WeeklyMealPlansView> {
       _lastActiveDay = activeDay;
     }
 
-    final dayItems = items.where((item) => item['day_number'] == _selectedDay).toList();
+    final dayItems = items.where((item) => item['day_of_week'] == _selectedDay).toList();
 
     return RefreshIndicator(
       onRefresh: () => provider.loadMyMealPlan(),
