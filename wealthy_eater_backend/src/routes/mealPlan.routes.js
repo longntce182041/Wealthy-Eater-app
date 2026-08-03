@@ -76,6 +76,13 @@ router.put(
   mealPlanController.updateDraftPlanEndpoint
 );
 
+router.delete(
+  "/:planId",
+  verifyToken,
+  nutritionistOnly,
+  mealPlanController.deleteMealPlanEndpoint
+);
+
 //BỔ SUNG: API nhận đồng bộ FCM Token thiết bị lên máy chủ
 router.put(
   "/users/fcm-token",

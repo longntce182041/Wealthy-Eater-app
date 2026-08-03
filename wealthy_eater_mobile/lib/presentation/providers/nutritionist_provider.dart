@@ -296,6 +296,21 @@ class NutritionistProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> deleteMealPlan(String planId) async {
+    try {
+      final success = await _service.deleteMealPlan(planId);
+      if (success) {
+        // Remove from local list
+        _nutritionistPlans.removeWhere((p) => (p['mealPlanId'] ?? p['_id'] ?? p['id']) == planId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('Failed to delete meal plan: $e');
+      return false;
+    }
+  }
+
   // ── UC-52: Recipe Search for Adjust Meal picker ──────────────────────────────
   List<Map<String, dynamic>> _recipeSearchResults = [];
   bool _isSearchingRecipes = false;

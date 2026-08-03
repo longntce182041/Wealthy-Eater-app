@@ -152,11 +152,11 @@ class MealPlanService {
         const qty = ri.base_quantity; // e.g. 150g
         totalWeight += qty;
 
-        // Nutrients are per 100g in database
-        totalCalories += (ing.calories_per_unit * qty) / 100;
-        totalProtein += ((ing.protein || 0) * qty) / 100;
-        totalFat += ((ing.fat || 0) * qty) / 100;
-        totalCarbs += ((ing.carbs || 0) * qty) / 100;
+        // Nutrients are per 1g in database
+        totalCalories += (ing.calories_per_unit * qty);
+        totalProtein += ((ing.protein || 0) * qty);
+        totalFat += ((ing.fat || 0) * qty);
+        totalCarbs += ((ing.carbs || 0) * qty);
       }
     }
 
@@ -183,10 +183,10 @@ class MealPlanService {
       if (ing) {
         const qty = item.amount_gram;
         totalWeight += qty;
-        totalCalories += (ing.calories_per_unit * qty) / 100;
-        totalProtein += ((ing.protein || 0) * qty) / 100;
-        totalFat += ((ing.fat || 0) * qty) / 100;
-        totalCarbs += ((ing.carbs || 0) * qty) / 100;
+        totalCalories += (ing.calories_per_unit * qty);
+        totalProtein += ((ing.protein || 0) * qty);
+        totalFat += ((ing.fat || 0) * qty);
+        totalCarbs += ((ing.carbs || 0) * qty);
       }
     }
 
@@ -1240,6 +1240,26 @@ class MealPlanService {
 
     await newLog.save();
     return newLog;
+  }
+
+  async deleteMealPlan(planId, nutritionistId) {
+    const MealPlan = require('../models/MealPlan');
+    const MealPlanItem = require('../models/MealPlanItem');
+
+    const query = { _id: planId };
+    if (nutritionistId) {
+      query.nutritionist_id = nutritionistId;
+    }
+
+    const plan = await MealPlan.findOne(query);
+    if (!plan) {
+      throw new Error('Meal plan not found or access denied');
+    }
+
+    await MealPlanItem.deleteMany({ meal_plan_id: planId });
+    await MealPlan.deleteOne({ _id: planId });
+
+    return { message: 'Meal plan deleted successfully' };
   }
 }
 

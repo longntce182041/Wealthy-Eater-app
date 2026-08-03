@@ -359,18 +359,25 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
   // ── Recipe selection callback ─────────────────────────────────────────────
 
   void _onRecipeSelected(Map<String, dynamic> recipe) {
+    final recipeId = recipe['id'] ?? recipe['_id'];
+
     setState(() {
       _selectedRecipe = recipe;
-      _baseNutrition = recipe['nutrition'] as Map?;
-      _editingItem['recipe_id'] = recipe['id'];
+      _baseNutrition = (_selectedRecipe?['nutrition'] ?? recipe['nutrition']) as Map?;
+      _editingItem['recipe_id'] = recipeId;
+      _editingItem['recipe'] = _selectedRecipe;
+
+      // Đưa danh sách ingredients READ-ONLY từ recipe vào state hiển thị
+      _editingItem['ingredients'] = _selectedRecipe?['ingredients'] ?? [];
+      _editingItem['custom_ingredients'] = null; // Reset AI custom ingredients
 
       // Get base weight in grams for the new recipe (default to 100g if missing)
-      final recipeBaseWeight = (recipe['baseWeight'] as num?)?.toDouble() ??
-                               (recipe['nutrition']?['baseWeight'] as num?)?.toDouble() ??
+      final recipeBaseWeight = (_selectedRecipe?['base_weight'] as num?)?.toDouble() ??
+                               (recipe['baseWeight'] as num?)?.toDouble() ??
+                               (_baseNutrition?['baseWeight'] as num?)?.toDouble() ??
                                100.0;
 
       _editingItem['base_weight'] = recipeBaseWeight;
-      _servingsController.text = recipeBaseWeight.round().toString();
       _editingItem['customized_servings_gram'] = recipeBaseWeight;
 
       _recalculateMacrosFromRecipe();
@@ -382,6 +389,9 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
       _selectedRecipe = null;
       _baseNutrition = null;
       _editingItem['recipe_id'] = null;
+      _editingItem['recipe'] = null;
+      _editingItem['ingredients'] = [];
+      _editingItem['custom_ingredients'] = null;
     });
   }
 
@@ -530,42 +540,7 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
           ),
           const SizedBox(height: 12),
 
-          // ── Servings (g) + Target Calories ─────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _servingsController,
-                  decoration: InputDecoration(
-                    labelText: 'Servings (g)',
-                    border: const OutlineInputBorder(),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (val) {
-                    _editingItem['customized_servings_gram'] = num.tryParse(val);
-                    if (_selectedRecipe != null) {
-                      _recalculateMacrosFromRecipe();
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextFormField(
-                  controller: _caloriesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Target Calories',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (val) => _editingItem['target_calories'] = num.tryParse(val),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
 
           // ── Ingredients section (AI mode only) ────────────────────────────
           if (isAI && _editingItem['custom_ingredients'] != null) ...[
