@@ -46,7 +46,7 @@ const UserSchema = new mongoose.Schema(
 //               User.deleteOne(), User.deleteMany()
 UserSchema.pre(
   ['findOneAndDelete', 'deleteOne', 'deleteMany'],
-  async function (next) {
+  async function () {
     try {
       // Get the filter to identify which user(s) are being deleted
       const filter = this.getFilter();
@@ -64,7 +64,7 @@ UserSchema.pre(
       const usersToDelete = await mongoose.model('User').find(filter, '_id');
       const userIds       = usersToDelete.map((u) => u._id);
 
-      if (userIds.length === 0) return next();
+      if (userIds.length === 0) return;
 
       // Find contracts owned by these users (needed for cascade into messages/tx)
       const contractIds = (
@@ -115,9 +115,9 @@ UserSchema.pre(
         await ConsultationContract.deleteMany({ _id: { $in: contractIds } });
       }
 
-      next();
+      return;
     } catch (err) {
-      next(err);
+      throw err;
     }
   }
 );
