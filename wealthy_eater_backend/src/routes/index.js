@@ -4,7 +4,7 @@ const router = express.Router();
 // ============================================================================
 // 1. IMPORT ROUTE FILES (Alphabetical order to minimize Git conflicts)
 // ============================================================================
-const adminNutritionistRoute = require("./admin.nutritionist.routes"); 
+const adminNutritionistRoute = require("./admin.nutritionist.routes");
 const adminRecipeRoute = require("./admin.recipe.routes");
 const adminTransactionRoute = require("./admin.transaction.routes");
 const adminSettingRoutes = require('./admin.setting.routes');
@@ -28,6 +28,7 @@ const userRecipeRoute = require("./user.recipe.route");
 const webhookRoute = require("./webhook.routes");
 const dietAuditRoute = require("./dietAudit.routes");
 const userChatbotRoute = require("./user.chatbot.routes");
+const internalRoutes = require("./internal.routes");
 const userAiRecipeRoute = require("./user.ai_recipe.routes");
 
 // ============================================================================
@@ -41,7 +42,7 @@ router.use("/api/pantry", pantryRoute);
 
 // ─── ADMIN ROUTES ───────────────────────────────────────────────────────────
 router.use("/api/admin/users", adminUserRoute);
-router.use("/api/admin/nutritionists", adminNutritionistRoute); 
+router.use("/api/admin/nutritionists", adminNutritionistRoute);
 router.use("/api/admin/ingredients", ingredientRoute);
 router.use("/api/admin/micronutrients", micronutrientRoute);
 router.use("/api/admin/recipes", adminRecipeRoute);
@@ -71,5 +72,8 @@ router.use("/api/chat", chatRoute);
 
 // ─── WEBHOOK ROUTES (unauthenticated, verified via signature) ───────────────
 router.use("/api/webhooks", webhookRoute);
+
+// ─── INTERNAL API ROUTES (secured via X-INTERNAL-SECRET) ──────────────────
+router.use("/api/internal", internalRoutes);
 
 module.exports = router;

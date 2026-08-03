@@ -27,7 +27,16 @@ const RecipeSchema = new mongoose.Schema({
   },
   cooking_step: { 
     type: String 
-  }
+  },
+  // UC-52: meal types this recipe is suitable for (used by recipe picker in Adjust Meal)
+  meal_types: {
+    type: [String],
+    enum: ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'],
+    default: [],
+  },
 });
+
+// Compound index: speeds up mealType filter + status filter queries
+RecipeSchema.index({ meal_types: 1, status: 1 });
 
 module.exports = mongoose.model('Recipe', RecipeSchema);

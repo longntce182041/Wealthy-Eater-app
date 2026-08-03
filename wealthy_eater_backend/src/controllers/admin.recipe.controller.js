@@ -178,7 +178,7 @@ async function getRecipesList(req, res, next) {
     }
 
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 5000);
     const skip = (page - 1) * limit;
 
     // ĐÃ FIX CÚ PHÁP QUERY MONGOOSE (SỬ DỤNG .read('primary'))

@@ -13,7 +13,7 @@ class RecipeDTO(BaseModel):
 
 class RecipePlanRequestDTO(BaseModel):
     """Input for the recipe-based weekly meal plan optimizer."""
-    targetCalories: float = Field(..., gt=0, examples=[2000.0], description="Daily TDEE target")
+    targetCalories: float = Field(..., gt=0, examples=[2000.0], description="Daily calorie target (after health_goal multiplier)")
     targetProtein: float = Field(..., gt=0, examples=[140.0])
     targetCarbs: float = Field(..., gt=0, examples=[200.0])
     targetFat: float = Field(..., gt=0, examples=[65.0])
@@ -24,6 +24,9 @@ class RecipePlanRequestDTO(BaseModel):
         description="Fraction of daily calories per meal slot (must sum to ~1.0)"
     )
     allowRepeatSameDay: bool = Field(False, description="Allow the same recipe in multiple meals on the same day")
+    maxRepeatPerWeekPerRecipe: int = Field(2, ge=1, description="Max times a recipe can appear across the entire week")
+    portionScaleMin: float = Field(0.6, ge=0.1, description="Minimum portion scale multiplier (business rule: 0.6)")
+    portionScaleMax: float = Field(1.8, le=3.0, description="Maximum portion scale multiplier (business rule: 1.8)")
     availableRecipes: List[RecipeDTO]
 
     @field_validator('availableRecipes')

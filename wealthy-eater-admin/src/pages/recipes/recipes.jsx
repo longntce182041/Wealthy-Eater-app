@@ -50,7 +50,8 @@ export default function RecipesPage() {
     setError('');
     setExcelErrors([]);
     try {
-      const response = await apiClient.get('/admin/recipes');
+      // Cập nhật: Truyền tham số limit lớn để admin có thể tải và xem toàn bộ danh sách món ăn trên 1 trang
+      const response = await apiClient.get('/admin/recipes?limit=5000');
       if (response.data?.success) {
         setRecipes(response.data.data || []);
       }

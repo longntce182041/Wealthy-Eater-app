@@ -24,9 +24,10 @@ class RecipeSolverService:
 
         Constraints:
           - Exactly 1 recipe per meal slot
-          - scale is bounded by x (only active if selected)
+          - scale is bounded by x (only active if selected), within [portionScaleMin, portionScaleMax]
+          - No same recipe twice on the same day (optional)
+          - Weekly repeat limit per recipe: sum over all days/meals <= maxRepeatPerWeekPerRecipe
           - Daily totals close to TDEE and macro targets (via slack variables)
-          - (Optional) No same recipe twice on the same day
         """
         logger.info(f"Starting recipe-based meal plan optimization: {payload.days} days × {payload.mealsPerDay} meals")
 
@@ -35,6 +36,11 @@ class RecipeSolverService:
         meals_per_day = payload.mealsPerDay
         meal_labels = MEAL_TYPE_LABELS[:meals_per_day]
         calorie_split = payload.mealCalorieSplit[:meals_per_day]
+
+        # Use business-rule bounds from payload
+        MIN_SCALE = payload.portionScaleMin  # default 0.6
+        MAX_SCALE = payload.portionScaleMax  # default 1.8
+        MAX_REPEAT = payload.maxRepeatPerWeekPerRecipe  # default 2
 
         # Normalize split in case it doesn't match mealsPerDay
         if len(calorie_split) < meals_per_day:
@@ -52,7 +58,7 @@ class RecipeSolverService:
         # --- Decision variables ---
         # x[r][d][m] = binary: is recipe r assigned to day d, meal m?
         x = {}
-        # scale[r][d][m] = continuous: portion multiplier (0.5 to 2.0 if selected)
+        # scale[r][d][m] = continuous: portion multiplier within [MIN_SCALE, MAX_SCALE] if selected
         scale = {}
 
         for r_idx, recipe in enumerate(recipes):
@@ -62,7 +68,7 @@ class RecipeSolverService:
                     x[r_idx, d, m] = pulp.LpVariable(var_name, cat='Binary')
 
                     scale_name = f"s_{r_idx}_{d}_{m}"
-                    scale[r_idx, d, m] = pulp.LpVariable(scale_name, lowBound=0, upBound=2.0)
+                    scale[r_idx, d, m] = pulp.LpVariable(scale_name, lowBound=0, upBound=MAX_SCALE)
 
         # --- Constraint 1: Exactly 1 recipe per meal slot ---
         for d in range(days):
@@ -70,12 +76,11 @@ class RecipeSolverService:
                 prob += pulp.lpSum(x[r_idx, d, m] for r_idx in range(len(recipes))) == 1, \
                     f"one_recipe_d{d}_m{m}"
 
-        # --- Constraint 2: Link scale to selection (scale > 0 only if x = 1) ---
-        MIN_SCALE = 0.3
-        MAX_SCALE = 2.0
+        # --- Constraint 2: Link scale to selection (scale active only if x = 1) ---
         for r_idx in range(len(recipes)):
             for d in range(days):
                 for m in range(meals_per_day):
+                    # If x=0 → scale=0; if x=1 → scale in [MIN_SCALE, MAX_SCALE]
                     prob += scale[r_idx, d, m] >= MIN_SCALE * x[r_idx, d, m], \
                         f"scale_lb_{r_idx}_{d}_{m}"
                     prob += scale[r_idx, d, m] <= MAX_SCALE * x[r_idx, d, m], \
@@ -87,6 +92,14 @@ class RecipeSolverService:
                 for d in range(days):
                     prob += pulp.lpSum(x[r_idx, d, m] for m in range(meals_per_day)) <= 1, \
                         f"no_repeat_d{d}_r{r_idx}"
+
+        # --- Constraint 4: Weekly repeat limit per recipe ---
+        for r_idx in range(len(recipes)):
+            prob += pulp.lpSum(
+                x[r_idx, d, m]
+                for d in range(days)
+                for m in range(meals_per_day)
+            ) <= MAX_REPEAT, f"max_repeat_week_r{r_idx}"
 
         # --- Slack variables for daily deviation ---
         daily_cal_plus = {}
@@ -108,7 +121,7 @@ class RecipeSolverService:
             daily_fat_plus[d] = pulp.LpVariable(f"dfat_p_{d}", lowBound=0)
             daily_fat_minus[d] = pulp.LpVariable(f"dfat_m_{d}", lowBound=0)
 
-        # --- Constraint 4: Daily nutrition = target ± slack ---
+        # --- Constraint 5: Daily nutrition = target ± slack ---
         for d in range(days):
             daily_cal_expr = pulp.lpSum(
                 scale[r_idx, d, m] * recipes[r_idx].totalCalories

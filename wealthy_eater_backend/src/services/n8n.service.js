@@ -67,7 +67,7 @@ class N8nService {
       return response.data;
     } catch (error) {
       console.warn("⚠️ [n8n Offline or Failed]:", error.message);
-      
+
       const apiKey = process.env.GOOGLE_API_KEY;
       if (apiKey) {
         console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis...");
@@ -81,10 +81,9 @@ class N8nService {
 
       if (error.response) {
         throw new Error(
-          `N8N_HTTP_${error.response.status}: ${
-            typeof error.response.data === "object"
-              ? JSON.stringify(error.response.data)
-              : error.response.data
+          `N8N_HTTP_${error.response.status}: ${typeof error.response.data === "object"
+            ? JSON.stringify(error.response.data)
+            : error.response.data
           }`,
         );
       }
@@ -184,6 +183,23 @@ class N8nService {
       },
       note: "",
     };
+  }
+
+  async triggerAutoAdjustCalories(payload) {
+    const url =
+      process.env.N8N_AUTO_ADJUST_CALORIES_WEBHOOK_URL ||
+      "http://localhost:5678/webhook-test/auto-adjust-calories";
+
+    try {
+      // Fire-and-forget for async processing by n8n
+      axios.post(url, payload, { timeout: 10000 }).catch(error => {
+        console.warn("⚠️ [n8n Auto-Adjust Calories Background Failed]:", error.message);
+      });
+      return { success: true, message: "Webhook triggered" };
+    } catch (error) {
+      console.warn("⚠️ [n8n Auto-Adjust Calories Trigger Failed]:", error.message);
+      return null;
+    }
   }
 }
 

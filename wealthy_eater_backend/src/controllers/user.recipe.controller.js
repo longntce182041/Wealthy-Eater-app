@@ -47,6 +47,23 @@ function buildFilter(query) {
     if (query.maxTime) filter.cooking_time.$lte = Number(query.maxTime);
   }
 
+  // UC-52: Filter by meal type for the nutritionist recipe picker.
+  // Recipes with no meal_types set are always included (backwards-compatible with existing data).
+  if (query.mealType) {
+    const mt = String(query.mealType).trim().toUpperCase();
+    const validTypes = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'];
+    if (validTypes.includes(mt)) {
+      // Include recipes that have this meal type, OR have an empty/null meal_types array
+      filter.$and = (filter.$and || []).concat([{
+        $or: [
+          { meal_types: { $in: [mt] } },
+          { meal_types: { $exists: false } },
+          { meal_types: { $size: 0 } },
+        ],
+      }]);
+    }
+  }
+
   return filter;
 }
 

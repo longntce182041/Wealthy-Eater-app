@@ -50,6 +50,7 @@ class AuthProvider with ChangeNotifier {
   String? _accessToken;
 
   bool get isAuthenticated => state == AuthState.authenticated && _accessToken != null;
+  String? get token => _accessToken;
 
   // ---------------------------------------------------------------------------
   // Session Restore
