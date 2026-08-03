@@ -518,7 +518,7 @@ const generateRecipeBasedPlan = async (req, res, next) => {
     const userSkillLevel = SKILL_LEVEL_ORDER[dietary?.cooking_skill_level?.toLowerCase()] || 3;
 
     // 3. Load all published recipes from DB
-    const allRecipes = await Recipe.find({ status: 'PUBLISHED' }).lean();
+    const allRecipes = await Recipe.find({ status: { $in: ['published', 'PUBLISHED'] } }).lean();
 
     // Also include recipes with no status set (backwards compat)
     const allRecipesWithFallback = allRecipes.length > 0
