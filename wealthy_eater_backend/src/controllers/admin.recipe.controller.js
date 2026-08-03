@@ -87,10 +87,10 @@ async function processRecipeIngredients(recipeId, ingredientsInput) {
     if (!ingredientData) continue;
 
     const quantity = Number(item.base_quantity) || 0;
-    totalCalories += (ingredientData.calories_per_unit || 0) * quantity;
-    totalProtein += (ingredientData.protein || 0) * quantity;
-    totalFat += (ingredientData.fat || 0) * quantity;
-    totalCarbs += (ingredientData.carbs || 0) * quantity;
+    totalCalories += ((ingredientData.calories_per_unit || 0) * quantity) / 100;
+    totalProtein += ((ingredientData.protein || 0) * quantity) / 100;
+    totalFat += ((ingredientData.fat || 0) * quantity) / 100;
+    totalCarbs += ((ingredientData.carbs || 0) * quantity) / 100;
 
     recipeIngredientDocs.push({
       recipe_id: recipeId,
