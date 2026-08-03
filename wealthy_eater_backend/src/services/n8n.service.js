@@ -137,7 +137,7 @@ class N8nService {
     };
 
     const response = await axios.post(url, payload, {
-      timeout: 25000,
+      timeout: 60000,
       headers: { "Content-Type": "application/json" },
     });
 

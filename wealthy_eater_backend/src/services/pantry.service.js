@@ -88,28 +88,64 @@ class PantryService {
 
       const response = await axios.post(url, payload, {
         headers: { "Content-Type": "application/json" },
-        timeout: 30000 // 30s timeout
+        timeout: 60000 // 60s timeout
       });
 
       const data = response.data;
       rawIngredients = data.inventory || data.pantry_ingredients || (Array.isArray(data) ? data : []);
     } catch (error) {
-      const AppError = require('../utils/AppError');
-      const isConnectionRefused = error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED');
-      if (isConnectionRefused) {
-        console.error('❌ [PantryService] n8n scan service is offline. N8N_SCAN_PANTRY_WEBHOOK_URL may be misconfigured.');
-        throw new AppError(
-          'Dịch vụ quét tủ lạnh tạm thời không khả dụng. Vui lòng thử lại sau.',
-          503,
-          'SERVICE_UNAVAILABLE'
-        );
+      console.warn('⚠️ [PantryService] n8n scan service failed or offline:', error.message);
+      
+      const apiKey = (process.env.GOOGLE_API_KEY || '').split(',')[0].trim();
+      if (apiKey) {
+        console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis for Pantry Scan...");
+        try {
+          const model = process.env.GEMINI_VISION_MODEL || "gemini-flash-latest";
+          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          
+          const prompt = [
+            "You are an expert culinary AI assistant.",
+            "Analyze the image of this pantry or fridge and return a list of visible ingredients.",
+            "Output exclusively a minified JSON array of objects without markdown. Each object must have:",
+            '- "name": string (simple ingredient name, e.g., "Egg", "Milk", "Tomato")',
+            '- "quantity": number (estimated amount)',
+            '- "unit": string (e.g., "units", "ml", "g")'
+          ].join("\\n");
+
+          const geminiPayload = {
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { text: prompt },
+                  {
+                    inline_data: {
+                      mime_type: file.mimetype || "image/jpeg",
+                      data: file.buffer.toString("base64"),
+                    },
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.2,
+              responseMimeType: "application/json",
+            },
+          };
+
+          const geminiResponse = await axios.post(geminiUrl, geminiPayload, { timeout: 60000 });
+          const rawText = geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+          const cleanJsonStr = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+          rawIngredients = JSON.parse(cleanJsonStr);
+        } catch (geminiError) {
+          console.error('❌ [Gemini Fallback Failed]:', geminiError.message);
+          const AppError = require('../utils/AppError');
+          throw new AppError('Dịch vụ quét tủ lạnh và AI dự phòng đều không khả dụng. Vui lòng thử lại.', 503, 'SERVICE_UNAVAILABLE');
+        }
+      } else {
+        const AppError = require('../utils/AppError');
+        throw new AppError('Dịch vụ quét tủ lạnh không khả dụng và chưa cấu hình AI dự phòng.', 503, 'SERVICE_UNAVAILABLE');
       }
-      console.error('❌ [PantryService] n8n webhook error:', error.message);
-      throw new AppError(
-        `Lỗi khi quét hình ảnh: ${error.message}`,
-        502,
-        'SCAN_SERVICE_ERROR'
-      );
     }
 
     // Normalize all items to objects
