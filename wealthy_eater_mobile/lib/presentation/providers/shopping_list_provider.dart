@@ -103,14 +103,18 @@ class ShoppingListProvider extends ChangeNotifier {
   /// The server accumulates quantities for duplicates automatically.
   ///
   /// Returns [true] on success, [false] on failure.
-  Future<bool> addFromRecipe(String recipeId, {int? servings}) async {
+  Future<bool> addFromRecipe(String recipeId, {int? servings, List<Map<String, dynamic>>? customIngredients}) async {
     isAdding     = true;
     isAddSuccess = false;
     errorMessage = null;
     notifyListeners();
 
     try {
-      await _addFromRecipe(recipeId: recipeId, servings: servings);
+      await _addFromRecipe(
+        recipeId: recipeId,
+        servings: servings,
+        customIngredients: customIngredients,
+      );
       // Reload to get server-confirmed quantities
       await loadList(silent: true);
       isAdding     = false;

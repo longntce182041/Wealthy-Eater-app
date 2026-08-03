@@ -66,7 +66,10 @@ class MealPlanProvider extends ChangeNotifier {
         final updatedData = res.data['data'] as Map<String, dynamic>;
         final index = items.indexWhere((element) => element['_id'] == itemId);
         if (index != -1) {
-          items[index] = updatedData;
+          items[index] = {
+            ...(items[index] as Map<String, dynamic>),
+            ...updatedData,
+          };
           notifyListeners();
         }
         return true;

@@ -569,7 +569,10 @@ class MealPlanService {
 
     return {
       _id: item._id,
+      meal_plan_id: item.meal_plan_id,
       meal_type: item.meal_type,
+      day_of_week: item.day_of_week,
+      is_completed: item.is_completed ?? false,
       recipe: recipe
         ? {
           _id: recipe._id,
