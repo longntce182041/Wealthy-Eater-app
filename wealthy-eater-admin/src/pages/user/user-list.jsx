@@ -13,7 +13,10 @@ import {
   ShieldAlert,
   Edit2,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Stethoscope,
+  Award,
+  DollarSign
 } from 'lucide-react';
 
 export default function UserListPage() {
@@ -42,30 +45,48 @@ export default function UserListPage() {
     setToast({ show: true, message, type });
     setTimeout(() => {
       setToast({ show: false, message: '', type: 'success' });
-    }, 5000);
+    }, 4000);
   };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null); 
-  const [formData, setFormData] = useState({ fullName: '', email: '', password: '', role: 'customer', status: 'active' });
+  
+  // 🟢 INITIAL FORM STATE (Bao gồm cả thông tin Nutritionist & Profile)
+  const initialFormState = { 
+    fullName: '', 
+    email: '', 
+    password: '', 
+    role: 'customer', 
+    status: 'active',
+    // Customer profile fields
+    age: '',
+    gender: 'other',
+    height: '',
+    weight: '',
+    healthGoal: 'maintain_weight',
+    // Nutritionist specific fields
+    specialization: 'General Nutrition',
+    professionalTitle: 'Specialist',
+    licenseNumber: '',
+    serviceFee: 0
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
   /**
-   * 🟢 HÀM BỔ TRỢ LẤY FULL NAME ĐA NĂNG
-   * Đảm bảo quét sạch tất cả các vị trí có thể chứa tên
+   * 🟢 HELPER: LẤY FULL NAME ĐA NĂNG
    */
   const getUserFullName = (userItem) => {
     if (!userItem) return '';
     return (
       userItem.profile?.fullName ||
       userItem.profile?.full_name ||
-      userItem.profile?.name ||
+      userItem.nutritionistProfile?.fullName ||
       userItem.fullName ||
-      userItem.full_name ||
-      userItem.name ||
       ''
     );
   };
@@ -116,19 +137,18 @@ export default function UserListPage() {
 
   const handleOpenCreateModal = () => {
     setEditingUserId(null);
-    setFormData({ fullName: '', email: '', password: '', role: 'customer', status: 'active' });
+    setFormData(initialFormState);
     setFormError('');
     setIsModalOpen(true);
   };
 
   /**
-   * 🟢 MỞ MODAL EDIT - Đã fix gán tên chính xác
+   * 🟢 MỞ MODAL EDIT - Nạp toàn bộ thông tin User & Profile liên quan
    */
   const handleOpenEditModal = (userItem) => {
     const currentId = userItem._id || userItem.id;
     setEditingUserId(currentId);
     
-    // Lấy tên người dùng chuẩn xác bằng helper function
     const extractedName = getUserFullName(userItem);
 
     setFormData({
@@ -136,7 +156,18 @@ export default function UserListPage() {
       email: userItem.email || '',
       password: '', 
       role: userItem.role?.toLowerCase() || 'customer',
-      status: userItem.status?.toLowerCase() || 'active'
+      status: userItem.status?.toLowerCase() || 'active',
+      // Customer profile fields
+      age: userItem.profile?.age || '',
+      gender: userItem.profile?.gender || 'other',
+      height: userItem.profile?.height || '',
+      weight: userItem.profile?.weight || '',
+      healthGoal: userItem.profile?.healthGoal || 'maintain_weight',
+      // Nutritionist specific fields
+      specialization: userItem.nutritionistProfile?.specialization || 'General Nutrition',
+      professionalTitle: userItem.nutritionistProfile?.professionalTitle || 'Specialist',
+      licenseNumber: userItem.nutritionistProfile?.licenseNumber || '',
+      serviceFee: userItem.nutritionistProfile?.serviceFee || 0
     });
     setFormError('');
     setIsModalOpen(true);
@@ -208,7 +239,7 @@ export default function UserListPage() {
     }
   };
 
-  // 🟢 BỘ LỌC TÌM KIẾM - Cập nhật lọc theo cả Name mở rộng
+  // 🟢 BỘ LỌC TÌM KIẾM
   const filteredUsers = users.filter(userItem => {
     const fullName = getUserFullName(userItem);
     const matchesSearch = userItem.email?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -313,8 +344,8 @@ export default function UserListPage() {
                 <th className="px-6 py-4">User Account</th>
                 <th className="px-6 py-4">Role</th>
                 <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Health Goal</th>
-                <th className="px-6 py-4">Metrics (BMI/TDEE)</th>
+                <th className="px-6 py-4">Specialization / Goal</th>
+                <th className="px-6 py-4">Metrics / Fee</th>
                 <th className="px-6 py-4">Joined Date</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
@@ -350,11 +381,14 @@ export default function UserListPage() {
                       <td className="px-6 py-4 font-medium text-slate-900">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 shrink-0">
-                            <Users className="w-4 h-4 text-slate-500" />
+                            {userItem.role === 'nutritionist' ? (
+                              <Stethoscope className="w-4 h-4 text-amber-600" />
+                            ) : (
+                              <Users className="w-4 h-4 text-slate-500" />
+                            )}
                           </div>
                           <div className="flex flex-col">
                             <span className="font-semibold text-slate-800">{userItem.email}</span>
-                            {/* 🟢 HIỂN THỊ TÊN NGƯỜI DÙNG */}
                             {fullName ? (
                               <span className="text-xs font-medium text-emerald-600">{fullName}</span>
                             ) : (
@@ -373,11 +407,26 @@ export default function UserListPage() {
                           {userItem.status}
                         </span>
                       </td>
+                      
+                      {/* Specialization / Health Goal */}
                       <td className="px-6 py-4 text-slate-600 font-medium">
-                        {userItem.profile?.healthGoal || '—'}
+                        {userItem.role === 'nutritionist' ? (
+                          <div className="flex flex-col text-xs">
+                            <span className="font-semibold text-amber-800">{userItem.nutritionistProfile?.specialization || 'General Nutrition'}</span>
+                            <span className="text-slate-400">{userItem.nutritionistProfile?.professionalTitle || 'Specialist'}</span>
+                          </div>
+                        ) : (
+                          <span>{userItem.profile?.healthGoal || '—'}</span>
+                        )}
                       </td>
+
+                      {/* Metrics / Service Fee */}
                       <td className="px-6 py-4">
-                        {userItem.profile?.bmi ? (
+                        {userItem.role === 'nutritionist' ? (
+                          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 inline-block">
+                            ${userItem.nutritionistProfile?.serviceFee || 0} / session
+                          </span>
+                        ) : userItem.profile?.bmi ? (
                           <div className="flex flex-col text-xs text-slate-500">
                             <span>BMI: <strong className="text-slate-700">{userItem.profile.bmi}</strong></span>
                             <span>TDEE: <strong className="text-emerald-600">{userItem.profile.tdee} kcal</strong></span>
@@ -386,6 +435,7 @@ export default function UserListPage() {
                           <span className="text-slate-400 italic text-xs">No profile data</span>
                         )}
                       </td>
+
                       <td className="px-6 py-4 text-slate-500">
                         {userItem.createdAt ? new Date(userItem.createdAt).toLocaleDateString('en-US') : '—'}
                       </td>
@@ -431,11 +481,11 @@ export default function UserListPage() {
         </div>
       </div>
 
-      {/* CREATE / EDIT USER MODAL */}
+      {/* CREATE / EDIT USER DYNAMIC MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => !submitLoading && setIsModalOpen(false)} />
-          <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between border-l border-slate-100">
+          <div className="relative w-full max-w-lg bg-white h-full shadow-2xl flex flex-col justify-between border-l border-slate-100">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <h3 className="text-xl font-bold text-slate-900 m-0 flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-emerald-600" /> 
@@ -447,6 +497,7 @@ export default function UserListPage() {
             <form id="userForm" onSubmit={handleFormSubmit} className="flex-1 p-6 space-y-5 overflow-y-auto">
               {formError && <div className="p-3 rounded-lg bg-red-50 text-red-700 border border-red-200 text-xs font-semibold">{formError}</div>}
               
+              {/* Core Account Credentials */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Full Name</label>
                 <input 
@@ -468,6 +519,7 @@ export default function UserListPage() {
                 <input type="password" placeholder={editingUserId ? "Leave blank to keep current password" : "Leave blank to use default password"} value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500" />
               </div>
 
+              {/* System Role Selector */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">System Role</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -485,6 +537,60 @@ export default function UserListPage() {
                   <option value="banned">Banned</option>
                 </select>
               </div>
+
+              {/* 🟢 DYNAMIC FIELDS FOR NUTRITIONIST ROLE */}
+              {formData.role === 'nutritionist' && (
+                <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200 space-y-3">
+                  <div className="flex items-center gap-2 text-amber-800 font-bold text-xs uppercase tracking-wider">
+                    <Stethoscope className="w-4 h-4" /> Nutritionist Details
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-600 font-medium">Specialization</label>
+                    <input type="text" placeholder="e.g. Clinical Dietetics, Sports Nutrition" value={formData.specialization} onChange={(e) => setFormData({ ...formData, specialization: e.target.value })} className="w-full px-3 py-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none focus:border-amber-500" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-slate-600 font-medium">Title</label>
+                      <input type="text" placeholder="Specialist / MSc" value={formData.professionalTitle} onChange={(e) => setFormData({ ...formData, professionalTitle: e.target.value })} className="w-full px-3 py-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-600 font-medium">Service Fee ($)</label>
+                      <input type="number" min="0" value={formData.serviceFee} onChange={(e) => setFormData({ ...formData, serviceFee: e.target.value })} className="w-full px-3 py-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-slate-600 font-medium">License Number</label>
+                    <input type="text" placeholder="e.g. LIC-2026-99" value={formData.licenseNumber} onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })} className="w-full px-3 py-2 text-sm bg-white border border-amber-200 rounded-lg focus:outline-none" />
+                  </div>
+                </div>
+              )}
+
+              {/* 🟢 CUSTOMER HEALTH METRICS (OPTIONAL) */}
+              {formData.role === 'customer' && (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="text-slate-700 font-bold text-xs uppercase tracking-wider">
+                    Body Metrics (Optional)
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-xs text-slate-500">Age</label>
+                      <input type="number" placeholder="25" value={formData.age} onChange={(e) => setFormData({ ...formData, age: e.target.value })} className="w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">Height (cm)</label>
+                      <input type="number" placeholder="170" value={formData.height} onChange={(e) => setFormData({ ...formData, height: e.target.value })} className="w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">Weight (kg)</label>
+                      <input type="number" placeholder="65" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: e.target.value })} className="w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-lg" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </form>
 
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center gap-3">
