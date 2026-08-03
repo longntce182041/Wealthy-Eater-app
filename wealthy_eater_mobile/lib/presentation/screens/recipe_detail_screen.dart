@@ -10,8 +10,15 @@ import '../providers/shopping_list_provider.dart';
 /// View is recorded automatically on open.
 class RecipeDetailScreen extends StatefulWidget {
   final String recipeId;
+  final List<dynamic>? customIngredients;
+  final double? customWeightGram;
 
-  const RecipeDetailScreen({super.key, required this.recipeId});
+  const RecipeDetailScreen({
+    super.key,
+    required this.recipeId,
+    this.customIngredients,
+    this.customWeightGram,
+  });
 
   @override
   State<RecipeDetailScreen> createState() => _RecipeDetailScreenState();
@@ -103,7 +110,11 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen>
       child: TabBarView(
         controller: _tabController,
         children: [
-          _InfoTab(recipe: recipe),
+          _InfoTab(
+            recipe: recipe,
+            customIngredients: widget.customIngredients,
+            customWeightGram: widget.customWeightGram,
+          ),
           _ReviewsTab(
             recipeId: recipe.id,
           ),
@@ -237,7 +248,73 @@ class _HeroBackground extends StatelessWidget {
 
 class _InfoTab extends StatelessWidget {
   final RecipeEntity recipe;
-  const _InfoTab({required this.recipe});
+  final List<dynamic>? customIngredients;
+  final double? customWeightGram;
+
+  const _InfoTab({
+    required this.recipe,
+    this.customIngredients,
+    this.customWeightGram,
+  });
+
+  List<Map<String, dynamic>> _getFormattedCustomIngredients() {
+    if (customIngredients == null || customIngredients!.isEmpty) return [];
+    final List<Map<String, dynamic>> list = [];
+    for (final ci in customIngredients!) {
+      if (ci is Map) {
+        final ing = ci['ingredient'] as Map?;
+        final id = ing?['_id'] ?? ing?['id'] ?? ci['ingredient_id'] ?? ci['ingredientId'];
+        final name = ing?['name'] ?? ci['name'] ?? 'Ingredient';
+        final unit = ing?['unit'] ?? ci['unit'] ?? 'g';
+        final grams = (ci['amount_gram'] ?? ci['quantity'] ?? 0) as num;
+        if (id != null) {
+          list.add({
+            'ingredientId': id.toString(),
+            'name': name.toString(),
+            'amount_gram': grams.toDouble(),
+            'unit': unit.toString(),
+          });
+        }
+      }
+    }
+    return list;
+  }
+
+  Future<void> _addCustomToShoppingList(BuildContext context, List<Map<String, dynamic>> customList) async {
+    final provider = context.read<ShoppingListProvider>();
+    final ok = await provider.addFromRecipe(recipe.id, customIngredients: customList);
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: ok
+            ? AppColors.primary
+            : Theme.of(context).colorScheme.error,
+        content: Row(
+          children: [
+            Icon(
+              ok ? Icons.shopping_cart_checkout : Icons.error_outline,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                ok
+                    ? 'Nutritionist prescribed ingredients added to list!'
+                    : (provider.errorMessage ?? 'Failed to add ingredients'),
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 
   Future<void> _addToShoppingList(BuildContext context, int servings) async {
     final provider = context.read<ShoppingListProvider>();
@@ -291,6 +368,9 @@ class _InfoTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final formattedCustom = _getFormattedCustomIngredients();
+    final bool hasCustom = formattedCustom.isNotEmpty;
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -322,9 +402,11 @@ class _InfoTab extends StatelessWidget {
                         )
                       : FilledButton.tonalIcon(
                           key: const ValueKey('button'),
-                          onPressed: (recipe.ingredients.isEmpty || isAdded)
+                          onPressed: isAdded
                               ? null
-                              : () => _showServingsSheet(ctx),
+                              : (hasCustom
+                                  ? () => _addCustomToShoppingList(ctx, formattedCustom)
+                                  : (recipe.ingredients.isEmpty ? null : () => _showServingsSheet(ctx))),
                           icon: Icon(
                             isAdded ? Icons.check : Icons.add_shopping_cart_outlined,
                             size: 16,
@@ -342,12 +424,47 @@ class _InfoTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        ...recipe.ingredients.map((ing) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _IngredientTile(
-                  ingredient: ing.name,
-                  quantity: '${ing.quantity} ${ing.unit}'),
-            )),
+        if (hasCustom) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primaryLight,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.verified, size: 16, color: AppColors.primaryDark),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Nutritionist Prescribed Portions',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ...formattedCustom.map((ci) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _IngredientTile(
+                  ingredient: ci['name'] as String,
+                  quantity: '${(ci['amount_gram'] as double).round()} ${ci['unit']}',
+                ),
+              )),
+        ] else ...[
+          ...recipe.ingredients.map((ing) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _IngredientTile(
+                    ingredient: ing.name,
+                    quantity: '${ing.quantity} ${ing.unit}'),
+              )),
+        ],
 
         const SizedBox(height: 20),
 

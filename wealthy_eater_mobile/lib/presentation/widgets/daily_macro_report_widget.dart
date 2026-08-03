@@ -65,6 +65,7 @@ class _DailyMacroReportWidgetState extends State<DailyMacroReportWidget> {
       onRefresh: _loadReport,
       color: AppColors.primary,
       child: ListView(
+        primary: false,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         children: [
@@ -239,6 +240,8 @@ class _DailyMacroReportWidgetState extends State<DailyMacroReportWidget> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.chevron_left, color: AppColors.primary),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                   onPressed: () {
                     setState(() {
                       _selectedDate = _selectedDate.subtract(const Duration(days: 1));
@@ -246,38 +249,47 @@ class _DailyMacroReportWidgetState extends State<DailyMacroReportWidget> {
                     _loadReport();
                   },
                 ),
-                InkWell(
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        _selectedDate = picked;
-                      });
-                      _loadReport();
-                    }
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.calendar_month, color: AppColors.primary, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          _formatDateString(_selectedDate),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
-                        ),
-                      ],
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _selectedDate = picked;
+                        });
+                        _loadReport();
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.calendar_month, color: AppColors.primary, size: 18),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              _formatDateString(_selectedDate),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.chevron_right, color: AppColors.primary),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                   onPressed: () {
                     setState(() {
                       _selectedDate = _selectedDate.add(const Duration(days: 1));

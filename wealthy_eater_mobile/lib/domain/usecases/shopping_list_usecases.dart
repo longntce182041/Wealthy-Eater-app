@@ -10,8 +10,13 @@ class AddFromRecipeUseCase {
   Future<List<ShoppingListItemEntity>> call({
     required String recipeId,
     int? servings,
+    List<Map<String, dynamic>>? customIngredients,
   }) =>
-      _repository.addFromRecipe(recipeId: recipeId, servings: servings);
+      _repository.addFromRecipe(
+        recipeId: recipeId,
+        servings: servings,
+        customIngredients: customIngredients,
+      );
 }
 
 /// Fetch the full shopping list (flat + grouped by category).
