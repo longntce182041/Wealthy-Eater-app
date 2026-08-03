@@ -23,7 +23,7 @@ const shoppingListService = require('../services/shopping_list.service');
 async function addFromRecipe(req, res, next) {
   try {
     const userId = req.user.sub || req.user.id;
-    const { recipeId, servings } = req.body;
+    const { recipeId, servings, customIngredients } = req.body;
 
     if (!recipeId || typeof recipeId !== 'string' || !recipeId.trim()) {
       return next(new AppError('recipeId is required', 400, 'VALIDATION_ERROR'));
@@ -41,6 +41,7 @@ async function addFromRecipe(req, res, next) {
       userId,
       recipeId.trim(),
       parsedServings,
+      customIngredients,
     );
 
     return res.status(201).json({

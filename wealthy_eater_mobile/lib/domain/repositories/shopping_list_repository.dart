@@ -16,6 +16,7 @@ abstract class ShoppingListRepository {
   Future<List<ShoppingListItemEntity>> addFromRecipe({
     required String recipeId,
     int? servings,
+    List<Map<String, dynamic>>? customIngredients,
   });
 
   /// Fetch the current user's full shopping list.
