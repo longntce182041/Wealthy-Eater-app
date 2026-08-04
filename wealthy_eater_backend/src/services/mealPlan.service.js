@@ -153,10 +153,10 @@ class MealPlanService {
         totalWeight += qty;
 
         // Nutrients are per 1g in database
-        totalCalories += (ing.calories_per_unit * qty);
-        totalProtein += ((ing.protein || 0) * qty);
-        totalFat += ((ing.fat || 0) * qty);
-        totalCarbs += ((ing.carbs || 0) * qty);
+        totalCalories += (ing.calories_per_unit * qty) / 100;
+        totalProtein += ((ing.protein || 0) * qty) / 100;
+        totalFat += ((ing.fat || 0) * qty) / 100;
+        totalCarbs += ((ing.carbs || 0) * qty) / 100;
       }
     }
 
@@ -183,10 +183,10 @@ class MealPlanService {
       if (ing) {
         const qty = item.amount_gram;
         totalWeight += qty;
-        totalCalories += (ing.calories_per_unit * qty);
-        totalProtein += ((ing.protein || 0) * qty);
-        totalFat += ((ing.fat || 0) * qty);
-        totalCarbs += ((ing.carbs || 0) * qty);
+        totalCalories += (ing.calories_per_unit * qty) / 100;
+        totalProtein += ((ing.protein || 0) * qty) / 100;
+        totalFat += ((ing.fat || 0) * qty) / 100;
+        totalCarbs += ((ing.carbs || 0) * qty) / 100;
       }
     }
 
@@ -220,7 +220,7 @@ class MealPlanService {
       .populate({
         path: "custom_ingredients.ingredient_id",
         model: "Ingredient",
-        select: "name calories_per_unit protein carbs fat",
+        select: "_id name calories_per_unit protein carbs fat",
       })
       .lean();
 
@@ -274,8 +274,12 @@ class MealPlanService {
 
       let customIngredientsData = null;
 
-      if (item.custom_ingredients && item.custom_ingredients.length > 0) {
-        // Prepare custom_ingredients for calculate utility
+      // Priority: if item has a real recipe_id (not AI_GENERATED), treat as recipe-based
+      const hasRealRecipe = recipe && recipe._id;
+      const isAIGenerated = !hasRealRecipe;
+
+      if (isAIGenerated && item.custom_ingredients && item.custom_ingredients.length > 0) {
+        // AI-generated meal: compute nutrients from custom ingredients
         const mappedCustomIngredients = item.custom_ingredients.map(ci => ({
           ingredient_id: ci.ingredient_id?._id || ci.ingredient_id,
           amount_gram: ci.amount_gram,
@@ -286,7 +290,8 @@ class MealPlanService {
           ingredient: ci.ingredient_id,
           amount_gram: ci.amount_gram,
         }));
-      } else if (recipe && recipe._id) {
+      } else if (hasRealRecipe) {
+        // Recipe-based meal: compute nutrients from the recipe
         nutrients = await this.calculateRecipeNutrients(recipe._id);
       }
 
@@ -301,7 +306,7 @@ class MealPlanService {
         meal_type: item.meal_type,
         day_of_week: item.day_of_week || null,
         is_completed: item.is_completed || false,
-        recipe: recipe && recipe._id
+        recipe: hasRealRecipe
           ? {
             _id: recipe._id,
             name: recipe.name,
@@ -352,7 +357,7 @@ class MealPlanService {
       .populate({
         path: "custom_ingredients.ingredient_id",
         model: "Ingredient",
-        select: "name calories_per_unit protein carbs fat",
+        select: "_id name calories_per_unit protein carbs fat",
       })
       .lean();
 
@@ -406,7 +411,12 @@ class MealPlanService {
 
       let customIngredientsData = null;
 
-      if (item.custom_ingredients && item.custom_ingredients.length > 0) {
+      // Priority: if item has a real recipe_id (not AI_GENERATED), treat as recipe-based
+      const hasRealRecipe = recipe && recipe._id;
+      const isAIGenerated = !hasRealRecipe;
+
+      if (isAIGenerated && item.custom_ingredients && item.custom_ingredients.length > 0) {
+        // AI-generated meal: compute nutrients from custom ingredients
         const mappedCustomIngredients = item.custom_ingredients.map(ci => ({
           ingredient_id: ci.ingredient_id?._id || ci.ingredient_id,
           amount_gram: ci.amount_gram,
@@ -417,7 +427,8 @@ class MealPlanService {
           ingredient: ci.ingredient_id,
           amount_gram: ci.amount_gram,
         }));
-      } else if (recipe && recipe._id) {
+      } else if (hasRealRecipe) {
+        // Recipe-based meal: compute nutrients from the recipe
         nutrients = await this.calculateRecipeNutrients(recipe._id);
       }
 
@@ -431,7 +442,7 @@ class MealPlanService {
         meal_type: item.meal_type,
         day_of_week: item.day_of_week || null,
         is_completed: item.is_completed || false,
-        recipe: recipe && recipe._id
+        recipe: hasRealRecipe
           ? {
             _id: recipe._id,
             name: recipe.name,
@@ -807,12 +818,13 @@ class MealPlanService {
         itemDoc.recipe_id = "AI_GENERATED"; // If it was a recipe, it's now customized
 
         totalCalories += nutrients.calories;
-      } else if (updateItem.recipeId) {
+      } else if (updateItem.recipeId || updateItem.recipe_id) {
         // Swap to a recipe
-        itemDoc.recipe_id = updateItem.recipeId;
+        const newRecipeId = updateItem.recipeId || updateItem.recipe_id;
+        itemDoc.recipe_id = newRecipeId;
         itemDoc.custom_ingredients = [];
 
-        const nutrients = await this.calculateRecipeNutrients(updateItem.recipeId);
+        const nutrients = await this.calculateRecipeNutrients(newRecipeId);
         itemDoc.target_calories = nutrients.calories;
         itemDoc.customized_servings_gram = nutrients.base_weight;
 

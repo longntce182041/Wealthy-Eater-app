@@ -345,9 +345,9 @@
       "parameters": {
         "operation": "update",
         "collection": "customermeallogs",
-        "updateKey": "_id",
+        "updateKey": "acknowledged",
         "options": {},
-        "query": "={{ JSON.stringify({ _id: $json.meal_log_id }) }}",
+        "query": "={{ JSON.stringify({ _id: $('Calorie Adaptive Redistribution').first().json.meal_log_id }) }}",
         "update": "={{ JSON.stringify({ $set: { deviation_flag: true } }) }}"
       },
       "type": "n8n-nodes-base.mongoDb",
@@ -401,7 +401,7 @@
         "updateKey": "_id",
         "options": {},
         "query": "={{ JSON.stringify({ meal_plan_id: $json._id, meal_type: 'breakfast' }) }}",
-        "update": "={{ JSON.stringify({ $inc: { target_calories: $json.next_day_payload.delta_cal_carry, 'macro_targets.protein': $json.next_day_payload.proteinDelta, 'macro_targets.carbs': $json.next_day_payload.carbsDelta, 'macro_targets.fat': $json.next_day_payload.fatDelta }, $set: { adjusted_by_uc42: true, adjusted_at: new Date().toISOString() } }) }}"
+        "update": "={{ JSON.stringify({ $inc: { target_calories: $('Calorie Adaptive Redistribution').first().json.next_day_payload.delta_cal_carry, 'macro_targets.protein': $('Calorie Adaptive Redistribution').first().json.next_day_payload.proteinDelta, 'macro_targets.carbs': $('Calorie Adaptive Redistribution').first().json.next_day_payload.carbsDelta, 'macro_targets.fat': $('Calorie Adaptive Redistribution').first().json.next_day_payload.fatDelta }, $set: { adjusted_by_uc42: true, adjusted_at: new Date().toISOString() } }) }}"
       },
       "type": "n8n-nodes-base.mongoDb",
       "typeVersion": 1.3,

@@ -815,7 +815,8 @@ class UserConsultationService {
       throw new AppError("You already have a pending meal plan request.", 400);
     }
 
-    // Check if a request was submitted in the last 5 days
+    // TEMPORARY DISABLED FOR TESTING: Check if a request was submitted in the last 5 days
+    /*
     const fiveDaysAgo = new Date();
     fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
 
@@ -827,6 +828,7 @@ class UserConsultationService {
     if (recentRequest) {
       throw new AppError("You can only submit a meal plan request once every 5 days.", 400);
     }
+    */
 
     const request = await MealPlanRequest.create({
       user_id: userId,

@@ -18,7 +18,7 @@ class BiometricAuditController {
    *   - :clientId must be a valid MongoDB ObjectId (enforced in route)
    *
    * Responds with the system-standard envelope:
-   *   { success: true, data: WeightLog[], error: null }
+   *   { success: true, data: { logs, profile, dietary }, error: null }
    */
   async getClientBiometricHistory(req, res, next) {
     try {
@@ -29,15 +29,19 @@ class BiometricAuditController {
 
       const { clientId } = req.params;
 
-      const logs = await biometricAuditService.getClientBiometricHistory(
+      const { logs, profile, dietary } = await biometricAuditService.getClientBiometricHistory(
         nutritionistId,
         clientId,
       );
 
       return res.status(200).json({
         success: true,
-        data:    logs,
-        error:   null,
+        data: {
+          logs,
+          profile,
+          dietary,
+        },
+        error: null,
       });
     } catch (error) {
       return next(error);

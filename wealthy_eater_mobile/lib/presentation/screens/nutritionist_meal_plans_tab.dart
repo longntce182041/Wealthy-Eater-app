@@ -172,17 +172,7 @@ class _NutritionistMealPlansTabState extends State<NutritionistMealPlansTab> {
                         ),
                       ],
                     ),
-                    const Divider(height: 24),
-                    Text(
-                      plan['created_by']?.toString() ?? 'AI Generated',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.black87,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     if (isDraft)
                       Wrap(
                         alignment: WrapAlignment.end,
