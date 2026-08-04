@@ -36,9 +36,15 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA), // Soft Grey
       appBar: AppBar(
-        title: Text(
-          'Biometrics: ${widget.clientName}',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+        title: Consumer<BiometricAuditProvider>(
+          builder: (context, provider, _) {
+            final fullName = provider.userProfile?['full_name']?.toString();
+            final name = (fullName != null && fullName.isNotEmpty) ? fullName : widget.clientName;
+            return Text(
+              'Biometrics: $name',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+            );
+          },
         ),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
@@ -218,9 +224,68 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
     );
   }
 
+  String _formatHealthGoal(String? goal) {
+    if (goal == null || goal.isEmpty) return 'Goal: Not Set';
+    final formatted = goal
+        .replaceAll('_', ' ')
+        .toLowerCase()
+        .split(' ')
+        .map((word) => word.isNotEmpty ? '${word[0].toUpperCase()}${word.substring(1)}' : '')
+        .join(' ');
+    return 'Goal: $formatted';
+  }
+
+  Widget _buildHeaderBadge({required IconData icon, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.grey.shade700),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProfileHeader(BiometricAuditProvider provider) {
-    // In a real app, this might come from a client model. 
-    // Here we use mock header data as requested.
+    final profile = provider.userProfile;
+    final dietary = provider.userDietary;
+
+    final fullName = profile?['full_name']?.toString();
+    final displayName = (fullName != null && fullName.isNotEmpty) ? fullName : widget.clientName;
+    final avatarUrl = profile?['avatar_url']?.toString();
+    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+
+    final goalText = _formatHealthGoal(profile?['health_goal']?.toString());
+
+    final bmi = profile?['bmi'];
+    final bmiStr = bmi != null ? (bmi as num).toStringAsFixed(1) : 'N/A';
+
+    final age = profile?['age'];
+    final gender = profile?['gender']?.toString();
+    final height = profile?['height'];
+    final weight = profile?['weight'];
+    final tdee = profile?['tdee'];
+    final bmr = profile?['bmr'];
+
+    final activity = dietary?['activity_level']?.toString();
+    final cookingSkill = dietary?['cooking_skill_level']?.toString();
+    final cookingTime = dietary?['available_cooking_time'];
+    final preferences = (dietary?['diet_preferences'] as List?)?.map((e) => e.toString()).toList() ?? [];
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -234,80 +299,163 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 32,
-            backgroundColor: const Color(0xFFE0F2F1), // Light Mint
-            child: Text(
-              widget.clientName.substring(0, 1).toUpperCase(),
-              style: GoogleFonts.inter(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF00796B), // Dark Teal
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 32,
+                backgroundColor: const Color(0xFFE0F2F1), // Light Mint
+                backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                    ? NetworkImage(avatarUrl)
+                    : null,
+                child: (avatarUrl == null || avatarUrl.isEmpty)
+                    ? Text(
+                        initial,
+                        style: GoogleFonts.inter(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF00796B), // Dark Teal
+                        ),
+                      )
+                    : null,
               ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.clientName,
-                  style: GoogleFonts.inter(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (fullName != null && fullName.isNotEmpty && widget.clientName != fullName) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.clientName,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3E0), // Orange tint
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        goalText,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.deepOrange,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0), // Orange tint
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Goal: Lose Weight',
+              ),
+              // BMI Chip
+              Column(
+                children: [
+                  Text(
+                    'BMI',
                     style: GoogleFonts.inter(
                       fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.deepOrange,
+                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          // BMI Chip
-          Column(
-            children: [
-              Text(
-                'BMI',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: Colors.grey.shade500,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '22.4',
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green.shade700,
-                  ),
-                ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      bmiStr,
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                  )
+                ],
               )
             ],
-          )
+          ),
+          if (profile != null || dietary != null) ...[
+            const Divider(height: 24),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (age != null || gender != null)
+                  _buildHeaderBadge(
+                    icon: Icons.person_outline,
+                    label: '${age ?? '?'} yrs • ${gender ?? 'N/A'}',
+                  ),
+                if (height != null || weight != null)
+                  _buildHeaderBadge(
+                    icon: Icons.straighten,
+                    label: '${height ?? '?'} cm • ${weight ?? '?'} kg',
+                  ),
+                if (tdee != null)
+                  _buildHeaderBadge(
+                    icon: Icons.local_fire_department_outlined,
+                    label: 'TDEE: $tdee kcal',
+                  ),
+                if (bmr != null)
+                  _buildHeaderBadge(
+                    icon: Icons.bolt_outlined,
+                    label: 'BMR: $bmr kcal',
+                  ),
+                if (activity != null)
+                  _buildHeaderBadge(
+                    icon: Icons.fitness_center_outlined,
+                    label: 'Activity: $activity',
+                  ),
+                if (cookingSkill != null)
+                  _buildHeaderBadge(
+                    icon: Icons.restaurant_outlined,
+                    label: 'Skill: $cookingSkill',
+                  ),
+                if (cookingTime != null)
+                  _buildHeaderBadge(
+                    icon: Icons.timer_outlined,
+                    label: '${cookingTime}m cook',
+                  ),
+              ],
+            ),
+            if (preferences.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: preferences.map((pref) {
+                  return Chip(
+                    label: Text(
+                      pref,
+                      style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500),
+                    ),
+                    backgroundColor: Colors.teal.shade50,
+                    side: BorderSide.none,
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
         ],
       ),
     );

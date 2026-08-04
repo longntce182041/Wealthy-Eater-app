@@ -872,17 +872,7 @@ class _WeeklyMealPlansViewState extends State<_WeeklyMealPlansView> {
                     ),
                 ],
               ),
-              const Spacer(),
-              if (provider.mealPlan?['created_by'] != null)
-                Expanded(
-                  child: Text(
-                    'By: ${provider.mealPlan!['created_by'].split('|')[0]}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+              
             ],
           ),
           const SizedBox(height: 16),

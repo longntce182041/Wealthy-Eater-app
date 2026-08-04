@@ -149,20 +149,9 @@ class _ClientProfileCard extends StatelessWidget {
                   children: [
                     Text(
                       clientName,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                         color: theme.colorScheme.onPrimaryContainer,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'ID: $clientId',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onPrimaryContainer
-                            .withValues(alpha: 0.7),
-                        fontFamily: 'monospace',
-                        fontSize: 11,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -180,11 +169,6 @@ class _ClientProfileCard extends StatelessWidget {
                 icon: Icons.restaurant_menu_outlined,
                 label: 'Recipe-Based',
                 color: theme.colorScheme.primary,
-              ),
-              _InfoChip(
-                icon: Icons.science_outlined,
-                label: 'LP Optimizer',
-                color: Colors.teal,
               ),
               _InfoChip(
                 icon: Icons.calendar_month_outlined,
@@ -519,11 +503,11 @@ class _ResultCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _MetaRow(label: 'Meal Plan ID', value: mealPlanId),
+              _MetaRow(label: 'Plan Duration', value: '7 Days (21 Meals)'),
               const Divider(height: 16),
               _MetaRow(
-                  label: 'Ingredient Components',
-                  value: '$itemsCount items allocated'),
+                  label: 'Allocation Status',
+                  value: 'Complete ($itemsCount items allocated)'),
             ],
           ),
         ),

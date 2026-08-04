@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/network/api_client.dart';
 import '../providers/nutritionist_provider.dart';
 import '../../data/models/draft_meal_plan_dto.dart';
 
@@ -41,19 +42,25 @@ class _MealPlanEditorScreenState extends State<MealPlanEditorScreen> {
     
     final items = _localDraft!['items'] as List;
     final payloadItems = items.map((item) {
+      // Only send ingredients for truly AI-generated items (no recipe).
+      // Recipe-based items also have custom_ingredients in DB for nutrition calc,
+      // but sending them would cause backend to overwrite recipe_id = "AI_GENERATED".
+      final bool isAIItem = item['recipe'] == null &&
+          (item['recipe_id'] == null || item['recipe_id'] == 'AI_GENERATED');
+
       List<IngredientUpdate>? ingredients;
-      if (item['custom_ingredients'] != null) {
+      if (isAIItem && item['custom_ingredients'] != null) {
         ingredients = (item['custom_ingredients'] as List).map((ing) {
           return IngredientUpdate(
-            ingredientId: ing['ingredient']['_id'],
+            ingredientId: ing['ingredient']['_id']?.toString() ?? '',
             grams: ing['amount_gram'],
           );
-        }).toList();
+        }).where((u) => u.ingredientId.isNotEmpty).toList();
       }
       
       return DraftItemUpdate(
-        itemId: item['_id'],
-        recipeId: item['recipe_id'] ?? item['recipe']?['_id'],
+        itemId: item['_id']?.toString() ?? '',
+        recipeId: isAIItem ? null : (item['recipe_id']?.toString() ?? item['recipe']?['_id']?.toString()),
         mealType: item['meal_type'],
         customizedServingsGram: item['customized_servings_gram'],
         targetCalories: item['target_calories'] ?? item['customized_nutrients']?['calories'],
@@ -358,30 +365,72 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
 
   // ── Recipe selection callback ─────────────────────────────────────────────
 
-  void _onRecipeSelected(Map<String, dynamic> recipe) {
+  void _onRecipeSelected(Map<String, dynamic> recipe) async {
+    final recipeId = recipe['id'] ?? recipe['_id'];
+
     setState(() {
       _selectedRecipe = recipe;
-      _baseNutrition = recipe['nutrition'] as Map?;
-      _editingItem['recipe_id'] = recipe['id'];
+      _baseNutrition = (_selectedRecipe?['nutrition'] ?? recipe['nutrition']) as Map?;
+      _editingItem['recipe_id'] = recipeId;
+      _editingItem['recipe'] = _selectedRecipe;
+
+      // Đưa danh sách ingredients READ-ONLY từ recipe vào state hiển thị
+      _editingItem['ingredients'] = _selectedRecipe?['ingredients'] ?? recipe['ingredients'] ?? [];
+      _editingItem['custom_ingredients'] = null; // Reset AI custom ingredients
 
       // Get base weight in grams for the new recipe (default to 100g if missing)
-      final recipeBaseWeight = (recipe['baseWeight'] as num?)?.toDouble() ??
-                               (recipe['nutrition']?['baseWeight'] as num?)?.toDouble() ??
+      final recipeBaseWeight = (_selectedRecipe?['base_weight'] as num?)?.toDouble() ??
+                               (recipe['baseWeight'] as num?)?.toDouble() ??
+                               (_baseNutrition?['baseWeight'] as num?)?.toDouble() ??
                                100.0;
 
       _editingItem['base_weight'] = recipeBaseWeight;
-      _servingsController.text = recipeBaseWeight.round().toString();
       _editingItem['customized_servings_gram'] = recipeBaseWeight;
+
+      // Update text controller to match the newly selected recipe's base weight
+      _servingsController.text = recipeBaseWeight.round().toString();
 
       _recalculateMacrosFromRecipe();
     });
+
+    // Fetch full recipe ingredients if list is empty
+    if ((_editingItem['ingredients'] as List).isEmpty && recipeId != null && recipeId.toString().isNotEmpty) {
+      try {
+        final apiClient = context.read<ApiClient>();
+        final response = await apiClient.get('/api/user/recipes/$recipeId');
+        if (response.statusCode == 200 && response.data['success'] == true) {
+          final data = response.data['data'] as Map<String, dynamic>?;
+          final ingList = data?['ingredients'] as List? ?? [];
+          if (mounted && _editingItem['recipe_id'] == recipeId) {
+            setState(() {
+              _editingItem['ingredients'] = ingList;
+              if (_selectedRecipe != null) {
+                _selectedRecipe!['ingredients'] = ingList;
+              }
+            });
+          }
+        }
+      } catch (_) {}
+    }
   }
 
   void _onClearSelection() {
     setState(() {
       _selectedRecipe = null;
       _baseNutrition = null;
-      _editingItem['recipe_id'] = null;
+      _editingItem['recipe_id'] = 'AI_GENERATED';
+      _editingItem['recipe'] = null;
+      _editingItem['ingredients'] = [];
+
+      // Retain or restore custom_ingredients so AI mode displays the ingredients list & allows edits
+      if (widget.item['custom_ingredients'] != null) {
+        _editingItem['custom_ingredients'] = List<Map<String, dynamic>>.from(
+          (widget.item['custom_ingredients'] as List).map((i) => Map<String, dynamic>.from(i))
+        );
+      } else {
+        _editingItem['custom_ingredients'] = <Map<String, dynamic>>[];
+      }
+      _recalculateLocalMacros();
     });
   }
 
@@ -422,7 +471,7 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
   /// Recalculates macros for AI-generated meals (ingredient-based).
   void _recalculateLocalMacros() {
     if (_editingItem['custom_ingredients'] == null) return;
-    
+
     double totalCal = 0;
     double totalPro = 0;
     double totalCarb = 0;
@@ -430,8 +479,9 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
 
     for (var ci in _editingItem['custom_ingredients']) {
       final ing = ci['ingredient'];
+      if (ing == null) continue;
       final num grams = ci['amount_gram'] ?? 0;
-      
+
       final num calPer100 = ing['calories_per_unit'] ?? 0;
       final num proPer100 = ing['protein'] ?? 0;
       final num carbPer100 = ing['carbs'] ?? 0;
@@ -455,12 +505,9 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
 
   // ── Confirm button availability ───────────────────────────────────────────
 
-  /// Confirm Changes is enabled if:
-  /// 1. User selected a recipe via picker, OR
-  /// 2. Original item was AI-generated (recipe == null) — keep AI mode.
+  /// Confirm Changes is enabled if user has a recipe selected OR is in AI mode (recipe == null).
   bool get _canConfirm {
-    final isOriginallyAI = widget.item['recipe'] == null;
-    return _selectedRecipe != null || isOriginallyAI;
+    return _selectedRecipe != null || _editingItem['recipe'] == null;
   }
 
   @override
@@ -530,46 +577,11 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
           ),
           const SizedBox(height: 12),
 
-          // ── Servings (g) + Target Calories ─────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _servingsController,
-                  decoration: InputDecoration(
-                    labelText: 'Servings (g)',
-                    border: const OutlineInputBorder(),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (val) {
-                    _editingItem['customized_servings_gram'] = num.tryParse(val);
-                    if (_selectedRecipe != null) {
-                      _recalculateMacrosFromRecipe();
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextFormField(
-                  controller: _caloriesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Target Calories',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (val) => _editingItem['target_calories'] = num.tryParse(val),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
 
-          // ── Ingredients section (AI mode only) ────────────────────────────
+          // ── Ingredients section ───────────────────────────────────────────
           if (isAI && _editingItem['custom_ingredients'] != null) ...[
-            const Text('Ingredients', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text('Ingredients (AI Customized)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Expanded(
               child: ListView.separated(
@@ -577,11 +589,11 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
                 separatorBuilder: (context, index) => const Divider(),
                 itemBuilder: (context, index) {
                   final ci = _editingItem['custom_ingredients'][index];
-                  final ing = ci['ingredient'];
+                  final ing = ci['ingredient'] ?? {};
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(child: Text(ing['name'] ?? 'Unknown', style: const TextStyle(fontSize: 16))),
+                      Expanded(child: Text(ing['name'] ?? 'Unknown', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500))),
                       Row(
                         children: [
                           IconButton(
@@ -607,6 +619,60 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
                         ],
                       )
                     ],
+                  );
+                },
+              ),
+            ),
+          ] else if (!isAI && _editingItem['ingredients'] != null && (_editingItem['ingredients'] as List).isNotEmpty) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Recipe Ingredients', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(
+                  '${(_editingItem['ingredients'] as List).length} items',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.separated(
+                itemCount: (_editingItem['ingredients'] as List).length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final ing = _editingItem['ingredients'][index];
+                  final String ingName = ing['name'] ?? ing['ingredient']?['name'] ?? 'Ingredient';
+                  final num quantity = ing['quantity'] ?? ing['amount_gram'] ?? 0;
+                  final String unit = ing['unit'] ?? 'g';
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            ingName,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '$quantity $unit',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue[800],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   );
                 },
               ),
@@ -680,22 +746,11 @@ class _RecipePickerInline extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Chọn món ăn',
+              'Select Recipe',
               style: TextStyle(
                 color: Colors.grey[600],
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
-              ),
-            ),
-            TextButton.icon(
-              onPressed: onClearSelection,
-              icon: const Icon(Icons.auto_awesome, size: 16),
-              label: const Text('AI gợi ý', style: TextStyle(fontSize: 12)),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.deepPurple[400],
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
           ],
@@ -823,7 +878,7 @@ class _PickerPlaceholder extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            'Nhấn để tìm và chọn món ăn...',
+            'Click to sreach and select recipe',
             style: TextStyle(color: Colors.grey[500], fontSize: 13),
           ),
         ),
@@ -894,11 +949,11 @@ class _RecipeSearchSheetState extends State<_RecipeSearchSheet> {
 
   static const List<String> _mealTypes = ['', 'BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'];
   static const Map<String, String> _mealTypeLabels = {
-    '':          'Tất cả',
-    'BREAKFAST': '🌅 Sáng',
-    'LUNCH':     '☀️ Trưa',
-    'DINNER':    '🌙 Tối',
-    'SNACK':     '🍎 Snack',
+    '':          'All',
+    'BREAKFAST' : 'BREAKFAST',
+    'LUNCH': 'LUNCH'   ,
+    'DINNER': 'LUNCH'  ,
+    'SNACK': 'SNACK'  ,
   };
 
   @override
@@ -981,7 +1036,7 @@ class _RecipeSearchSheetState extends State<_RecipeSearchSheet> {
               padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
               child: Row(
                 children: [
-                  const Text('Tìm món ăn', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text('Search recipe', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -1002,7 +1057,7 @@ class _RecipeSearchSheetState extends State<_RecipeSearchSheet> {
                     _onSearchChanged(v);
                   },
                   decoration: InputDecoration(
-                    hintText: 'Tìm theo tên món ăn…',
+                    hintText: 'Sreach recipe',
                     prefixIcon: const Icon(Icons.search, size: 20),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
@@ -1273,7 +1328,7 @@ class _RecipeCard extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   elevation: 0,
                 ),
-                child: const Text('Chọn', style: TextStyle(fontSize: 13)),
+                child: const Text('Select', style: TextStyle(fontSize: 13)),
               ),
             ],
           ),
