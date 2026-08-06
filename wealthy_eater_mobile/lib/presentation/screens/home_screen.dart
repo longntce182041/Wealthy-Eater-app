@@ -50,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final token = context.read<AuthProvider>().token;
     if (token == null) return;
     
-    final baseUrl = kIsWeb ? 'http://localhost:5000' : EnvConfig.baseUrl;
+    final baseUrl = EnvConfig.baseUrl;
     _socket = socket_io.io(
       baseUrl,
       socket_io.OptionBuilder()
