@@ -100,7 +100,8 @@ class PantryService {
       if (apiKey) {
         console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis for Pantry Scan...");
         try {
-          const model = process.env.GEMINI_VISION_MODEL || "gemini-flash-latest";
+          // Model được xác minh tại ai.google.dev/gemini-api/docs/models (cập nhật 2026-08)
+          const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.5-flash'; // gemini-flash-latest đã bị tắt
           const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
           
           const prompt = [

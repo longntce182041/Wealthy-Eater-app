@@ -92,7 +92,8 @@ class N8nService {
   }
 
   async callGeminiVisionFallback(file, apiKey) {
-    const model = process.env.GEMINI_VISION_MODEL || "gemini-flash-latest";
+    // Model được xác minh tại ai.google.dev/gemini-api/docs/models (cập nhật 2026-08)
+    const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.5-flash'; // gemini-flash-latest đã bị tắt
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt = [
