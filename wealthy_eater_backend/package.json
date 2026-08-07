@@ -4,10 +4,22 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "cross-env JWT_ACCESS_SECRET=test JWT_REFRESH_SECRET=test GOOGLE_API_KEY=test GOOGLE_CLIENT_ID=test_id jest --runInBand --forceExit --testPathPatterns=test/services --verbose",
+    "test:coverage": "cross-env JWT_ACCESS_SECRET=test JWT_REFRESH_SECRET=test GOOGLE_API_KEY=test GOOGLE_CLIENT_ID=test_id jest --runInBand --forceExit --testPathPatterns=test/services --coverage",
     "start": "cross-env NODE_ENV=production node src/server.js",
     "dev": "cross-env NODE_ENV=development nodemon -q src/server.js",
     "seed": "node scripts/seed.js"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/services/**/*.js"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "text",
+      "html"
+    ]
   },
   "keywords": [],
   "author": "",
@@ -41,6 +53,7 @@
   },
   "devDependencies": {
     "cross-env": "^10.1.0",
+    "jest": "^30.2.0",
     "nodemon": "^3.1.14"
   },
   "overrides": {
