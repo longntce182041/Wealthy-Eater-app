@@ -445,10 +445,59 @@ class _ResultDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double confidencePct = (result.confidence * 100);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Main Card: Meal name & Confidence ──
+        // ── 2D Visual Reference Warning Card ──
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8E1), // Light amber background
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFFE082), width: 1.2),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFF57F17),
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'Reference Warning (2D Image)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFE65100),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'AI camera analysis estimates portion sizes based strictly on 2D visual representations. Actual weight (g) may vary depending on thickness and density. Please verify and adjust actual gram weights manually when logging.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF4E342E),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // ── Main Card: Meal name & Strict Confidence ──
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(20),
@@ -480,18 +529,43 @@ class _ResultDashboard extends StatelessWidget {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: confidencePct >= 75
+                          ? AppColors.primaryLight
+                          : const Color(0xFFFFF3E0),
                       borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      'Confidence: ${(result.confidence * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(
-                        color: AppColors.primaryDark,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
+                      border: Border.all(
+                        color: confidencePct >= 75
+                            ? AppColors.primary.withValues(alpha: 0.3)
+                            : const Color(0xFFFFB74D),
+                        width: 1,
                       ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          confidencePct >= 75
+                              ? Icons.verified_outlined
+                              : Icons.visibility_outlined,
+                          size: 13,
+                          color: confidencePct >= 75
+                              ? AppColors.primaryDark
+                              : const Color(0xFFE65100),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '2D Estimate: ${confidencePct.toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            color: confidencePct >= 75
+                                ? AppColors.primaryDark
+                                : const Color(0xFFE65100),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -594,22 +668,23 @@ class _ResultDashboard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade50,
+              color: Colors.amber.shade50,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade200),
+              border: Border.all(color: Colors.amber.shade200),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline_rounded, color: Colors.grey.shade600, size: 16),
+                Icon(Icons.info_outline_rounded, color: Colors.amber.shade900, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     result.note,
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade600,
-                      height: 1.3,
+                      color: Colors.amber.shade900,
+                      fontWeight: FontWeight.w500,
+                      height: 1.35,
                     ),
                   ),
                 ),
