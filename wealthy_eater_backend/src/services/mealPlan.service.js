@@ -726,8 +726,8 @@ class MealPlanService {
       if (user && user.fcmToken) {
         const message = {
           notification: {
-            title: "🍳 Thực đơn mới đã sẵn sàng!",
-            body: `Chuyên gia dinh dưỡng đã gửi thực đơn chính thức cho bạn. Vào app xem ngay ní ơi!`,
+            title: "🍳 Your new meal plan is ready!",
+            body: `Your nutritionist has published your official meal plan. Open the app to view it now!`,
           },
           token: user.fcmToken,
         };
@@ -735,21 +735,21 @@ class MealPlanService {
         if (firebaseConfig.messaging) {
           const response = await firebaseConfig.messaging.send(message);
           console.log(
-            `[Firebase FCM] Đã kích bắn thông báo thật thành công! Message ID: ${response}`,
+            `[Firebase FCM] Push notification sent successfully! Message ID: ${response}`,
           );
         } else {
           console.log(
-            `[Firebase Mock Sandbox] Đã giả lập bắn thông báo thành công tới User: ${targetUserId}`,
+            `[Firebase Mock Sandbox] Simulated push notification successfully sent to User: ${targetUserId}`,
           );
         }
       } else {
         console.warn(
-          `[Firebase FCM] Bỏ qua gửi thông báo vì không tìm thấy fcmToken hợp lệ của User: ${targetUserId}`,
+          `[Firebase FCM] Skipping notification — no valid fcmToken found for User: ${targetUserId}`,
         );
       }
     } catch (fcmError) {
       console.error(
-        "[Firebase FCM Error] Lỗi trong quá trình gửi tin nhắn lên thiết bị:",
+        "[Firebase FCM Error] Error sending message to device:",
         fcmError.message,
       );
     }

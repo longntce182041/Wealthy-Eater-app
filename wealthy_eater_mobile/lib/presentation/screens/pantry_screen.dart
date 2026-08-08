@@ -253,15 +253,21 @@ class _PantryScreenState extends State<PantryScreen> {
               child: SizedBox(
                 height: 160,
                 width: double.infinity,
-                child: kIsWeb
-                    ? Image.network(
-                        provider.scannedImagePath!,
-                        fit: BoxFit.cover,
-                      )
-                    : Image.file(
-                        File(provider.scannedImagePath!),
-                        fit: BoxFit.cover,
-                      ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    kIsWeb
+                        ? Image.network(
+                            provider.scannedImagePath!,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.file(
+                            File(provider.scannedImagePath!),
+                            fit: BoxFit.cover,
+                          ),
+                    if (provider.isLoading) const _ScanningOverlay(),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -702,10 +708,13 @@ class _PantryScreenState extends State<PantryScreen> {
                 : () async {
                     await provider.savePantry();
                     if (context.mounted) {
+                      final err = provider.error;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Virtual Fridge saved successfully!'),
-                          backgroundColor: AppColors.primary,
+                        SnackBar(
+                          content: Text(err != null
+                              ? 'Failed to save: $err'
+                              : 'Virtual Fridge saved successfully!'),
+                          backgroundColor: err != null ? AppColors.error : AppColors.primary,
                         ),
                       );
                     }
@@ -940,11 +949,13 @@ class _IngredientRowState extends State<_IngredientRow> {
                       borderSide: const BorderSide(color: AppColors.primary),
                     ),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 'g', child: Text('g')),
-                    DropdownMenuItem(value: 'ml', child: Text('ml')),
-                    DropdownMenuItem(value: 'pieces', child: Text('pcs')),
-                    DropdownMenuItem(value: 'units', child: Text('unit')),
+                  items: [
+                    const DropdownMenuItem(value: 'g', child: Text('g')),
+                    const DropdownMenuItem(value: 'ml', child: Text('ml')),
+                    const DropdownMenuItem(value: 'pieces', child: Text('pcs')),
+                    const DropdownMenuItem(value: 'units', child: Text('unit')),
+                    if (!['', 'g', 'ml', 'pieces', 'units'].contains(widget.item.unit))
+                      DropdownMenuItem(value: widget.item.unit, child: Text(widget.item.unit)),
                   ],
                   onChanged: (val) {
                     if (val != null) {
@@ -960,3 +971,68 @@ class _IngredientRowState extends State<_IngredientRow> {
     );
   }
 }
+
+// ── Animated Scanner Overlay Widget ──
+class _ScanningOverlay extends StatefulWidget {
+  const _ScanningOverlay();
+
+  @override
+  State<_ScanningOverlay> createState() => _ScanningOverlayState();
+}
+
+class _ScanningOverlayState extends State<_ScanningOverlay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.35),
+              ),
+            ),
+            Positioned(
+              top: _controller.value * 160,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.secondary,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.secondary.withValues(alpha: 0.8),
+                      blurRadius: 12,
+                      spreadRadius: 3,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
