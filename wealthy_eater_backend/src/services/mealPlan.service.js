@@ -1239,13 +1239,6 @@ class MealPlanService {
       matched_in_system: false,
       note: scanResult?.note || "⚠️ Reference Warning: AI analysis from 2D camera images estimates ingredient amounts based strictly on visual appearance. Please manually check and adjust actual portion weight (g) before logging."
     };
-    }
-
-    return {
-      ...scanResult,
-      matched_in_system: false,
-      note: ""
-    };
   }
 
   async logCustomRecipe(userId, recipeId, actualWeight, dateStr) {
@@ -1301,7 +1294,6 @@ class MealPlanService {
     await MealPlan.deleteOne({ _id: planId });
 
     return { message: 'Meal plan deleted successfully' };
->>>>>>> develop
   }
 }
 
