@@ -663,51 +663,29 @@ class _ResultDashboard extends StatelessWidget {
         ...result.ingredients.map((ing) => _buildIngredientTile(ing)),
         
         // ── AI Disclaimer Note ──
-<<<<<<< HEAD
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.amber.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.amber.shade200),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline_rounded, color: Colors.amber.shade900, size: 16),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  result.note,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.amber.shade900,
-                    fontWeight: FontWeight.w500,
-                    height: 1.35,
-=======
         if (result.note.isNotEmpty) ...[
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade50,
+              color: Colors.amber.shade50,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade200),
+              border: Border.all(color: Colors.amber.shade200),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline_rounded, color: Colors.grey.shade600, size: 16),
+                Icon(Icons.info_outline_rounded, color: Colors.amber.shade900, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     result.note,
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade600,
-                      height: 1.3,
+                      color: Colors.amber.shade900,
+                      fontWeight: FontWeight.w500,
+                      height: 1.35,
                     ),
->>>>>>> develop
                   ),
                 ),
               ],
