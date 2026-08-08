@@ -18,12 +18,17 @@ class MealImageScanScreen extends StatefulWidget {
 }
 
 class _MealImageScanScreenState extends State<MealImageScanScreen> {
+  MealImageScanProvider? _scanProvider;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scanProvider = Provider.of<MealImageScanProvider>(context, listen: false);
+  }
+
   @override
   void dispose() {
-    final provider = Provider.of<MealImageScanProvider>(context, listen: false);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      provider.clear();
-    });
+    _scanProvider?.clear();
     super.dispose();
   }
 
