@@ -1112,7 +1112,79 @@ class MealPlanService {
   }
 
   async scanMealImage(file) {
-    return await n8nService.scanMealImage(file);
+    let scanResult = await n8nService.scanMealImage(file);
+
+    // Normalize array or nested payload if returned from n8n
+    if (Array.isArray(scanResult) && scanResult.length > 0) {
+      scanResult = scanResult[0];
+    }
+    if (scanResult && typeof scanResult === 'object' && scanResult.data && !scanResult.meal_name) {
+      scanResult = scanResult.data;
+    }
+
+    try {
+      const Recipe = require('../models/Recipe');
+      const RecipeNutrition = require('../models/RecipeNutrition');
+      const RecipeIngredient = require('../models/RecipeIngredient');
+      const Ingredient = require('../models/Ingredient');
+
+      if (scanResult && scanResult.meal_name) {
+        const matchedRecipe = await Recipe.findOne({
+          name: { $regex: new RegExp(`^${scanResult.meal_name.trim()}$`, 'i') }
+        }).lean();
+
+        if (matchedRecipe) {
+          const nutrition = await RecipeNutrition.findOne({ recipe_id: matchedRecipe._id }).lean();
+          const recipeIngredients = await RecipeIngredient.find({ recipe_id: matchedRecipe._id }).lean();
+
+          const ingredientsList = [];
+          for (const ring of recipeIngredients) {
+            const ingDetails = await Ingredient.findById(ring.ingredient_id).lean();
+            ingredientsList.push({
+              name: ingDetails ? ingDetails.name : "Ingredient",
+              estimated_amount: ring.quantity,
+              estimated_unit: ring.unit || (ingDetails ? ingDetails.unit : "g"),
+              nutrition: {
+                kcal: ring.calories || 0,
+                protein: ring.protein || 0,
+                carbs: ring.carbs || 0,
+                fats: ring.fat || 0
+              }
+            });
+          }
+
+          return {
+            meal_name: matchedRecipe.name,
+            recipe_id: matchedRecipe._id,
+            image_url: matchedRecipe.image_url || scanResult.image_url,
+            // Strict confidence score capped at 0.80 for 2D matched recipe templates
+            confidence: 0.80,
+            ingredients: ingredientsList.length > 0 ? ingredientsList : (scanResult.ingredients || []),
+            totals: {
+              kcal: nutrition ? nutrition.calories : (scanResult.totals?.kcal || 0),
+              protein: nutrition ? nutrition.protein : (scanResult.totals?.protein || 0),
+              carbs: nutrition ? nutrition.carbs : (scanResult.totals?.carbs || 0),
+              fats: nutrition ? nutrition.fat : (scanResult.totals?.fats || 0)
+            },
+            matched_in_system: true,
+            note: "⚠️ Reference Warning: AI matched this dish with system database recipes, but portion estimation from 2D camera images carries visual margin of error. Please check and adjust actual portion weight (g) manually."
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ [MealPlanService] Recipe lookup failed during scan meal:', err.message);
+    }
+
+    // Strict confidence cap for raw 2D visual AI scan (max 0.65)
+    const rawConfidence = parseFloat(scanResult?.confidence);
+    const strictConfidence = Math.min(0.65, Math.max(0.30, isNaN(rawConfidence) ? 0.55 : rawConfidence));
+
+    return {
+      ...(scanResult || {}),
+      confidence: strictConfidence,
+      matched_in_system: false,
+      note: scanResult?.note || "⚠️ Reference Warning: AI analysis from 2D camera images estimates ingredient amounts based strictly on visual appearance. Please manually check and adjust actual portion weight (g) before logging."
+    };
   }
 }
 
