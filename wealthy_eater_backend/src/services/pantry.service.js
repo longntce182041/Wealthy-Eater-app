@@ -95,7 +95,7 @@ class PantryService {
       rawIngredients = data.inventory || data.pantry_ingredients || (Array.isArray(data) ? data : []);
     } catch (error) {
       console.warn('⚠️ [PantryService] n8n scan service failed or offline:', error.message);
-      
+
       const apiKey = (process.env.GOOGLE_API_KEY || '').split(',')[0].trim();
       if (apiKey) {
         console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis for Pantry Scan...");
@@ -103,7 +103,7 @@ class PantryService {
           // Model verified at ai.google.dev/gemini-api/docs/models (updated 2026-08)
           const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.5-flash'; // gemini-flash-latest has been deprecated
           const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-          
+
           const prompt = [
             "You are an expert culinary AI assistant.",
             "Analyze the image of this pantry or fridge and return a list of visible ingredients.",
@@ -195,10 +195,10 @@ class PantryService {
       .populate('allergies', 'name')
       .populate('dislike_ingredients', 'name');
 
-    const allergies = userDietary && userDietary.allergies 
+    const allergies = userDietary && userDietary.allergies
       ? userDietary.allergies.map(a => a.name).filter(Boolean)
       : [];
-    const dislikes = userDietary && userDietary.dislike_ingredients 
+    const dislikes = userDietary && userDietary.dislike_ingredients
       ? userDietary.dislike_ingredients.map(d => d.name).filter(Boolean)
       : [];
 
