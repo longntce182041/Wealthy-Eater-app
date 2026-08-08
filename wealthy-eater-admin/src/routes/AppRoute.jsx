@@ -4,7 +4,7 @@ import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 // ĐỒNG BỘ CHUẨN CẤU TRÚC THƯ MỤC THỰC TẾ CỦA BẠN:
 import DashboardPage from "../pages/Dashboard.jsx"; // File Dashboard.jsx nằm trực tiếp trong pages
 import IngredientsPage from "../pages/ingredients/ingredients.jsx";
-import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx";
+import MicronutrientsPage from "../pages/micronutrients/micronutrients.jsx"; 
 import RecipesPage from "../pages/recipes/recipes.jsx"; 
 import RecipeDetail from '../pages/recipes/recipe-detail';
 import AddRecipePage from "../pages/recipes/add-recipe";
@@ -14,6 +14,10 @@ import NutritionistListPage from "../pages/nutritionist/nutritionist-list.jsx";
 import LoginPage from "../pages/Login.jsx"; 
 import AdminLayout from "../layouts/AdminLayout.jsx";
 import PlatformAnalytics from "../pages/analytics/PlatformAnalytics.jsx";
+
+// 🎯 ĐÃ SỬA ĐÚNG PATH IMPORT (Sử dụng ../pages thay vì ./pages):
+import CommissionSettingsPage from "../pages/commission-settings/commission-settings.jsx";
+import TransactionLogsPage from "../pages/transaction/transaction-logs.jsx";
 
 // Route bảo vệ yêu cầu trạng thái đăng nhập hệ thống
 const PrivateRoute = () => {
@@ -68,10 +72,16 @@ export function AppRoutes() {
             {/* Quản lý chuyên gia dinh dưỡng (Nutritionist) */}
             <Route path="nutritionists" element={<NutritionistListPage />} />
 
+            {/* Quản lý lịch sử giao dịch */}
+            <Route path="transactions" element={<TransactionLogsPage />} />
+
+            {/* 🎯 ĐÃ THÊM ROUTE CẤU HÌNH PHÍ CHIẾT KHẤU SÀN (UC-81) */}
+            <Route path="settings/commission" element={<CommissionSettingsPage />} />
+
             {/* Phân hệ quản lý Công thức nấu ăn (Recipes) */}
             <Route path="recipes" element={<RecipesPage />} /> 
             
-            {/* Đưa trang static (add) lên trên động (:id) để tránh lỗi route trùng lập */}
+            {/* Đưa trang static (add) lên trên động (:id) để tránh lỗi route trùng lặp */}
             <Route path="recipes/add" element={<AddRecipePage />} />
             <Route path="recipes/edit/:id" element={<EditRecipePage />} />
             

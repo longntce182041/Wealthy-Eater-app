@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
 
 class ProfileFormScreen extends StatefulWidget {
@@ -95,6 +96,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     try {
       final auth = context.read<AuthProvider>();
       final metadata = await auth.fetchSetupMetadata();
+      if (!mounted) return;
       if (metadata != null) {
         setState(() {
           _dbIngredients = metadata['ingredients'] ?? [];
@@ -104,9 +106,11 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
     } catch (e) {
       debugPrint('Error loading metadata: $e');
     } finally {
-      setState(() {
-        _isLoadingMetadata = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingMetadata = false;
+        });
+      }
     }
   }
 
@@ -118,7 +122,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter your full name'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.error,
           ),
         );
         return;
@@ -131,7 +135,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter a valid weight (30-300 kg)'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.error,
           ),
         );
         return;
@@ -217,14 +221,14 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(auth.errorMessage ?? 'Save failed'),
-            backgroundColor: Colors.redAccent,
+            backgroundColor: AppColors.error,
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile setup completed successfully!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Text('Profile setup completed successfully!'),
+            backgroundColor: AppColors.primary,
           ),
         );
         if (Navigator.canPop(context)) {
@@ -232,10 +236,11 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         }
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Save failed: $e'),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: AppColors.error,
         ),
       );
     }

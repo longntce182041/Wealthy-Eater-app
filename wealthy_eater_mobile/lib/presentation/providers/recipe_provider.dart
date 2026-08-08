@@ -79,6 +79,10 @@ class RecipeProvider extends ChangeNotifier {
   List<RecipeReviewEntity> currentRecipeReviews = const [];
   Map<String, dynamic> reviewStats = const {};
   RecipeReviewEntity? myReviewForCurrentRecipe;
+  
+  int currentRecipeReviewsPage = 1;
+  bool hasMoreRecipeReviews = false;
+  bool isLoadingMoreRecipeReviews = false;
 
   bool isSubmittingReview = false;
   String? reviewSubmitError;
@@ -88,6 +92,10 @@ class RecipeProvider extends ChangeNotifier {
   RecipeViewState myReviewsListState = RecipeViewState.initial;
   List<dynamic> myReviewsItems = const [];
   Map<String, dynamic> myReviewsMeta = const {};
+
+  int myReviewsPage = 1;
+  bool hasMoreMyReviews = false;
+  bool isLoadingMoreMyReviews = false;
 
   // ════════════════════════════════════════════════════════════════════════════
   // BROWSE
@@ -314,12 +322,16 @@ class RecipeProvider extends ChangeNotifier {
   Future<void> loadRecipeReviews(String recipeId, {int page = 1}) async {
     reviewsState = RecipeViewState.loading;
     reviewsError = null;
+    currentRecipeReviewsPage = page;
     notifyListeners();
 
     try {
       final result = await getRecipeReviewsUseCase(recipeId, page: page, limit: 10);
       currentRecipeReviews = List<RecipeReviewEntity>.from(result['reviews'] as List? ?? []);
       reviewStats          = result['stats']   as Map<String, dynamic>? ?? {};
+      
+      final pagination = result['pagination'] as Map<String, dynamic>? ?? {};
+      hasMoreRecipeReviews = pagination['hasMore'] as bool? ?? false;
       
       // Update the average rating on the selected recipe so the top UI header updates real-time
       if (selectedRecipe?.id == recipeId) {
@@ -340,6 +352,32 @@ class RecipeProvider extends ChangeNotifier {
       reviewsError = mapError(e).message;
     }
     notifyListeners();
+  }
+
+  Future<void> loadMoreRecipeReviews(String recipeId) async {
+    if (isLoadingMoreRecipeReviews || !hasMoreRecipeReviews) return;
+    
+    isLoadingMoreRecipeReviews = true;
+    notifyListeners();
+
+    try {
+      final nextPage = currentRecipeReviewsPage + 1;
+      final result = await getRecipeReviewsUseCase(recipeId, page: nextPage, limit: 10);
+      
+      final newReviews = List<RecipeReviewEntity>.from(result['reviews'] as List? ?? []);
+      currentRecipeReviews = [...currentRecipeReviews, ...newReviews];
+      
+      final pagination = result['pagination'] as Map<String, dynamic>? ?? {};
+      hasMoreRecipeReviews = pagination['hasMore'] as bool? ?? false;
+      if (newReviews.isNotEmpty) {
+        currentRecipeReviewsPage = nextPage;
+      }
+    } catch (_) {
+      // Silently fail or show a toast
+    } finally {
+      isLoadingMoreRecipeReviews = false;
+      notifyListeners();
+    }
   }
 
   Future<void> loadMyReview(String recipeId) async {
@@ -385,11 +423,13 @@ class RecipeProvider extends ChangeNotifier {
             'level_cooking': selectedRecipe!.difficulty,
           }
         };
-        myReviewsItems.removeWhere((item) {
+        final updatedItems = List<dynamic>.from(myReviewsItems);
+        updatedItems.removeWhere((item) {
           final r = item['recipe_id'] as Map<String, dynamic>? ?? {};
           return (r['_id'] ?? '') == recipeId;
         });
-        myReviewsItems.insert(0, reviewMap);
+        updatedItems.insert(0, reviewMap);
+        myReviewsItems = updatedItems;
       } else {
         loadMyReviewsList();
       }
@@ -412,7 +452,9 @@ class RecipeProvider extends ChangeNotifier {
       await loadRecipeReviews(recipeId);
       
       // Optimistically remove from My Reviews tab
-      myReviewsItems.removeWhere((item) => (item['_id'] ?? '') == reviewId);
+      final updatedItems = List<dynamic>.from(myReviewsItems);
+      updatedItems.removeWhere((item) => (item['_id'] ?? '') == reviewId);
+      myReviewsItems = updatedItems;
     } catch (_) {}
     notifyListeners();
   }
@@ -423,12 +465,15 @@ class RecipeProvider extends ChangeNotifier {
 
   Future<void> loadMyReviewsList({int page = 1}) async {
     myReviewsListState = RecipeViewState.loading;
+    myReviewsPage = page;
     notifyListeners();
 
     try {
       final result = await getMyReviewsListUseCase(page: page, limit: 20);
       final rawItems = result['items'] as List? ?? [];
       myReviewsMeta      = result['meta']  as Map<String, dynamic>? ?? {};
+
+      hasMoreMyReviews = (myReviewsMeta['pagination']?['hasMore'] as bool?) ?? false;
 
       // Filter out reviews for archived and draft recipes
       myReviewsItems = rawItems.where((item) {
@@ -446,6 +491,41 @@ class RecipeProvider extends ChangeNotifier {
       errorMessage       = mapError(e).message;
     }
     notifyListeners();
+  }
+
+  Future<void> loadMoreMyReviewsList() async {
+    if (isLoadingMoreMyReviews || !hasMoreMyReviews) return;
+
+    isLoadingMoreMyReviews = true;
+    notifyListeners();
+
+    try {
+      final nextPage = myReviewsPage + 1;
+      final result = await getMyReviewsListUseCase(page: nextPage, limit: 20);
+      final rawItems = result['items'] as List? ?? [];
+      myReviewsMeta      = result['meta']  as Map<String, dynamic>? ?? {};
+
+      hasMoreMyReviews = (myReviewsMeta['pagination']?['hasMore'] as bool?) ?? false;
+
+      final newItems = rawItems.where((item) {
+        final recipe = item['recipe_id'];
+        if (recipe is Map) {
+          final status = (recipe['status'] ?? '').toString().toLowerCase();
+          return status != 'archived' && status != 'draft';
+        }
+        return false;
+      }).toList();
+
+      myReviewsItems = [...myReviewsItems, ...newItems];
+      if (rawItems.isNotEmpty) {
+        myReviewsPage = nextPage;
+      }
+    } catch (_) {
+      // Silently fail
+    } finally {
+      isLoadingMoreMyReviews = false;
+      notifyListeners();
+    }
   }
 
   void reset() {

@@ -7,6 +7,8 @@ class MealImageScanResult {
   final List<MealImageScanIngredient> ingredients;
   final MealImageScanTotals totals;
   final String note;
+  final String? recipeId;
+  final bool matchedInSystem;
 
   const MealImageScanResult({
     required this.mealName,
@@ -14,6 +16,8 @@ class MealImageScanResult {
     required this.ingredients,
     required this.totals,
     required this.note,
+    this.recipeId,
+    this.matchedInSystem = false,
   });
 
   factory MealImageScanResult.fromJson(Map<String, dynamic> json) {
@@ -38,6 +42,8 @@ class MealImageScanResult {
       ),
       note: (json['note'] as String?) ??
           '⚠️ Reference Warning: Nutritional values and portion amounts are estimated from 2D AI image analysis.',
+      recipeId: json['recipe_id']?.toString() ?? json['recipeId']?.toString(),
+      matchedInSystem: json['matched_in_system'] as bool? ?? false,
     );
   }
 }

@@ -254,4 +254,62 @@ class NutritionistService {
       throw mapError(e);
     }
   }
+
+  /// DELETE /api/meal-plans/:planId
+  /// Deletes a meal plan created by the nutritionist.
+  Future<bool> deleteMealPlan(String planId) async {
+    try {
+      final response = await apiClient.delete('/api/meal-plans/$planId');
+
+      return response.statusCode == 200 && response.data['success'] == true;
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// GET /api/user/recipes — used by the recipe picker inside "Adjust Meal" bottom sheet.
+  ///
+  /// Supports:
+  /// - [search]      text search against recipe name
+  /// - [mealType]    optional filter: BREAKFAST | LUNCH | DINNER | SNACK
+  /// - [minCalories] / [maxCalories] optional calorie range filter
+  /// - [page] / [limit] for pagination (load-more)
+  ///
+  /// Returns `{ 'items': List, 'meta': Map }` so the caller can detect whether
+  /// more pages are available via `meta['totalPages']`.
+  Future<Map<String, dynamic>> searchRecipes({
+    String search = '',
+    String mealType = '',
+    double? minCalories,
+    double? maxCalories,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    try {
+      final Map<String, dynamic> params = {
+        'page': page,
+        'limit': limit,
+      };
+      if (search.trim().isNotEmpty) params['search'] = search.trim();
+      if (mealType.trim().isNotEmpty) params['mealType'] = mealType.trim().toUpperCase();
+      if (minCalories != null) params['minCalories'] = minCalories;
+      if (maxCalories != null) params['maxCalories'] = maxCalories;
+
+      final response = await apiClient.get(
+        '/api/user/recipes',
+        queryParameters: params,
+      );
+
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return {
+          'items': (response.data['data'] as List? ?? []),
+          'meta': (response.data['meta'] as Map<String, dynamic>? ?? {}),
+        };
+      }
+
+      throw AppError(response.data['message'] ?? 'Unable to search recipes');
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
 }

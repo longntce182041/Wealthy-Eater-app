@@ -295,4 +295,109 @@ class NutritionistProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  Future<bool> deleteMealPlan(String planId) async {
+    try {
+      final success = await _service.deleteMealPlan(planId);
+      if (success) {
+        // Remove from local list
+        _nutritionistPlans.removeWhere((p) => (p['mealPlanId'] ?? p['_id'] ?? p['id']) == planId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('Failed to delete meal plan: $e');
+      return false;
+    }
+  }
+
+  // ── UC-52: Recipe Search for Adjust Meal picker ──────────────────────────────
+  List<Map<String, dynamic>> _recipeSearchResults = [];
+  bool _isSearchingRecipes = false;
+  String? _recipeSearchError;
+  bool _hasMoreRecipes = false;
+  int _recipeSearchPage = 1;
+
+  List<Map<String, dynamic>> get recipeSearchResults => _recipeSearchResults;
+  bool get isSearchingRecipes => _isSearchingRecipes;
+  String? get recipeSearchError => _recipeSearchError;
+  bool get hasMoreRecipes => _hasMoreRecipes;
+
+  /// Search recipes for the recipe picker inside the "Adjust Meal" bottom sheet.
+  ///
+  /// - [reset=true]  → first search / new query (clears previous results & resets page to 1)
+  /// - [reset=false] → load-more (appends results, increments page)
+  Future<void> searchRecipesForSwap({
+    String query = '',
+    String mealType = '',
+    double? minCalories,
+    double? maxCalories,
+    bool reset = true,
+  }) async {
+    if (reset) {
+      _recipeSearchResults = [];
+      _recipeSearchPage = 1;
+      _hasMoreRecipes = false;
+    }
+
+    _isSearchingRecipes = true;
+    _recipeSearchError = null;
+    notifyListeners();
+
+    try {
+      const int pageSize = 20;
+      final result = await _service.searchRecipes(
+        search: query,
+        mealType: mealType,
+        minCalories: minCalories,
+        maxCalories: maxCalories,
+        page: _recipeSearchPage,
+        limit: pageSize,
+      );
+
+      final items = (result['items'] as List)
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      final meta = result['meta'] as Map<String, dynamic>? ?? {};
+      final totalPages = (meta['totalPages'] as num?)?.toInt() ?? 1;
+
+      if (reset) {
+        _recipeSearchResults = items;
+      } else {
+        _recipeSearchResults = [..._recipeSearchResults, ...items];
+      }
+
+      _hasMoreRecipes = _recipeSearchPage < totalPages;
+      if (!reset) _recipeSearchPage++;
+    } catch (e) {
+      _recipeSearchError = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      _isSearchingRecipes = false;
+      notifyListeners();
+    }
+  }
+
+  /// Load next page of recipe search results (called on scroll-to-end).
+  Future<void> loadMoreRecipes({
+    String query = '',
+    String mealType = '',
+  }) async {
+    if (!_hasMoreRecipes || _isSearchingRecipes) return;
+    _recipeSearchPage++;
+    await searchRecipesForSwap(
+      query: query,
+      mealType: mealType,
+      reset: false,
+    );
+  }
+
+  /// Clear recipe search state when bottom sheet closes.
+  void clearRecipeSearch() {
+    _recipeSearchResults = [];
+    _isSearchingRecipes = false;
+    _recipeSearchError = null;
+    _hasMoreRecipes = false;
+    _recipeSearchPage = 1;
+    notifyListeners();
+  }
 }

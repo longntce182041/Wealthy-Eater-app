@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../providers/nutritionist_provider.dart';
 import 'meal_plan_editor_screen.dart';
 
@@ -148,20 +149,9 @@ class _ClientProfileCard extends StatelessWidget {
                   children: [
                     Text(
                       clientName,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                         color: theme.colorScheme.onPrimaryContainer,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'ID: $clientId',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onPrimaryContainer
-                            .withValues(alpha: 0.7),
-                        fontFamily: 'monospace',
-                        fontSize: 11,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -179,11 +169,6 @@ class _ClientProfileCard extends StatelessWidget {
                 icon: Icons.restaurant_menu_outlined,
                 label: 'Recipe-Based',
                 color: theme.colorScheme.primary,
-              ),
-              _InfoChip(
-                icon: Icons.science_outlined,
-                label: 'LP Optimizer',
-                color: Colors.teal,
               ),
               _InfoChip(
                 icon: Icons.calendar_month_outlined,
@@ -436,16 +421,16 @@ class _ResultCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.green.shade50,
+            color: AppColors.primaryLight,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(16),
               topRight: Radius.circular(16),
             ),
-            border: Border.all(color: Colors.green.shade200),
+            border: Border.all(color: AppColors.border),
           ),
           child: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green.shade600, size: 32),
+              Icon(Icons.check_circle, color: AppColors.primary, size: 32),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -456,14 +441,14 @@ class _ResultCard extends StatelessWidget {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
-                        color: Colors.green.shade800,
+                        color: AppColors.primaryDark,
                       ),
                     ),
                     Text(
                       'Status: $status',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.green.shade700,
+                        color: AppColors.primaryDark,
                       ),
                     ),
                   ],
@@ -511,18 +496,18 @@ class _ResultCard extends StatelessWidget {
             color: Colors.grey.shade50,
             border: Border(
               top: BorderSide(color: Colors.grey.shade200),
-              left: BorderSide(color: Colors.green.shade200),
-              right: BorderSide(color: Colors.green.shade200),
+              left: BorderSide(color: AppColors.border),
+              right: BorderSide(color: AppColors.border),
             ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _MetaRow(label: 'Meal Plan ID', value: mealPlanId),
+              _MetaRow(label: 'Plan Duration', value: '7 Days (21 Meals)'),
               const Divider(height: 16),
               _MetaRow(
-                  label: 'Ingredient Components',
-                  value: '$itemsCount items allocated'),
+                  label: 'Allocation Status',
+                  value: 'Complete ($itemsCount items allocated)'),
             ],
           ),
         ),
@@ -536,7 +521,7 @@ class _ResultCard extends StatelessWidget {
               bottomLeft: Radius.circular(16),
               bottomRight: Radius.circular(16),
             ),
-            border: Border.all(color: Colors.green.shade200),
+            border: Border.all(color: AppColors.border),
           ),
           child: Row(
             children: [

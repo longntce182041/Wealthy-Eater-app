@@ -20,6 +20,7 @@ class ShoppingListRepositoryImpl implements ShoppingListRepository {
   Future<List<ShoppingListItemEntity>> addFromRecipe({
     required String recipeId,
     int? servings,
+    List<Map<String, dynamic>>? customIngredients,
   }) async {
     try {
       final response = await _apiClient.post(
@@ -27,6 +28,7 @@ class ShoppingListRepositoryImpl implements ShoppingListRepository {
         data: {
           'recipeId': recipeId,
           'servings': ?servings,
+          'customIngredients': ?customIngredients,
         },
       );
 

@@ -9,6 +9,8 @@ import '../../core/theme/app_colors.dart';
 import 'chatbot_screen.dart';
 import 'profile_form_screen.dart';
 import 'meal_image_scan_screen.dart';
+import 'pantry_screen.dart';
+import '../widgets/base_card.dart';
 
 class DashboardHomeTab extends StatefulWidget {
   final UserEntity? user;
@@ -69,19 +71,19 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
         if (bmi > 0) {
           if (bmi < 18.5) {
             bmiCategory = 'Underweight';
-            bmiColor = Colors.blue;
+            bmiColor = const Color(0xFF0288D1); // Deep light blue
             bmiMessage = 'Your body weight is lower than standard. Consider increasing calorie intake and consulting a nutritionist.';
           } else if (bmi < 25.0) {
             bmiCategory = 'Normal';
-            bmiColor = Colors.green;
+            bmiColor = AppColors.success;
             bmiMessage = 'Great job! Your weight is in the healthy range. Keep maintaining your active lifestyle and balanced eating habits.';
           } else if (bmi < 30.0) {
             bmiCategory = 'Overweight';
-            bmiColor = Colors.orange;
+            bmiColor = AppColors.warning;
             bmiMessage = 'Your weight is slightly above standard. Combining portion control with regular exercise will help you reach a healthy range.';
           } else {
             bmiCategory = 'Obese';
-            bmiColor = Colors.red;
+            bmiColor = AppColors.error;
             bmiMessage = 'Your weight is significantly above standard. We recommend speaking with a certified nutritionist to build a structured health plan.';
           }
         }
@@ -118,16 +120,11 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               const SizedBox(height: 10),
               
               // BMI Card
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              BaseCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -190,7 +187,6 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                       ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
 
@@ -198,16 +194,11 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               Row(
                 children: [
                   Expanded(
-                    child: Card(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                    child: BaseCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                             Row(
                               children: [
                                 Container(
@@ -261,21 +252,15 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                             ),
                           ],
                         ),
-                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Card(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                    child: BaseCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                             Row(
                               children: [
                                 Container(
@@ -331,7 +316,6 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                             ),
                           ],
                         ),
-                      ),
                     ),
                   ),
                 ],
@@ -339,18 +323,11 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               const SizedBox(height: 16),
               
               // Basic stats summary
-              Card(
-                color: Colors.grey.shade50,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
+              BaseCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
                       _buildStatSubItem('Height', '${height.toStringAsFixed(0)} cm'),
                       _buildDivider(),
                       _buildStatSubItem('Weight', '${weight.toStringAsFixed(1)} kg'),
@@ -360,7 +337,6 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                       _buildStatSubItem('Goal', goal.toUpperCase()),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 20),
 
@@ -368,6 +344,8 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               _buildNutriBotBanner(context),
               const SizedBox(height: 16),
               _buildMealScanBanner(context),
+              const SizedBox(height: 16),
+              _buildVirtualPantryBanner(context),
               const SizedBox(height: 16),
               _buildWeightTrackingCard(context, auth),
               const SizedBox(height: 20),
@@ -523,7 +501,79 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                   ),
                   SizedBox(height: 3),
                   Text(
-                    'Quét khay đồ ăn thực tế phân tích dinh dưỡng',
+                    'Scan your meal plate to analyze nutrition details',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white54,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVirtualPantryBanner(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const PantryScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF0D9488), Color(0xFF0F766E)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0D9488).withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.15),
+              ),
+              child: const Icon(
+                Icons.kitchen_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Virtual Fridge',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Manage your pantry ingredients',
                     style: TextStyle(
                       color: Colors.white70,
                       fontSize: 12,
@@ -567,16 +617,11 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
       }
     }
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return BaseCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -692,12 +737,12 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                                     setState(() => _isSaving = false);
                                   }
                                   if (success && mounted) {
-                                    scaffoldMessenger.showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Weight logged successfully!'),
-                                        backgroundColor: Colors.green,
-                                      ),
-                                    );
+                                     scaffoldMessenger.showSnackBar(
+                                       const SnackBar(
+                                         content: Text('Weight logged successfully!'),
+                                         backgroundColor: AppColors.primary,
+                                       ),
+                                     );
                                   } else if (!success && mounted) {
                                     scaffoldMessenger.showSnackBar(
                                       SnackBar(
@@ -757,7 +802,6 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
             ],
           ],
         ),
-      ),
     );
   }
 }
@@ -894,7 +938,7 @@ class _BmiGauge extends StatelessWidget {
                         ),
                         Expanded(
                           flex: 325, // 18.5 to 25 is 6.5 (32.5%)
-                          child: Container(color: Colors.green.shade400),
+                          child: Container(color: AppColors.primary),
                         ),
                         Expanded(
                           flex: 250, // 25 to 30 is 5.0 (25%)

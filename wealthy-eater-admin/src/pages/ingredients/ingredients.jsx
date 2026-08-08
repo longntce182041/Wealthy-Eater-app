@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useRef } from 'react';
 import apiClient from '../../services/api';
 import { Trash2, Edit, Plus, X, Image as ImageIcon, Search, ChevronLeft, ChevronRight, FileUp, PackageSearch, UploadCloud } from 'lucide-react';
 
-// 🎯 ĐỔI SANG THƯ VIỆN HOT TOAST Ở ĐÂY
+// 🎯 THƯ VIỆN HOT TOAST
 import { toast } from 'react-hot-toast'; 
 
 import { DataTable, DataTableRow, DataTableCell } from '../../components/ui/DataTable';
@@ -10,18 +10,18 @@ import { AdminButton } from '../../components/ui/AdminButton';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { EmptyState } from '../../components/ui/EmptyState';
 
-// 🎯 ĐỊNH NGHĨA SẴN KHUNG STYLE ĐỂ TÁI SỬ DỤNG CHO ĐẸP VÀ GỌN
+// 🎯 KHUNG STYLE CHO HOT TOAST
 const successStyle = {
     style: {
-        background: '#16a34a', // Màu xanh lá cây đậm
-        color: '#ffffff',      // Chữ trắng
+        background: '#16a34a',
+        color: '#ffffff',
     },
     iconTheme: { primary: '#ffffff', secondary: '#16a34a' } 
 };
 
 const errorStyle = {
     style: {
-        background: '#dc2626', // Màu đỏ hệ thống
+        background: '#dc2626',
         color: '#ffffff',
     }
 };
@@ -52,13 +52,15 @@ const IngredientPage = () => {
     const [showDetail, setShowDetail] = useState(false);
     const [detailData, setDetailData] = useState(null);
 
-    const blockInvalidChar = (e) => ['e', 'E', '+', '-', ',', '.'].includes(e.key) && e.preventDefault();
+    const blockInvalidChar = (e) => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault();
 
     const handleNumberChange = (field, value) => {
-        let val = value === '' ? '' : Number(value);
-        if (val > 10000) val = 10000;
-        if (val < 0) val = 0;
-        setFormData({ ...formData, [field]: val });
+        if (value === '') {
+            setFormData({ ...formData, [field]: '' });
+            return;
+        }
+        let normalized = value.toString().replace(',', '.');
+        setFormData({ ...formData, [field]: normalized });
     };
 
     const handleImageChange = (e) => {
@@ -66,7 +68,6 @@ const IngredientPage = () => {
         if (!file) return;
 
         if (!file.type.startsWith('image/')) {
-            // 🎯 SỬA THÔNG BÁO LỖI CHỌN FILE
             toast.error("Please select a valid image file (PNG, JPG, JPEG)", errorStyle);
             return;
         }
@@ -90,7 +91,6 @@ const IngredientPage = () => {
             }
         } catch (error) {
             console.error(error);
-            // 🎯 SỬA THÔNG BÁO LỖI FETCH DATA
             toast.error("Failed to fetch ingredients database", errorStyle);
         } finally {
             setLoading(false);
@@ -124,7 +124,6 @@ const IngredientPage = () => {
         if (!file) return;
         const fileExtension = file.name.split('.').pop().toLowerCase();
         if (fileExtension !== 'xlsx' && fileExtension !== 'xls') {
-            // 🎯 SỬA THÔNG BÁO LỖI ĐỊNH DẠNG EXCEL
             toast.error("Please upload an Excel file (.xlsx or .xls)", errorStyle);
             return;
         }
@@ -134,13 +133,11 @@ const IngredientPage = () => {
             setLoading(true);
             const res = await apiClient.post('/admin/ingredients/import', dataForm, { headers: { 'Content-Type': 'multipart/form-data' } });
             if (res.data.success) {
-                // 🎯 SỬA THÔNG BÁO IMPORT THÀNH CÔNG
                 toast.success(res.data.message || "Imported ingredients successfully!", successStyle);
                 fetchIngredients(); 
             }
         } catch (error) {
             console.error(error);
-            // 🎯 SỬA THÔNG BÁO IMPORT THẤT BẠI
             toast.error(error.response?.data?.message || "Failed to parse and import Excel file", errorStyle);
         } finally {
             setLoading(false);
@@ -164,26 +161,33 @@ const IngredientPage = () => {
                 const data = res.data.data;
                 setFormData({
                     name: data.name || '',
-                    calories_per_unit: data.calories_per_unit || '',
-                    protein: data.protein || 0,
-                    carbs: data.carbs || 0,
+                    calories_per_unit: data.calories_per_unit !== undefined ? data.calories_per_unit : '',
+                    protein: data.protein !== undefined ? data.protein : 0,
+                    carbs: data.carbs !== undefined ? data.carbs : 0,
                     fat: data.fat !== undefined ? data.fat : (data.fats || 0),
                     unit: data.unit || 'gram',
                     description: data.description || '',
                     image_file: null,
                     preview_url: data.image_url || '' 
                 });
+
                 const micros = (data.micronutrients || [])
-                    .filter(m => m.micronutrientId)
-                    .map(m => ({ 
-                        micronutrientId: m.micronutrientId?._id || m.micronutrientId || m._id || m.id, 
-                        amount: m.amount || 0
-                    }));
+                    .map(m => {
+                        const targetId = typeof m.micronutrientId === 'object' 
+                            ? (m.micronutrientId?._id || m.micronutrientId?.id) 
+                            : (m.micronutrientId || m._id || m.id);
+                        
+                        return {
+                            micronutrientId: targetId ? String(targetId) : '',
+                            amount: m.amount || 0
+                        };
+                    })
+                    .filter(m => m.micronutrientId !== '');
+
                 setSelectedMicros(micros);
             }
         } catch (error) {
             console.error(error);
-            // 🎯 SỬA THÔNG BÁO LỖI TẢI FORM EDIT
             toast.error("Failed to load details data record", errorStyle);
         }
         setShowModal(true);
@@ -194,12 +198,10 @@ const IngredientPage = () => {
         try {
             const res = await apiClient.delete(`/admin/ingredients/delete/${id}`);
             if (res.data.success) {
-                // 🎯 SỬA THÔNG BÁO XÓA THÀNH CÔNG
                 toast.success(res.data.message || "Deleted successfully!", successStyle);
                 fetchIngredients();
             }
         } catch (error) { 
-            // 🎯 SỬA THÔNG BÁO XÓA THẤT BẠI
             toast.error(error.response?.data?.message || "Error deleting selected ingredient", errorStyle); 
         }
     };
@@ -212,7 +214,6 @@ const IngredientPage = () => {
                 setShowDetail(true);
             }
         } catch (error) { 
-            // 🎯 SỬA THÔNG BÁO LỖI PROFILE CHI TIẾT
             toast.error('Failed to load ingredient details profile', errorStyle); 
         }
     };
@@ -220,26 +221,34 @@ const IngredientPage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            const parseNum = (val) => {
+                if (!val) return 0;
+                const str = String(val).replace(',', '.');
+                const num = parseFloat(str);
+                return isNaN(num) || num < 0 ? 0 : num;
+            };
+
             const cleanMicros = (selectedMicros || [])
-                .filter(m => m && m.micronutrientId && m.micronutrientId.trim() !== '')
+                .filter(m => m && m.micronutrientId && String(m.micronutrientId).trim() !== '' && parseNum(m.amount) > 0)
                 .map(m => ({
-                    micronutrientId: m.micronutrientId,
-                    amount: Number(m.amount) || 0
+                    micronutrientId: String(m.micronutrientId).trim(),
+                    amount: parseNum(m.amount)
                 }));
 
             const dataForm = new FormData();
             dataForm.append('name', formData.name ? formData.name.trim() : '');
-            dataForm.append('calories_per_unit', Number(formData.calories_per_unit) || 0);
-            dataForm.append('protein', Number(formData.protein) || 0);
-            dataForm.append('carbs', Number(formData.carbs) || 0);
-            dataForm.append('fat', Number(formData.fat) || 0);
+            dataForm.append('calories_per_unit', parseNum(formData.calories_per_unit));
+            dataForm.append('protein', parseNum(formData.protein));
+            dataForm.append('carbs', parseNum(formData.carbs));
+            dataForm.append('fat', parseNum(formData.fat));
             dataForm.append('unit', formData.unit || 'gram');
             dataForm.append('description', formData.description ? formData.description.trim() : '');
+            
             dataForm.append('micronutrients', JSON.stringify(cleanMicros));
 
             if (formData.image_file) {
-                dataForm.append('image_file', formData.image_file);
-            }
+                dataForm.append('imageFile', formData.image_file); 
+        }
 
             let res;
             const config = { headers: { 'Content-Type': 'multipart/form-data' } };
@@ -251,15 +260,18 @@ const IngredientPage = () => {
             }
             
             if (res.data && res.data.success) {
-                // 🎯 SỬA THÔNG BÁO SUBMIT FORM (LƯU / TẠO) THÀNH CÔNG
                 toast.success(res.data.message || "Saved successfully!", successStyle);
                 setShowModal(false);
                 fetchIngredients();
             }
         } catch (error) {
             console.error('Submit error:', error);
-            // 🎯 SỬA THÔNG BÁO SUBMIT THẤT BẠI
-            toast.error(error.response?.data?.message || "Action failed due to upload validation error", errorStyle);
+            
+            const serverMsg = error.response?.data?.error?.message 
+                || error.response?.data?.message 
+                || "Validation Error: Vui lòng kiểm tra lại dữ liệu nhập";
+
+            toast.error(serverMsg, errorStyle);
         }
     };
 
@@ -343,7 +355,7 @@ const IngredientPage = () => {
                                 </div>
                                 <div className="flex flex-col items-center">
                                     <span className="text-xs text-[var(--text-muted)] font-medium">Fats</span>
-                                    <span className="font-semibold text-red-500 dark:text-red-400">{item.fat || 0}g</span>
+                                    <span className="font-semibold text-rose-500 dark:text-rose-400">{item.fat || 0}g</span>
                                 </div>
                             </div>
                         </DataTableCell>
@@ -417,7 +429,7 @@ const IngredientPage = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Calories / Unit</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.calories_per_unit} onChange={e => handleNumberChange('calories_per_unit', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
+                                    <input type="text" onKeyDown={blockInvalidChar} value={formData.calories_per_unit} onChange={e => handleNumberChange('calories_per_unit', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Unit</label>
@@ -433,15 +445,15 @@ const IngredientPage = () => {
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Protein (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.protein} onChange={e => handleNumberChange('protein', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
+                                    <input type="text" onKeyDown={blockInvalidChar} value={formData.protein} onChange={e => handleNumberChange('protein', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Carbs (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.carbs} onChange={e => handleNumberChange('carbs', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
+                                    <input type="text" onKeyDown={blockInvalidChar} value={formData.carbs} onChange={e => handleNumberChange('carbs', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-[var(--text-main)] mb-1.5">Fats (g)</label>
-                                    <input type="number" onKeyDown={blockInvalidChar} value={formData.fat} onChange={e => handleNumberChange('fat', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
+                                    <input type="text" onKeyDown={blockInvalidChar} value={formData.fat} onChange={e => handleNumberChange('fat', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-main)] text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" required />
                                 </div>
                             </div>
                             
@@ -468,12 +480,12 @@ const IngredientPage = () => {
                                                 {availableMicros
                                                     .filter(a => {
                                                         const id = a._id || a.id;
-                                                        const already = selectedMicros.some((s, si) => s.micronutrientId === id && si !== idx);
-                                                        return !already || (m.micronutrientId && (m.micronutrientId === id));
+                                                        const already = selectedMicros.some((s, si) => String(s.micronutrientId) === String(id) && si !== idx);
+                                                        return !already || (m.micronutrientId && String(m.micronutrientId) === String(id));
                                                     })
                                                     .map(a => <option key={a._id || a.id} value={a._id || a.id}>{a.name}</option>)}
                                             </select>
-                                            <input type="number" min="0" onKeyDown={blockInvalidChar} value={m.amount}
+                                            <input type="text" onKeyDown={blockInvalidChar} value={m.amount}
                                                 onChange={e => {
                                                     const copy = [...selectedMicros];
                                                     copy[idx].amount = e.target.value;
@@ -500,80 +512,104 @@ const IngredientPage = () => {
                 </div>
             )}
 
+            {/* 🎯 MODAL DETAIL: KHÓA NỀN TRẮNG VÀ CHỮ ĐEN CỐ ĐỊNH (CỰC CỲ RÕ RÀNG) */}
             {showDetail && detailData && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-[1100] p-4">
-                    <div className="bg-[var(--card-bg)] p-6 rounded-2xl w-[520px] max-h-[90vh] overflow-y-auto relative shadow-xl border border-[var(--border)]">
-                        <button onClick={() => { setShowDetail(false); setDetailData(null); }} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer">
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-[1100] p-4">
+                    <div className="!bg-white p-6 rounded-2xl w-[520px] max-h-[90vh] overflow-y-auto relative shadow-2xl border border-slate-200 text-slate-900">
+                        <button onClick={() => { setShowDetail(false); setDetailData(null); }} className="absolute top-4 right-4 z-10 p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer">
                             <X className="w-5 h-5" />
                         </button>
                         
-                        <h3 className="mt-0 mb-4 text-xl font-bold text-[var(--text-h)]">{detailData.name}</h3>
-                        
-                        <div className="space-y-4 text-sm text-[var(--text-main)]">
-                            <div className="flex gap-4">
-                                <div className="bg-[var(--bg-muted)] px-3 py-2 rounded-lg flex-1">
-                                    <span className="block text-xs text-[var(--text-muted)] mb-1">Unit</span>
-                                    <span className="font-semibold">{detailData.unit}</span>
-                                </div>
-                                <div className="bg-[var(--bg-muted)] px-3 py-2 rounded-lg flex-1">
-                                    <span className="block text-xs text-[var(--text-muted)] mb-1">Calories / Unit</span>
-                                    <span className="font-semibold text-[var(--primary)]">{detailData.calories_per_unit} kcal</span>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-4">
-                                <div className="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-3 py-2 rounded-lg flex-1">
-                                    <span className="block text-xs opacity-70 mb-1">Protein</span>
-                                    <span className="font-bold">{detailData.protein}g</span>
-                                </div>
-                                <div className="bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 px-3 py-2 rounded-lg flex-1">
-                                    <span className="block text-xs opacity-70 mb-1">Carbs</span>
-                                    <span className="font-bold">{detailData.carbs}g</span>
-                                </div>
-                                <div className="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg flex-1">
-                                    <span className="block text-xs opacity-70 mb-1">Fats</span>
-                                    <span className="font-bold">{detailData.fat || 0}g</span>
-                                </div>
-                            </div>
-                            
-                            {detailData.description && (
-                                <div className="bg-[var(--bg-muted)] p-3 rounded-lg border border-[var(--border)]">
-                                    <strong className="block text-xs text-[var(--text-muted)] mb-1">Description</strong>
-                                    <p className="whitespace-pre-wrap">{detailData.description}</p>
+                        {/* HÌNH ẢNH NGUYÊN LIỆU */}
+                        <div className="w-full h-48 mb-5 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center relative shadow-inner">
+                            {detailData.image_url ? (
+                                <img src={detailData.image_url} alt={detailData.name} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="flex flex-col items-center gap-2 text-slate-400">
+                                    <ImageIcon className="w-10 h-10" />
+                                    <span className="text-xs">No image provided</span>
                                 </div>
                             )}
                         </div>
 
+                        {/* TIÊU ĐỀ NGUYÊN LIỆU CHỮ ĐEN ĐẬM */}
+                        <h3 className="mt-0 mb-4 text-2xl font-bold !text-slate-900">{detailData.name}</h3>
+                        
+                        <div className="space-y-4 text-sm">
+                            {/* THÔNG TIN UNIT & CALORIES */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex flex-col justify-center">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-0.5">Unit</span>
+                                    <span className="font-bold !text-slate-900 text-base">{detailData.unit}</span>
+                                </div>
+                                <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex flex-col justify-center">
+                                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-0.5">Calories / Unit</span>
+                                    <span className="font-extrabold text-emerald-800 text-base">{detailData.calories_per_unit} kcal</span>
+                                </div>
+                            </div>
+
+                            {/* CÁC CHỈ SỐ MACRO NỀN SÁNG CHỮ RÕ */}
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="bg-teal-50 border border-teal-200 p-3 rounded-xl text-center">
+                                    <span className="block text-xs font-bold uppercase tracking-wider text-teal-700 mb-1">Protein</span>
+                                    <span className="text-lg font-black text-teal-900">{detailData.protein}g</span>
+                                </div>
+                                <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-center">
+                                    <span className="block text-xs font-bold uppercase tracking-wider text-amber-700 mb-1">Carbs</span>
+                                    <span className="text-lg font-black text-amber-900">{detailData.carbs}g</span>
+                                </div>
+                                <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl text-center">
+                                    <span className="block text-xs font-bold uppercase tracking-wider text-rose-700 mb-1">Fats</span>
+                                    <span className="text-lg font-black text-rose-900">{detailData.fat || 0}g</span>
+                                </div>
+                            </div>
+                            
+                            {/* MÔ TẢ */}
+                            {detailData.description && (
+                                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                                    <strong className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Description</strong>
+                                    <p className="whitespace-pre-wrap !text-slate-800 text-sm leading-relaxed">{detailData.description}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* DANH SÁCH VI LƯỢNG */}
                         <div className="mt-6">
-                            <h4 className="text-sm font-bold text-[var(--text-h)] border-b border-[var(--border)] pb-2 mb-3">Micronutrients Profile</h4>
+                            <h4 className="text-sm font-bold !text-slate-900 border-b border-slate-200 pb-2 mb-3">Micronutrients Profile</h4>
                             {detailData.micronutrients && detailData.micronutrients.length ? (
-                                <div className="border border-[var(--border)] rounded-lg overflow-hidden">
+                                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                     <table className="w-full text-sm text-left">
-                                        <thead className="bg-[var(--bg-muted)]">
+                                        <thead className="bg-slate-100 !text-slate-900 border-b border-slate-200">
                                             <tr>
-                                                <th className="px-4 py-2 font-semibold text-[var(--text-muted)]">Name</th>
-                                                <th className="px-4 py-2 font-semibold text-[var(--text-muted)]">Amount</th>
-                                                <th className="px-4 py-2 font-semibold text-[var(--text-muted)]">Unit</th>
+                                                <th className="px-4 py-2.5 font-bold">Name</th>
+                                                <th className="px-4 py-2.5 font-bold">Amount</th>
+                                                <th className="px-4 py-2.5 font-bold">Unit</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-[var(--border)]">
+                                        <tbody className="divide-y divide-slate-200">
                                             {detailData.micronutrients.map((m, i) => (
-                                                <tr key={i} className="bg-[var(--card-bg)] hover:bg-[var(--bg-muted)]/50 transition-colors">
-                                                    <td className="px-4 py-2 font-medium">{m.micronutrientId?.name || m.name || m.micronutrientId}</td>
-                                                    <td className="px-4 py-2 font-bold text-[var(--primary)]">{m.amount}</td>
-                                                    <td className="px-4 py-2 text-[var(--text-muted)]">{m.micronutrientId?.unit || m.unit || '-'}</td>
+                                                <tr key={i} className="!bg-white hover:bg-slate-50 transition-colors">
+                                                    <td className="px-4 py-2.5 font-semibold !text-slate-900">{m.micronutrientId?.name || m.name || m.micronutrientId}</td>
+                                                    <td className="px-4 py-2.5 font-bold text-emerald-700">{m.amount}</td>
+                                                    <td className="px-4 py-2.5 font-medium text-slate-600">{m.micronutrientId?.unit || m.unit || '-'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
                                 </div>
                             ) : (
-                                <p className="text-sm text-[var(--text-muted)] italic bg-[var(--bg-muted)] p-3 rounded-lg text-center">No micronutrients linked.</p>
+                                <p className="text-sm text-slate-500 italic bg-slate-50 p-3 rounded-xl text-center border border-dashed border-slate-200">No micronutrients linked.</p>
                             )}
                         </div>
 
-                        <div className="flex justify-end mt-6 pt-4 border-t border-[var(--border)]">
-                            <AdminButton variant="secondary" onClick={() => { setShowDetail(false); setDetailData(null); }}>Close</AdminButton>
+                        <div className="flex justify-end mt-6 pt-4 border-t border-slate-200">
+                            <button 
+                                type="button" 
+                                onClick={() => { setShowDetail(false); setDetailData(null); }}
+                                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-lg transition-colors cursor-pointer"
+                            >
+                                Close
+                            </button>
                         </div>
                     </div>
                 </div>

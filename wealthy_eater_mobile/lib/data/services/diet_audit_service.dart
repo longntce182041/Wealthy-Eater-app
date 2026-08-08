@@ -6,7 +6,7 @@ class DietAuditService {
 
   DietAuditService(this.apiClient);
 
-  // Hàm bắn request trực tiếp lên API Backend
+  // Sends a request directly to the Backend API
   Future<Map<String, dynamic>> fetchClientAuditLogs(String clientId, String dateStr) async {
     try {
       final response = await apiClient.get('/api/diet-audit/nutritionist/clients/$clientId/audit-logs?date=$dateStr');
@@ -14,7 +14,7 @@ class DietAuditService {
       if (response.statusCode == 200 && response.data['success'] == true) {
         return Map<String, dynamic>.from(response.data['data'] as Map);
       } else {
-        throw AppError(response.data['error']?['message'] ?? 'Lỗi hệ thống Backend');
+        throw AppError(response.data['error']?['message'] ?? 'Backend system error.');
       }
     } catch (e) {
       throw mapError(e);

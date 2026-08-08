@@ -44,7 +44,7 @@ class ChatbotService {
 
       throw AppError(
         response.data['error']?['message'] ??
-            'Không thể kết nối với trợ lý AI.',
+            'Unable to connect to the AI assistant.',
       );
     } catch (e) {
       throw mapError(e);
@@ -76,7 +76,7 @@ class ChatbotService {
       }
 
       throw AppError(
-        response.data['error']?['message'] ?? 'Không thể tải lịch sử.',
+        response.data['error']?['message'] ?? 'Unable to load chat history.',
       );
     } catch (e) {
       throw mapError(e);

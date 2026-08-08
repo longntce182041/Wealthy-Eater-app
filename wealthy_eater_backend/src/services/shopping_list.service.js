@@ -72,7 +72,7 @@ function inferCategory(name = '') {
  * @param {number} [servings=1] - Multiplier; defaults to recipe's base_servings.
  * @returns {Promise<Array>} Array of ShoppingList documents (upserted)
  */
-async function addFromRecipe(userId, recipeId, servings) {
+async function addFromRecipe(userId, recipeId, servings, customIngredients) {
   // Validate ObjectId
   if (!mongoose.Types.ObjectId.isValid(recipeId)) {
     const err = new Error('Invalid Recipe ID format');
@@ -90,63 +90,104 @@ async function addFromRecipe(userId, recipeId, servings) {
     throw err;
   }
 
-  // 2. Fetch recipe ingredients, populate Ingredient master for name/unit/category
-  const recipeIngredients = await RecipeIngredient.find({ recipe_id: recipeId })
-    .populate({ path: 'ingredient_id', model: 'Ingredient' })
-    .lean();
-
-  if (!recipeIngredients.length) {
-    const err = new Error('This recipe has no ingredients to add');
-    err.statusCode = 422;
-    err.code = 'NO_INGREDIENTS';
-    throw err;
-  }
-
-  // Compute serving multiplier
-  const baseServings  = recipe.base_servings || 1;
-  const targetServings = servings && servings > 0 ? servings : baseServings;
-  const multiplier    = targetServings / baseServings;
-
-  // 3. Smart accumulation using bulkWrite
   const bulkOps = [];
   const ingredientIds = [];
 
-  for (const ri of recipeIngredients) {
-    const ingredient = ri.ingredient_id; // populated document or null
-    if (!ingredient) continue;           // skip orphaned RecipeIngredient rows
+  if (Array.isArray(customIngredients) && customIngredients.length > 0) {
+    for (const item of customIngredients) {
+      const ingObj = item.ingredient || {};
+      const ingredientId = (item.ingredientId || ingObj._id || ingObj.id || item.ingredient_id)?.toString();
+      if (!ingredientId) continue;
 
-    const ingredientId   = ingredient._id.toString();
-    const ingredientName = ingredient.name;
-    const baseQty        = parseFloat(((ri.base_quantity || 0) * multiplier).toFixed(4));
-    const unit           = ri.unit || ingredient.unit || '';
-    const category       = inferCategory(ingredientName);
+      const ingredientName = item.name || ingObj.name || 'Ingredient';
+      const baseQty = parseFloat(Number(item.amount_gram || item.quantity || 0).toFixed(4));
+      if (baseQty <= 0) continue;
 
-    ingredientIds.push(ingredientId);
+      const unit = item.unit || ingObj.unit || 'g';
+      const category = inferCategory(ingredientName);
 
-    bulkOps.push({
-      updateOne: {
-        filter: { 
-          user_id:       userId,
-          ingredient_id: ingredientId,
-          is_purchase:   false,
-        },
-        update: {
-          $inc: { quantity: baseQty },
-          $setOnInsert: { 
-            _id: new mongoose.Types.ObjectId().toString(),
-            recipe_id: recipeId,
-            add_at: new Date(),
-            created_at: new Date()
+      ingredientIds.push(ingredientId);
+
+      bulkOps.push({
+        updateOne: {
+          filter: { 
+            user_id:       userId,
+            ingredient_id: ingredientId,
+            is_purchase:   false,
           },
-          $set: { 
-            ingredient_name: ingredientName,
-            unit: unit,
-            category: category
-          }
-        },
-        upsert: true
-      }
-    });
+          update: {
+            $inc: { quantity: baseQty },
+            $setOnInsert: { 
+              _id: new mongoose.Types.ObjectId().toString(),
+              recipe_id: recipeId,
+              add_at: new Date(),
+              created_at: new Date()
+            },
+            $set: { 
+              ingredient_name: ingredientName,
+              unit: unit,
+              category: category
+            }
+          },
+          upsert: true
+        }
+      });
+    }
+  } else {
+    // 2. Fetch recipe ingredients, populate Ingredient master for name/unit/category
+    const recipeIngredients = await RecipeIngredient.find({ recipe_id: recipeId })
+      .populate({ path: 'ingredient_id', model: 'Ingredient' })
+      .lean();
+
+    if (!recipeIngredients.length) {
+      const err = new Error('This recipe has no ingredients to add');
+      err.statusCode = 422;
+      err.code = 'NO_INGREDIENTS';
+      throw err;
+    }
+
+    // Compute serving multiplier
+    const baseServings  = recipe.base_servings || 1;
+    const targetServings = servings && servings > 0 ? servings : baseServings;
+    const multiplier    = targetServings / baseServings;
+
+    for (const ri of recipeIngredients) {
+      const ingredient = ri.ingredient_id; // populated document or null
+      if (!ingredient) continue;           // skip orphaned RecipeIngredient rows
+
+      const ingredientId   = ingredient._id.toString();
+      const ingredientName = ingredient.name;
+      const baseQty        = parseFloat(((ri.base_quantity || 0) * multiplier).toFixed(4));
+      const unit           = ri.unit || ingredient.unit || '';
+      const category       = inferCategory(ingredientName);
+
+      ingredientIds.push(ingredientId);
+
+      bulkOps.push({
+        updateOne: {
+          filter: { 
+            user_id:       userId,
+            ingredient_id: ingredientId,
+            is_purchase:   false,
+          },
+          update: {
+            $inc: { quantity: baseQty },
+            $setOnInsert: { 
+              _id: new mongoose.Types.ObjectId().toString(),
+              recipe_id: recipeId,
+              add_at: new Date(),
+              created_at: new Date()
+            },
+            $set: { 
+              ingredient_name: ingredientName,
+              unit: unit,
+              category: category
+            }
+          },
+          upsert: true
+        }
+      });
+    }
   }
 
   if (bulkOps.length > 0) {

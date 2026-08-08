@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -25,7 +24,7 @@ class NutritionistProviders {
   /// Creates a fresh [ExpertRegistrationNotifier] with its own [ApiClient].
   /// Does NOT require ApiClient to be registered in the widget tree.
   static ExpertRegistrationNotifier createNotifier(BuildContext _) {
-    final baseUrl = kIsWeb ? 'http://localhost:5000' : EnvConfig.baseUrl;
+    final baseUrl = EnvConfig.baseUrl;
     final apiClient = ApiClient(baseUrl);
     final dataSource = NutritionistRemoteDataSource(apiClient);
     final repository = NutritionistRepositoryImpl(dataSource);

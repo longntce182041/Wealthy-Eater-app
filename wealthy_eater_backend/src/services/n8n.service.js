@@ -84,7 +84,7 @@ class N8nService {
       return dataObj;
     } catch (error) {
       console.warn("⚠️ [n8n Offline or Failed]:", error.message);
-      
+
       const apiKey = process.env.GOOGLE_API_KEY;
       if (apiKey) {
         console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis...");
@@ -98,10 +98,9 @@ class N8nService {
 
       if (error.response) {
         throw new Error(
-          `N8N_HTTP_${error.response.status}: ${
-            typeof error.response.data === "object"
-              ? JSON.stringify(error.response.data)
-              : error.response.data
+          `N8N_HTTP_${error.response.status}: ${typeof error.response.data === "object"
+            ? JSON.stringify(error.response.data)
+            : error.response.data
           }`,
         );
       }
@@ -110,7 +109,8 @@ class N8nService {
   }
 
   async callGeminiVisionFallback(file, apiKey) {
-    const model = process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash";
+    // Model verified at ai.google.dev/gemini-api/docs/models (updated 2026-08)
+    const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.5-flash'; // gemini-flash-latest has been deprecated
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt = [
@@ -156,7 +156,7 @@ class N8nService {
     };
 
     const response = await axios.post(url, payload, {
-      timeout: 25000,
+      timeout: 60000,
       headers: { "Content-Type": "application/json" },
     });
 
@@ -206,6 +206,23 @@ class N8nService {
       },
       note: "⚠️ Reference Warning: AI analysis from 2D camera images estimates ingredient amounts based strictly on visual appearance. Actual portion weight (g) may vary depending on thickness and density. Please manually check and adjust actual weights before logging.",
     };
+  }
+
+  async triggerAutoAdjustCalories(payload) {
+    const url =
+      process.env.N8N_AUTO_ADJUST_CALORIES_WEBHOOK_URL ||
+      "http://localhost:5678/webhook-test/auto-adjust-calories";
+
+    try {
+      // Fire-and-forget for async processing by n8n
+      axios.post(url, payload, { timeout: 10000 }).catch(error => {
+        console.warn("⚠️ [n8n Auto-Adjust Calories Background Failed]:", error.message);
+      });
+      return { success: true, message: "Webhook triggered" };
+    } catch (error) {
+      console.warn("⚠️ [n8n Auto-Adjust Calories Trigger Failed]:", error.message);
+      return null;
+    }
   }
 }
 

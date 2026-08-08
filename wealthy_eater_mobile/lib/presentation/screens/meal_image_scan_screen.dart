@@ -1,5 +1,4 @@
 /// meal_image_scan_screen.dart — Premium AI Meal Scanner Screen.
-library;
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -39,7 +38,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
         backgroundColor: Colors.white,
         elevation: 0.5,
         title: const Text(
-          'Phân Tích Bữa Ăn AI',
+          'AI Meal Scanner',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
@@ -55,7 +54,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
             IconButton(
               icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
               onPressed: provider.clear,
-              tooltip: 'Làm mới',
+              tooltip: 'Reset',
             ),
         ],
       ),
@@ -67,7 +66,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Chụp ảnh hoặc tải lên hình ảnh khay đồ ăn thực tế. Trí tuệ nhân tạo sẽ nhận dạng món ăn, ước lượng khối lượng và phân tích dinh dưỡng.',
+                'Take a photo or upload an image of your meal plate. The AI will recognize the dish, estimate portion weight, and analyze nutrition.',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
@@ -92,7 +91,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
                       ),
                       SizedBox(height: 16),
                       Text(
-                        'Đang phân tích khay đồ ăn với AI...',
+                        'Analyzing meal plate with AI...',
                         style: TextStyle(
                           color: AppColors.primaryDark,
                           fontWeight: FontWeight.bold,
@@ -101,7 +100,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
                       ),
                       SizedBox(height: 6),
                       Text(
-                        'Quá trình này có thể mất vài giây',
+                        'This process may take a few seconds',
                         style: TextStyle(
                           color: AppColors.textTertiary,
                           fontSize: 12,
@@ -210,7 +209,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
           ),
           const SizedBox(height: 20),
           const Text(
-            'Chưa có hình ảnh được chọn',
+            'No image selected',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -219,7 +218,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Chọn chụp trực tiếp hoặc tải ảnh từ thư viện',
+            'Capture directly or upload a photo from your gallery',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
@@ -241,7 +240,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
                   ),
                   icon: const Icon(Icons.photo_library_outlined, color: AppColors.primary, size: 20),
                   label: const Text(
-                    'Thư viện',
+                    'Gallery',
                     style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -261,7 +260,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
                     ),
                     icon: const Icon(Icons.camera_alt_outlined, color: Colors.white, size: 20),
                     label: const Text(
-                      'Máy ảnh',
+                      'Camera',
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -293,7 +292,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Phân tích thất bại',
+                  'Analysis Failed',
                   style: TextStyle(
                     color: Color(0xFFC62828),
                     fontWeight: FontWeight.bold,
@@ -387,6 +386,62 @@ class _ResultDashboard extends StatelessWidget {
   final MealImageScanResult result;
 
   const _ResultDashboard({required this.result});
+
+  void _showLogMealDialog(BuildContext context) {
+    final provider = context.read<MealImageScanProvider>();
+    double loggedWeight = result.ingredients.fold(0.0, (sum, item) => sum + (item.estimatedAmount ?? 0.0));
+    if (loggedWeight == 0.0) loggedWeight = 150.0; // default portion weight
+
+    final ctrl = TextEditingController(text: loggedWeight.toStringAsFixed(0));
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          title: const Text('Log Scanned Meal'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Enter the portion weight you consumed (g):'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  suffixText: 'g',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final weight = double.tryParse(ctrl.text) ?? loggedWeight;
+                Navigator.pop(dialogCtx);
+                
+                final success = await provider.logScannedMeal(weight);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(success ? 'Meal successfully added to daily logs!' : 'Failed to log meal.'),
+                      backgroundColor: success ? AppColors.success : AppColors.error,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Save Log'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -556,6 +611,27 @@ class _ResultDashboard extends StatelessWidget {
                   ),
                 ],
               ),
+
+              // ── Log Meal Action (Only if matched in system) ──
+              if (result.matchedInSystem && result.recipeId != null) ...[
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showLogMealDialog(context),
+                    icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white),
+                    label: const Text('Log This Meal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -585,9 +661,9 @@ class _ResultDashboard extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         ...result.ingredients.map((ing) => _buildIngredientTile(ing)),
-        const SizedBox(height: 12),
         
         // ── AI Disclaimer Note ──
+<<<<<<< HEAD
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -608,12 +684,36 @@ class _ResultDashboard extends StatelessWidget {
                     color: Colors.amber.shade900,
                     fontWeight: FontWeight.w500,
                     height: 1.35,
+=======
+        if (result.note.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline_rounded, color: Colors.grey.shade600, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    result.note,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
+                      height: 1.3,
+                    ),
+>>>>>>> develop
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -730,8 +830,8 @@ class _ResultDashboard extends StatelessWidget {
           // Match detail subtitle
           Text(
             isMatched
-                ? 'Đã khớp thành công: ${ingredient.matchedName}'
-                : 'Thành phần gợi ý tự do',
+                ? 'Successfully matched: ${ingredient.matchedName}'
+                : 'Free-text suggested ingredient',
             style: TextStyle(
               fontSize: 12,
               color: isMatched ? AppColors.success : AppColors.warning,
@@ -751,9 +851,9 @@ class _ResultDashboard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _buildIngredientMacroText('Kcal', ingredient.nutrition.kcal.toStringAsFixed(0)),
-                _buildIngredientMacroText('Đạm', '${ingredient.nutrition.protein.toStringAsFixed(1)}g'),
+                _buildIngredientMacroText('Protein', '${ingredient.nutrition.protein.toStringAsFixed(1)}g'),
                 _buildIngredientMacroText('Carbs', '${ingredient.nutrition.carbs.toStringAsFixed(1)}g'),
-                _buildIngredientMacroText('Béo', '${ingredient.nutrition.fats.toStringAsFixed(1)}g'),
+                _buildIngredientMacroText('Fats', '${ingredient.nutrition.fats.toStringAsFixed(1)}g'),
               ],
             ),
           ),

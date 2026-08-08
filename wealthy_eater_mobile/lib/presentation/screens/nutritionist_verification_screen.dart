@@ -99,7 +99,7 @@ class _NutritionistVerificationScreenState
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Submission successful!'),
-              backgroundColor: Colors.green,
+              backgroundColor: AppColors.primary,
             ),
           );
           setState(() {

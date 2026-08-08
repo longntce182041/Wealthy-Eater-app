@@ -73,4 +73,7 @@ NutritionistSchema.index(
 
 NutritionistSchema.index({ user_id: 1, approval_status: 1 });
 
+// Supports: Nutritionist.find({ approval_status: {$in:[...]} }).sort({ average_rating: -1 })
+NutritionistSchema.index({ approval_status: 1, average_rating: -1 });
+
 module.exports = mongoose.model("Nutritionist", NutritionistSchema);

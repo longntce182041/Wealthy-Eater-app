@@ -21,3 +21,5 @@ export 'client_audit_screen.dart';
 export 'forget_password_screen.dart';
 export 'meal_image_scan_screen.dart';
 export 'nutritionist_verification_screen.dart';
+export 'pantry_screen.dart';
+export 'client_biometrics_screen.dart';

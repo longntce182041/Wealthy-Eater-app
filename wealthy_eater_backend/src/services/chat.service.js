@@ -37,11 +37,20 @@ class ChatService {
    * @returns {Promise<Object>} The contract document (lean)
    * @throws {AppError} 404 if contract not found, 403 if not a party.
    */
-  async assertContractAccess(contractId, userId) {
+  async assertContractAccess(contractId, userId, requireActive = false) {
     const contract = await ConsultationContract.findById(contractId).lean();
 
     if (!contract) {
       throw new AppError('Consultation contract not found.', 404);
+    }
+
+    if (requireActive) {
+      if (contract.status !== 'active') {
+        throw new AppError('This consultation contract is not active. You cannot send messages.', 403);
+      }
+      if (contract.expire_at && new Date() > new Date(contract.expire_at)) {
+        throw new AppError('This consultation contract has expired. You cannot send messages.', 403);
+      }
     }
 
     // Caller is the customer
@@ -78,7 +87,14 @@ class ChatService {
    * @returns {{ messages: Object[], total: number, hasMore: boolean }}
    */
   async getMessageHistory(contractId, userId, { page = 1, limit = DEFAULT_PAGE_SIZE, before } = {}) {
-    await this.assertContractAccess(contractId, userId);
+    const contract = await this.assertContractAccess(contractId, userId);
+    
+    let isExpired = false;
+    if (contract.status !== 'active') {
+      isExpired = true;
+    } else if (contract.expire_at && new Date() > new Date(contract.expire_at)) {
+      isExpired = true;
+    }
 
     const safePage  = Math.max(1, parseInt(page, 10));
     const safeLimit = Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(limit, 10)));
@@ -109,6 +125,8 @@ class ChatService {
       page: safePage,
       limit: safeLimit,
       hasMore: messages.length === safeLimit,
+      contractStatus: contract.status,
+      isExpired: isExpired,
     };
   }
 
@@ -134,7 +152,7 @@ class ChatService {
       throw new AppError('Message exceeds the 5000-character limit.', 400);
     }
 
-    await this.assertContractAccess(contractId, senderId);
+    await this.assertContractAccess(contractId, senderId, true);
 
     const message = await ConsultationMessage.create({
       contract_id:    contractId,
@@ -168,7 +186,7 @@ class ChatService {
     }
 
     try {
-      await this.assertContractAccess(contractId, senderId);
+      await this.assertContractAccess(contractId, senderId, true);
 
       // With Cloudinary, file.path contains the secure URL
       const imageUrl = file.path;

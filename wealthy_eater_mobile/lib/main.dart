@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 
 import 'core/config/env_config.dart';
@@ -15,6 +14,7 @@ import 'domain/usecases/recipe_like_usecases.dart';
 import 'domain/usecases/recipe_review_usecases.dart';
 import 'domain/usecases/get_my_reviews_list_usecase.dart';
 import 'domain/usecases/shopping_list_usecases.dart';
+import 'presentation/providers/biometric_audit_provider.dart';
 import 'presentation/providers/index.dart';
 import 'presentation/screens/index.dart';
 
@@ -27,7 +27,7 @@ class WealthyEaterApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final baseUrl = kIsWeb ? 'http://localhost:5000' : EnvConfig.baseUrl;
+    final baseUrl = EnvConfig.baseUrl;
     final api = ApiClient(baseUrl);
     final recipeRepository       = RecipeRepositoryImpl(apiClient: api);
     final shoppingListRepository = ShoppingListRepositoryImpl(apiClient: api);
@@ -80,6 +80,8 @@ class WealthyEaterApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => ChatbotProvider(api: api)),
         ChangeNotifierProvider(create: (_) => MealImageScanProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => PantryProvider(api: api)),
+        ChangeNotifierProvider(create: (_) => BiometricAuditProvider(apiClient: api)),
       ],
       child: MaterialApp(
         title: 'Wealthy Eater',
@@ -116,7 +118,7 @@ class _AppRootState extends State<_AppRoot> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+            'Your session has expired. Please log in again.',
           ),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 4),
@@ -138,6 +140,8 @@ class _AppRootState extends State<_AppRoot> {
         context.read<NutritionistProvider>().reset();
         context.read<ConsultationProvider>().reset();
         context.read<ChatProvider>().resetChat();
+        context.read<PantryProvider>().reset();
+        context.read<BiometricAuditProvider>().reset();
       }
       wasAuthenticated = isAuth;
     });

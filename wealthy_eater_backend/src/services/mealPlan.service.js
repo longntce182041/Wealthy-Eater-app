@@ -152,7 +152,7 @@ class MealPlanService {
         const qty = ri.base_quantity; // e.g. 150g
         totalWeight += qty;
 
-        // Nutrients are per 100g in database
+        // Nutrients are per 1g in database
         totalCalories += (ing.calories_per_unit * qty) / 100;
         totalProtein += ((ing.protein || 0) * qty) / 100;
         totalFat += ((ing.fat || 0) * qty) / 100;
@@ -220,38 +220,38 @@ class MealPlanService {
       .populate({
         path: "custom_ingredients.ingredient_id",
         model: "Ingredient",
-        select: "name calories_per_unit protein carbs fat",
+        select: "_id name calories_per_unit protein carbs fat",
       })
       .lean();
 
-    // Assign fallback day_number & is_completed
+    // Assign fallback day_of_week & is_completed
     items.forEach((item, index) => {
-      if (item.day_number === undefined || item.day_number === null) {
-        item.day_number = Math.floor(index / 3) + 1;
+      if (item.day_of_week === undefined || item.day_of_week === null) {
+        item.day_of_week = Math.floor(index / 3) + 1;
       }
       if (item.is_completed === undefined || item.is_completed === null) {
         item.is_completed = false;
       }
     });
 
-    // Sort items by day_number and meal_type order
+    // Sort items by day_of_week and meal_type order
     const orderMap = { 'breakfast': 1, 'lunch': 2, 'dinner': 3, 'snack': 4 };
     function getMealTypeOrder(mealType) {
       return orderMap[(mealType || '').toLowerCase()] || 99;
     }
     items.sort((a, b) => {
-      if (a.day_number !== b.day_number) {
-        return a.day_number - b.day_number;
+      if (a.day_of_week !== b.day_of_week) {
+        return a.day_of_week - b.day_of_week;
       }
       return getMealTypeOrder(a.meal_type) - getMealTypeOrder(b.meal_type);
     });
 
     // Calculate active_day
     let activeDay = 1;
-    const dayNumbers = [...new Set(items.map(item => item.day_number))].sort((a, b) => a - b);
+    const dayNumbers = [...new Set(items.map(item => item.day_of_week))].sort((a, b) => a - b);
     if (dayNumbers.length > 0) {
       const firstUncompletedDay = dayNumbers.find(dayNum => {
-        const dayItems = items.filter(item => item.day_number === dayNum);
+        const dayItems = items.filter(item => item.day_of_week === dayNum);
         return dayItems.some(item => !item.is_completed);
       });
       if (firstUncompletedDay) {
@@ -274,8 +274,12 @@ class MealPlanService {
 
       let customIngredientsData = null;
 
-      if (item.custom_ingredients && item.custom_ingredients.length > 0) {
-        // Prepare custom_ingredients for calculate utility
+      // Priority: if item has a real recipe_id (not AI_GENERATED), treat as recipe-based
+      const hasRealRecipe = recipe && recipe._id;
+      const isAIGenerated = !hasRealRecipe;
+
+      if (isAIGenerated && item.custom_ingredients && item.custom_ingredients.length > 0) {
+        // AI-generated meal: compute nutrients from custom ingredients
         const mappedCustomIngredients = item.custom_ingredients.map(ci => ({
           ingredient_id: ci.ingredient_id?._id || ci.ingredient_id,
           amount_gram: ci.amount_gram,
@@ -286,7 +290,8 @@ class MealPlanService {
           ingredient: ci.ingredient_id,
           amount_gram: ci.amount_gram,
         }));
-      } else if (recipe && recipe._id) {
+      } else if (hasRealRecipe) {
+        // Recipe-based meal: compute nutrients from the recipe
         nutrients = await this.calculateRecipeNutrients(recipe._id);
       }
 
@@ -300,9 +305,8 @@ class MealPlanService {
         _id: item._id,
         meal_type: item.meal_type,
         day_of_week: item.day_of_week || null,
-        day_number: item.day_number,
         is_completed: item.is_completed || false,
-        recipe: recipe && recipe._id
+        recipe: hasRealRecipe
           ? {
             _id: recipe._id,
             name: recipe.name,
@@ -353,38 +357,38 @@ class MealPlanService {
       .populate({
         path: "custom_ingredients.ingredient_id",
         model: "Ingredient",
-        select: "name calories_per_unit protein carbs fat",
+        select: "_id name calories_per_unit protein carbs fat",
       })
       .lean();
 
-    // Assign fallback day_number & is_completed
+    // Assign fallback day_of_week & is_completed
     items.forEach((item, index) => {
-      if (item.day_number === undefined || item.day_number === null) {
-        item.day_number = Math.floor(index / 3) + 1;
+      if (item.day_of_week === undefined || item.day_of_week === null) {
+        item.day_of_week = Math.floor(index / 3) + 1;
       }
       if (item.is_completed === undefined || item.is_completed === null) {
         item.is_completed = false;
       }
     });
 
-    // Sort items by day_number and meal_type order
+    // Sort items by day_of_week and meal_type order
     const orderMap = { 'breakfast': 1, 'lunch': 2, 'dinner': 3, 'snack': 4 };
     function getMealTypeOrder(mealType) {
       return orderMap[(mealType || '').toLowerCase()] || 99;
     }
     items.sort((a, b) => {
-      if (a.day_number !== b.day_number) {
-        return a.day_number - b.day_number;
+      if (a.day_of_week !== b.day_of_week) {
+        return a.day_of_week - b.day_of_week;
       }
       return getMealTypeOrder(a.meal_type) - getMealTypeOrder(b.meal_type);
     });
 
     // Calculate active_day
     let activeDay = 1;
-    const dayNumbers = [...new Set(items.map(item => item.day_number))].sort((a, b) => a - b);
+    const dayNumbers = [...new Set(items.map(item => item.day_of_week))].sort((a, b) => a - b);
     if (dayNumbers.length > 0) {
       const firstUncompletedDay = dayNumbers.find(dayNum => {
-        const dayItems = items.filter(item => item.day_number === dayNum);
+        const dayItems = items.filter(item => item.day_of_week === dayNum);
         return dayItems.some(item => !item.is_completed);
       });
       if (firstUncompletedDay) {
@@ -407,7 +411,12 @@ class MealPlanService {
 
       let customIngredientsData = null;
 
-      if (item.custom_ingredients && item.custom_ingredients.length > 0) {
+      // Priority: if item has a real recipe_id (not AI_GENERATED), treat as recipe-based
+      const hasRealRecipe = recipe && recipe._id;
+      const isAIGenerated = !hasRealRecipe;
+
+      if (isAIGenerated && item.custom_ingredients && item.custom_ingredients.length > 0) {
+        // AI-generated meal: compute nutrients from custom ingredients
         const mappedCustomIngredients = item.custom_ingredients.map(ci => ({
           ingredient_id: ci.ingredient_id?._id || ci.ingredient_id,
           amount_gram: ci.amount_gram,
@@ -418,7 +427,8 @@ class MealPlanService {
           ingredient: ci.ingredient_id,
           amount_gram: ci.amount_gram,
         }));
-      } else if (recipe && recipe._id) {
+      } else if (hasRealRecipe) {
+        // Recipe-based meal: compute nutrients from the recipe
         nutrients = await this.calculateRecipeNutrients(recipe._id);
       }
 
@@ -431,9 +441,8 @@ class MealPlanService {
         _id: item._id,
         meal_type: item.meal_type,
         day_of_week: item.day_of_week || null,
-        day_number: item.day_number,
         is_completed: item.is_completed || false,
-        recipe: recipe && recipe._id
+        recipe: hasRealRecipe
           ? {
             _id: recipe._id,
             name: recipe.name,
@@ -571,7 +580,10 @@ class MealPlanService {
 
     return {
       _id: item._id,
+      meal_plan_id: item.meal_plan_id,
       meal_type: item.meal_type,
+      day_of_week: item.day_of_week,
+      is_completed: item.is_completed ?? false,
       recipe: recipe
         ? {
           _id: recipe._id,
@@ -714,8 +726,8 @@ class MealPlanService {
       if (user && user.fcmToken) {
         const message = {
           notification: {
-            title: "🍳 Thực đơn mới đã sẵn sàng!",
-            body: `Chuyên gia dinh dưỡng đã gửi thực đơn chính thức cho bạn. Vào app xem ngay ní ơi!`,
+            title: "🍳 Your new meal plan is ready!",
+            body: `Your nutritionist has published your official meal plan. Open the app to view it now!`,
           },
           token: user.fcmToken,
         };
@@ -723,21 +735,21 @@ class MealPlanService {
         if (firebaseConfig.messaging) {
           const response = await firebaseConfig.messaging.send(message);
           console.log(
-            `[Firebase FCM] Đã kích bắn thông báo thật thành công! Message ID: ${response}`,
+            `[Firebase FCM] Push notification sent successfully! Message ID: ${response}`,
           );
         } else {
           console.log(
-            `[Firebase Mock Sandbox] Đã giả lập bắn thông báo thành công tới User: ${targetUserId}`,
+            `[Firebase Mock Sandbox] Simulated push notification successfully sent to User: ${targetUserId}`,
           );
         }
       } else {
         console.warn(
-          `[Firebase FCM] Bỏ qua gửi thông báo vì không tìm thấy fcmToken hợp lệ của User: ${targetUserId}`,
+          `[Firebase FCM] Skipping notification — no valid fcmToken found for User: ${targetUserId}`,
         );
       }
     } catch (fcmError) {
       console.error(
-        "[Firebase FCM Error] Lỗi trong quá trình gửi tin nhắn lên thiết bị:",
+        "[Firebase FCM Error] Error sending message to device:",
         fcmError.message,
       );
     }
@@ -806,12 +818,13 @@ class MealPlanService {
         itemDoc.recipe_id = "AI_GENERATED"; // If it was a recipe, it's now customized
 
         totalCalories += nutrients.calories;
-      } else if (updateItem.recipeId) {
+      } else if (updateItem.recipeId || updateItem.recipe_id) {
         // Swap to a recipe
-        itemDoc.recipe_id = updateItem.recipeId;
+        const newRecipeId = updateItem.recipeId || updateItem.recipe_id;
+        itemDoc.recipe_id = newRecipeId;
         itemDoc.custom_ingredients = [];
 
-        const nutrients = await this.calculateRecipeNutrients(updateItem.recipeId);
+        const nutrients = await this.calculateRecipeNutrients(newRecipeId);
         itemDoc.target_calories = nutrients.calories;
         itemDoc.customized_servings_gram = nutrients.base_weight;
 
@@ -914,6 +927,28 @@ class MealPlanService {
 
     item.is_completed = true;
     await item.save();
+
+    // ── TRIGGER UC-42 N8N WEBHOOK ──────────────────────────────────────────
+    try {
+      const ConsultationContract = require("../models/ConsultationContract");
+      const activeContract = await ConsultationContract.findOne({
+        user_id: userId,
+        status: 'active'
+      }).lean();
+
+      const n8nService = require('./n8n.service');
+      n8nService.triggerAutoAdjustCalories({
+        user_id: userId.toString(),
+        actual_calories: calories,
+        meal_type: item.meal_type,
+        meal_log_id: newLog._id.toString(),
+        contract_id: activeContract ? activeContract._id.toString() : '',
+        logged_at: newLog.create_at.toISOString()
+      });
+    } catch (err) {
+      console.error("❌ Failed to trigger auto-adjust calories webhook:", err);
+    }
+    // ───────────────────────────────────────────────────────────────────────
 
     return newLog;
   }
@@ -1074,6 +1109,8 @@ class MealPlanService {
       throw new AppError('Invalid payload: clientId and assignments are required.', 400);
     }
 
+    const RecipeIngredient = require('../models/RecipeIngredient');
+
     // 1. Create the MealPlan header document
     const newPlan = new MealPlan({
       user_id: clientId,
@@ -1085,15 +1122,32 @@ class MealPlanService {
     await newPlan.save();
 
     // 2. Create MealPlanItem entries — one per recipe assignment
-    const planItems = assignments.map((assignment) => new MealPlanItem({
-      meal_plan_id: newPlan._id,
-      recipe_id: assignment.recipeId,
-      meal_type: assignment.mealType,
-      day_of_week: assignment.dayOfWeek,
-      customized_servings_gram: Math.round(assignment.scaledWeight),
-      target_calories: Math.round(assignment.scaledCalories),
-      custom_ingredients: [], // Using existing recipe, no custom ingredients
-    }));
+    //    Scale RecipeIngredient quantities by portionScale and save as custom_ingredients
+    //    so the mobile app can display ingredient breakdown and compute nutrition on the fly.
+    const planItems = [];
+
+    for (const assignment of assignments) {
+      // Fetch base recipe ingredients and scale them by portionScale
+      const recipeIngredients = await RecipeIngredient.find({
+        recipe_id: assignment.recipeId,
+      }).lean();
+
+      const scaledIngredients = recipeIngredients.map(ri => ({
+        ingredient_id: ri.ingredient_id,
+        amount_gram: parseFloat(((ri.base_quantity || 0) * assignment.portionScale).toFixed(1)),
+      }));
+
+      planItems.push(new MealPlanItem({
+        meal_plan_id: newPlan._id,
+        recipe_id: assignment.recipeId,
+        meal_type: assignment.mealType,
+        day_of_week: assignment.dayOfWeek,
+        customized_servings_gram: Math.round(assignment.scaledWeight),
+        target_calories: Math.round(assignment.scaledCalories),
+        // Persist scaled ingredients so the app can compute nutrition without re-querying
+        custom_ingredients: scaledIngredients,
+      }));
+    }
 
     await MealPlanItem.insertMany(planItems);
 
@@ -1185,6 +1239,69 @@ class MealPlanService {
       matched_in_system: false,
       note: scanResult?.note || "⚠️ Reference Warning: AI analysis from 2D camera images estimates ingredient amounts based strictly on visual appearance. Please manually check and adjust actual portion weight (g) before logging."
     };
+    }
+
+    return {
+      ...scanResult,
+      matched_in_system: false,
+      note: ""
+    };
+  }
+
+  async logCustomRecipe(userId, recipeId, actualWeight, dateStr) {
+    const CustomerMealLog = require("../models/CustomerMealLog");
+    const Recipe = require("../models/Recipe");
+
+    const recipe = await Recipe.findById(recipeId);
+    if (!recipe) {
+      throw new Error("RECIPE_NOT_FOUND");
+    }
+
+    const nutrients = await this.calculateRecipeNutrients(recipeId);
+    const weight = actualWeight || nutrients.base_weight || 100;
+    const scale = weight / (nutrients.base_weight || 1);
+
+    const calories = Math.round(nutrients.calories * scale);
+    const protein = parseFloat((nutrients.protein * scale).toFixed(1));
+    const carbs = parseFloat((nutrients.carbs * scale).toFixed(1));
+    const fat = parseFloat((nutrients.fat * scale).toFixed(1));
+
+    const newLog = new CustomerMealLog({
+      user_id: userId,
+      recipe_id: recipeId,
+      actual_weight_gram: weight,
+      actual_calories: calories,
+      actual_protein: protein,
+      actual_carbs: carbs,
+      actual_fat: fat,
+      custom_name: recipe.name,
+      meal_plan_item_id: null,
+      create_at: dateStr ? new Date(dateStr) : new Date(),
+    });
+
+    await newLog.save();
+    return newLog;
+  }
+
+  async deleteMealPlan(planId, nutritionistId) {
+    const MealPlan = require('../models/MealPlan');
+    const MealPlanItem = require('../models/MealPlanItem');
+
+    const query = { _id: planId };
+    if (nutritionistId) {
+      query.nutritionist_id = nutritionistId;
+    }
+
+    const plan = await MealPlan.findOne(query);
+    if (!plan) {
+      throw new Error('Meal plan not found or access denied');
+    }
+
+    await MealPlanItem.deleteMany({ meal_plan_id: planId });
+    await MealPlan.deleteOne({ _id: planId });
+
+    return { message: 'Meal plan deleted successfully' };
+>>>>>>> develop
   }
 }
 

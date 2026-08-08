@@ -1,30 +1,16 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 enum Environment { dev, staging, prod }
 
 class EnvConfig {
   static Environment environment = Environment.dev;
-
-  static String get _localDevBaseUrl {
-    if (kIsWeb) return 'http://localhost:5000';
-
-    // Android emulators cannot access host localhost directly.
-    if (Platform.isAndroid) return 'http://10.0.2.2:5000';
-
-    // Windows/macOS/Linux/iOS simulator can access host localhost.
-    return 'http://localhost:5000';
-  }
-
   static String get baseUrl {
     switch (environment) {
       case Environment.prod:
-        return 'https://api.wealthyeater.com';
+        return 'https://wealthy-eater-app.onrender.com';
       case Environment.staging:
-        return 'https://staging-api.wealthyeater.com';
+        return 'https://wealthy-eater-app.onrender.com';
       case Environment.dev:
-        return _localDevBaseUrl;
+        return 'https://wealthy-eater-app.onrender.com';
     }
   }
 

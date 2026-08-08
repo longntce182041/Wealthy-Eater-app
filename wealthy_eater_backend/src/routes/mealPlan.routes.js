@@ -44,6 +44,7 @@ router.post("/scan-meal", protect, uploadMealImage, mealPlanController.scanMealI
 router.get("/my-plan", protect, mealPlanController.getMyMealPlanEndpoint);
 router.get("/daily-report", protect, mealPlanController.getDailyMacroReportEndpoint);
 router.get("/logs", protect, mealPlanController.getMealLogsEndpoint);
+router.post("/logs/custom", protect, mealPlanController.logCustomRecipeEndpoint);
 router.put("/logs/:logId", protect, mealPlanController.updateMealLogEndpoint);
 router.delete("/logs/:logId", protect, mealPlanController.deleteMealLogEndpoint);
 router.post(
@@ -73,6 +74,13 @@ router.put(
   verifyToken,
   nutritionistOnly,
   mealPlanController.updateDraftPlanEndpoint
+);
+
+router.delete(
+  "/:planId",
+  verifyToken,
+  nutritionistOnly,
+  mealPlanController.deleteMealPlanEndpoint
 );
 
 //BỔ SUNG: API nhận đồng bộ FCM Token thiết bị lên máy chủ

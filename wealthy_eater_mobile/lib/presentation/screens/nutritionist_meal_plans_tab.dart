@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../providers/nutritionist_provider.dart';
 import 'meal_plan_editor_screen.dart';
 
@@ -154,10 +155,10 @@ class _NutritionistMealPlansTabState extends State<NutritionistMealPlansTab> {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: isDraft ? Colors.orange.shade50 : Colors.green.shade50,
+                            color: isDraft ? Colors.orange.shade50 : AppColors.primaryLight,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: isDraft ? Colors.orange.shade200 : Colors.green.shade200,
+                              color: isDraft ? Colors.orange.shade200 : AppColors.border,
                             ),
                           ),
                           child: Text(
@@ -165,23 +166,13 @@ class _NutritionistMealPlansTabState extends State<NutritionistMealPlansTab> {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: isDraft ? Colors.orange.shade800 : Colors.green.shade800,
+                              color: isDraft ? Colors.orange.shade800 : AppColors.primaryDark,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const Divider(height: 24),
-                    Text(
-                      plan['created_by']?.toString() ?? 'AI Generated',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.black87,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     if (isDraft)
                       Wrap(
                         alignment: WrapAlignment.end,
@@ -250,23 +241,97 @@ class _NutritionistMealPlansTabState extends State<NutritionistMealPlansTab> {
                               ),
                             ),
                           ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            tooltip: 'Delete Plan',
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Delete Meal Plan'),
+                                  content: const Text('Are you sure you want to delete this meal plan? This action cannot be undone.'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    FilledButton(
+                                      style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true && context.mounted) {
+                                final success = await provider.deleteMealPlan(planId);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(success ? 'Meal plan deleted successfully!' : 'Failed to delete meal plan.'),
+                                      backgroundColor: success ? Colors.green : Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                          ),
                         ],
                       )
                     else
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => MealPlanEditorScreen(planId: planId),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.visibility, size: 18),
-                          label: const Text('View Only'),
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            tooltip: 'Delete Plan',
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Delete Meal Plan'),
+                                  content: const Text('Are you sure you want to delete this meal plan? This action cannot be undone.'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    FilledButton(
+                                      style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true && context.mounted) {
+                                final success = await provider.deleteMealPlan(planId);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(success ? 'Meal plan deleted successfully!' : 'Failed to delete meal plan.'),
+                                      backgroundColor: success ? Colors.green : Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                          TextButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => MealPlanEditorScreen(planId: planId),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.visibility, size: 18),
+                            label: const Text('View Only'),
+                          ),
+                        ],
                       )
                   ],
                 ),

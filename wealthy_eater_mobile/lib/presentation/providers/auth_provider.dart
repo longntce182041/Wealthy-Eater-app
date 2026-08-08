@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier, debugPrint, defaultTargetPlatform, TargetPlatform;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/config/secrets.dart';
 import '../../core/error/app_error.dart';
@@ -48,6 +50,7 @@ class AuthProvider with ChangeNotifier {
   String? _accessToken;
 
   bool get isAuthenticated => state == AuthState.authenticated && _accessToken != null;
+  String? get token => _accessToken;
 
   // ---------------------------------------------------------------------------
   // Session Restore
@@ -421,6 +424,54 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  bool isUploadingAvatar = false;
+
+  /// Upload customer profile picture to Cloudinary via backend API.
+  Future<bool> uploadAvatar(XFile imageFile) async {
+    isUploadingAvatar = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final fileName = imageFile.name.isNotEmpty
+          ? imageFile.name
+          : 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final bytes = await imageFile.readAsBytes();
+
+      final formData = FormData.fromMap({
+        'avatar': MultipartFile.fromBytes(
+          bytes,
+          filename: fileName,
+        ),
+      });
+
+      final res = await _api.post(
+        '/api/profile/avatar',
+        data: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      );
+
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        await _fetchUserProfile();
+        isUploadingAvatar = false;
+        errorMessage = null;
+        notifyListeners();
+        return true;
+      } else {
+        errorMessage = res.data['error']?['message'] ?? res.data['message'] ?? 'Failed to upload profile picture';
+        isUploadingAvatar = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      errorMessage = mapError(e).message;
+      isUploadingAvatar = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Change user password via API.
   Future<bool> changePassword(String oldPassword, String newPassword) async {
     errorMessage = null;
@@ -441,7 +492,7 @@ class AuthProvider with ChangeNotifier {
         final errObj = res.data['error'];
         errorMessage = errObj != null && errObj['message'] != null
             ? errObj['message'].toString()
-            : (res.data['message']?.toString() ?? 'Đổi mật khẩu thất bại');
+            : (res.data['message']?.toString() ?? 'Password change failed.');
         notifyListeners();
         return false;
       }
@@ -477,11 +528,12 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> resetPassword(String identifier, String otp, String newPassword) async {
+  Future<bool> resetPassword(String identifier, String otp, String newPassword, {bool isNutritionist = false}) async {
     _setLoading();
     try {
+      final endpoint = isNutritionist ? '/api/auth/reset-password-nutritionist' : '/api/auth/reset-password';
       final res = await _api.post(
-        '/api/auth/reset-password',
+        endpoint,
         data: {
           'identifier': identifier.trim(),
           'otp': otp.trim(),

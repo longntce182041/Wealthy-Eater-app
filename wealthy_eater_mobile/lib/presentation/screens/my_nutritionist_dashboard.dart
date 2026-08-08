@@ -59,7 +59,7 @@ class _MyNutritionistDashboardState extends State<MyNutritionistDashboard> {
                 messenger.showSnackBar(
                   const SnackBar(
                     content: Text('Request sent successfully, please wait for nutritionist response.'),
-                    backgroundColor: Colors.green,
+                    backgroundColor: AppColors.primary,
                   ),
                 );
               } else {
@@ -288,43 +288,24 @@ class _MyNutritionistDashboardState extends State<MyNutritionistDashboard> {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildActionCard(
-                    icon: Icons.chat_rounded,
-                    title: 'Chat',
-                    subtitle: 'Direct message',
-                    color: const Color(0xFF1E88E5),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatScreen(
-                            contractId: widget.contract.id,
-                            peerName: doc.fullName,
-                            peerInitials: doc.initials,
-                          ),
-                        ),
-                      );
-                    },
+            _buildActionCard(
+              icon: Icons.chat_rounded,
+              title: 'Chat',
+              subtitle: 'Direct message',
+              color: const Color(0xFF1E88E5),
+              isFullWidth: true,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChatScreen(
+                      contractId: widget.contract.id,
+                      peerName: doc.fullName,
+                      peerInitials: doc.initials,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildActionCard(
-                    icon: Icons.video_camera_front_rounded,
-                    title: 'Video Call',
-                    subtitle: 'Book session',
-                    color: const Color(0xFF43A047),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Video Call feature coming soon!')),
-                      );
-                    },
-                  ),
-                ),
-              ],
+                );
+              },
             ),
             const SizedBox(height: 16),
             _buildActionCard(

@@ -38,11 +38,15 @@ function buildAdminFilter(query) {
     ];
   }
 
-  if (query.status) {
+  // Lọc status: Nếu truyền status cụ thể khác 'all' thì lọc theo status đó
+  if (query.status && query.status.trim() !== '' && query.status.toLowerCase() !== 'all') {
     filter.status = { $regex: `^${escapeRegex(String(query.status).trim())}$`, $options: 'i' };
+  } else {
+    // Nếu chọn 'All' hoặc không truyền status -> Lấy tất cả ngoại trừ món đã xóa mềm ('archived')
+    filter.status = { $ne: 'archived' };
   }
 
-  if (query.level) {
+  if (query.level && query.level.trim() !== '' && query.level.toLowerCase() !== 'all') {
     filter.level_cooking = { $regex: `^${escapeRegex(String(query.level).trim())}$`, $options: 'i' };
   }
 
@@ -83,10 +87,10 @@ async function processRecipeIngredients(recipeId, ingredientsInput) {
     if (!ingredientData) continue;
 
     const quantity = Number(item.base_quantity) || 0;
-    totalCalories += (ingredientData.calories_per_unit || 0) * quantity;
-    totalProtein += (ingredientData.protein || 0) * quantity;
-    totalFat += (ingredientData.fat || 0) * quantity;
-    totalCarbs += (ingredientData.carbs || 0) * quantity;
+    totalCalories += ((ingredientData.calories_per_unit || 0) * quantity) / 100;
+    totalProtein += ((ingredientData.protein || 0) * quantity) / 100;
+    totalFat += ((ingredientData.fat || 0) * quantity) / 100;
+    totalCarbs += ((ingredientData.carbs || 0) * quantity) / 100;
 
     recipeIngredientDocs.push({
       recipe_id: recipeId,
@@ -145,6 +149,11 @@ function mapRecipeForAdmin(recipe, nutrition, reviewStats, ingredientsCount, ste
  */
 async function getRecipesList(req, res, next) {
   try {
+    // 🔴 BẮT BUỘC TRÌNH DUYỆT BỎ CACHE CHO API NÀY
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const filter = buildAdminFilter(req.query || {});
 
     if (req.query.minCalories || req.query.maxCalories) {
@@ -157,7 +166,7 @@ async function getRecipesList(req, res, next) {
       filter._id = { $in: matchedNutritions.map(n => n.recipe_id) };
     }
 
-    let sortObj = { createdAt: -1 };
+    let sortObj = { createdAt: -1, _id: -1 };
     const sortBy = req.query.sortBy || 'newest';
     switch (sortBy) {
       case 'name_asc': sortObj = { name: 1 }; break;
@@ -165,15 +174,16 @@ async function getRecipesList(req, res, next) {
       case 'time_asc': sortObj = { cooking_time: 1 }; break;
       case 'time_desc': sortObj = { cooking_time: -1 }; break;
       case 'oldest': sortObj = { createdAt: 1 }; break;
-      case 'newest': default: sortObj = { createdAt: -1 }; break;
+      case 'newest': default: sortObj = { createdAt: -1, _id: -1 }; break;
     }
 
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 5000);
     const skip = (page - 1) * limit;
 
+    // ĐÃ FIX CÚ PHÁP QUERY MONGOOSE (SỬ DỤNG .read('primary'))
     const [recipes, total] = await Promise.all([
-      Recipe.find(filter).sort(sortObj).skip(skip).limit(limit).lean(),
+      Recipe.find(filter).read('primary').sort(sortObj).skip(skip).limit(limit).lean(),
       Recipe.countDocuments(filter),
     ]);
 
@@ -216,20 +226,16 @@ async function getRecipesList(req, res, next) {
 /**
  * UC-71: GET /api/admin/recipes/stats
  */
-/**
- * UC-71: GET /api/admin/recipes/stats
- */
 async function getRecipesStats(req, res, next) {
   try {
-    // 🔥 Đã bổ sung User.countDocuments({}) chạy song song trong Promise.all
     const [totalRecipes, publishedRecipes, draftRecipes, totalReviews, avgRating, topRecipeByRating, totalUsers] = await Promise.all([
-      Recipe.countDocuments({}),
+      Recipe.countDocuments({ status: { $ne: 'archived' } }),
       Recipe.countDocuments({ status: 'published' }),
       Recipe.countDocuments({ status: 'draft' }),
       RecipeReview.countDocuments({}),
       RecipeReview.aggregate([{ $group: { _id: null, avgRating: { $avg: '$rating' } } }]),
       RecipeReview.aggregate([{ $group: { _id: '$recipe_id', avgRating: { $avg: '$rating' }, count: { $sum: 1 } } }, { $sort: { avgRating: -1 } }, { $limit: 1 }, { $lookup: { from: 'recipes', localField: '_id', foreignField: '_id', as: 'recipe' } }]),
-      User.countDocuments({}), // <-- Thêm dòng này để đếm tổng số User trong hệ thống
+      User.countDocuments({}),
     ]);
 
     const stats = {
@@ -237,7 +243,7 @@ async function getRecipesStats(req, res, next) {
       publishedRecipes, 
       draftRecipes, 
       totalReviews,
-      totalUsers, // <-- 🎯 Trả thêm key này về cho Frontend hiển thị
+      totalUsers,
       averageRating: avgRating[0]?.avgRating ? Number(avgRating[0].avgRating.toFixed(1)) : 0,
       topRecipe: topRecipeByRating[0] ? { id: topRecipeByRating[0]._id, name: topRecipeByRating[0].recipe[0]?.name || 'Unknown', rating: Number((topRecipeByRating[0].avgRating || 0).toFixed(1)), reviewCount: topRecipeByRating[0].count } : null,
     };
@@ -301,43 +307,54 @@ async function getRecipeDetail(req, res, next) {
 
 /**
  * UC-73: POST /api/admin/recipes
- * ☁️ ĐÃ MÓC CLOUDINARY XỬ LÝ CHUỖI BASE64 ẢNH TỪ FRONTEND
  */
 async function addRecipe(req, res, next) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { name, description, image_url, cooking_time, base_servings, status, level_cooking, ingredients, steps } = req.body;
 
     if (!name) {
+      await session.abortTransaction();
+      session.endSession();
       return next(new AppError('Tên công thức là bắt buộc.', 400));
     }
 
-    // 🔥 Xử lý ảnh: Nếu có gửi ảnh dạng base64, đẩy lên Cloudinary lấy URL sạch lưu DB
+    // 1. Upload ảnh lên Cloudinary nếu gửi dạng Base64
     let finalImageUrl = image_url || '';
     if (image_url && image_url.startsWith('data:image')) {
       finalImageUrl = await uploadBase64ToCloudinary(image_url);
     }
 
+    // 2. Tạo Instance Recipe - Mặc định trạng thái 'published' nếu không truyền để hiển thị ngay ra UI
     const recipe = new Recipe({
-      name, description, 
-      image_url: finalImageUrl, // Lưu URL từ Cloudinary
+      name,
+      description, 
+      image_url: finalImageUrl,
       cooking_time: Number(cooking_time) || 0,
       base_servings: Number(base_servings) || 1,
-      status: status || 'draft',
+      status: status || 'published',
       level_cooking: level_cooking || 'medium',
     });
-    await recipe.save();
+
+    await recipe.save({ session });
 
     let savedNutrition = { calories: 0, protein: 0, fat: 0, carbs: 0 };
-    let enrichedIngredients = []; // Mảng chứa dữ liệu nguyên liệu đầy đủ để trả về Frontend
+    let enrichedIngredients = [];
 
+    // 3. Xử lý Nguyên liệu & Dinh dưỡng
     if (ingredients && Array.isArray(ingredients) && ingredients.length > 0) {
       const processed = await processRecipeIngredients(recipe._id, ingredients);
       if (processed.recipeIngredientDocs.length > 0) {
-        await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
-        const nutritionDoc = await RecipeNutrition.create({ recipe_id: recipe._id, ...processed.nutrition });
+        await RecipeIngredient.insertMany(processed.recipeIngredientDocs, { session });
+        
+        const [nutritionDoc] = await RecipeNutrition.create(
+          [{ recipe_id: recipe._id, ...processed.nutrition }],
+          { session }
+        );
         savedNutrition = nutritionDoc.toObject();
         
-        // Lấy thông tin tên nguyên liệu để trả về đồng bộ
         const ingIds = processed.recipeIngredientDocs.map(i => i.ingredient_id);
         const ingsData = await Ingredient.find({ _id: { $in: ingIds } }).lean();
         const ingMap = {};
@@ -350,9 +367,13 @@ async function addRecipe(req, res, next) {
         }));
       }
     } else {
-      await RecipeNutrition.create({ recipe_id: recipe._id, calories: 0, protein: 0, fat: 0, carbs: 0 });
+      await RecipeNutrition.create(
+        [{ recipe_id: recipe._id, calories: 0, protein: 0, fat: 0, carbs: 0 }],
+        { session }
+      );
     }
 
+    // 4. Xử lý Các bước thực hiện
     let stepsList = [];
     if (steps && Array.isArray(steps) && steps.length > 0) {
       const recipeStepDocs = steps.map((stepContent, index) => ({
@@ -360,14 +381,19 @@ async function addRecipe(req, res, next) {
         step_number: index + 1,
         instruction: typeof stepContent === 'object' ? stepContent.instruction : stepContent,
       }));
-      await RecipeStep.insertMany(recipeStepDocs);
+      await RecipeStep.insertMany(recipeStepDocs, { session });
       stepsList = recipeStepDocs.map(s => s.instruction);
     }
 
-    const responseData = mapRecipeForAdmin(recipe.toObject(), savedNutrition, null, ingredients?.length || 0, stepsList.length, [], stepsList);
+    await session.commitTransaction();
+    session.endSession();
+
+    const responseData = mapRecipeForAdmin(recipe.toObject(), savedNutrition, null, enrichedIngredients.length, stepsList.length, enrichedIngredients, stepsList);
 
     return res.status(201).json({ success: true, message: 'Tạo công thức thành công!', data: responseData });
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     console.error('❌ Error adding recipe:', err);
     return next(new AppError(err.message || 'Tạo công thức thất bại.', 500));
   }
@@ -375,80 +401,187 @@ async function addRecipe(req, res, next) {
 
 /**
  * UC-74: PUT /api/admin/recipes/:id
- * ☁️ ĐÃ MÓC CLOUDINARY XỬ LÝ CHUỖI BASE64 KHI UPDATE CÔNG THỨC
  */
 async function updateRecipe(req, res, next) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const recipeId = req.params.id;
-    const { name, description, image_url, cooking_time, base_servings, status, level_cooking, ingredients, steps } = req.body;
+    console.log(`\n=================== 🚀 UPDATE RECIPE START [ID: ${recipeId}] ===================`);
+    console.log('📦 Request Body received:', JSON.stringify(req.body, null, 2));
 
-    const recipe = await Recipe.findById(recipeId);
+    const { 
+      name, 
+      description, 
+      cooking_time, 
+      base_servings, 
+      status, 
+      level_cooking, 
+      ingredients, 
+      steps 
+    } = req.body;
+
+    // 1. Get image_url flexibly (snake_case or camelCase)
+    const rawImageUrl = req.body.image_url !== undefined ? req.body.image_url : req.body.imageUrl;
+    console.log('🖼️ RAW Image Field Check:', {
+      'req.body.image_url': req.body.image_url,
+      'req.body.imageUrl': req.body.imageUrl,
+      'Resolved rawImageUrl': rawImageUrl
+    });
+
+    const recipe = await Recipe.findById(recipeId).session(session);
     if (!recipe) {
-      return next(new AppError('Không tìm thấy công thức để cập nhật.', 404));
+      console.log(`❌ Recipe NOT FOUND in DB for ID: ${recipeId}`);
+      await session.abortTransaction();
+      session.endSession();
+      return next(new AppError('Recipe not found for update.', 404));
     }
 
+    console.log('📌 Current Image URL in DB:', recipe.image_url);
+
+    // 2. Update basic fields
     if (name) recipe.name = name;
     if (description !== undefined) recipe.description = description;
-    
-    // 🔥 Xử lý ảnh khi cập nhật: Nếu frontend thay ảnh mới bằng base64 thì upload lên Cloudinary
-    if (image_url !== undefined) {
-      if (image_url && image_url.startsWith('data:image')) {
-        recipe.image_url = await uploadBase64ToCloudinary(image_url);
+
+    // 3. Handle Image Upload & Base64 edge cases
+    if (rawImageUrl !== undefined && rawImageUrl !== null) {
+      const isBase64 = typeof rawImageUrl === 'string' && (
+        rawImageUrl.toLowerCase().startsWith('data:image') || 
+        /^[A-Za-z0-9+/=]+\s*$/.test(rawImageUrl.substring(0, 100))
+      );
+
+      console.log('🔍 Image Processing Check:', { isBase64 });
+
+      if (isBase64) {
+        console.log('🔄 Detected Base64 format -> Uploading to Cloudinary...');
+        let formattedBase64 = rawImageUrl;
+        if (!formattedBase64.toLowerCase().startsWith('data:image')) {
+          formattedBase64 = `data:image/png;base64,${formattedBase64}`;
+        }
+
+        try {
+          const uploadedUrl = await uploadBase64ToCloudinary(formattedBase64);
+          console.log('✅ Cloudinary Upload Success -> New URL:', uploadedUrl);
+          if (uploadedUrl) {
+            recipe.image_url = uploadedUrl;
+          } else {
+            throw new Error('Cloudinary returned an empty URL.');
+          }
+        } catch (uploadErr) {
+          console.error('❌ Cloudinary Upload Error:', uploadErr);
+          await session.abortTransaction();
+          session.endSession();
+          return next(new AppError('Failed to upload image. Please try again!', 500));
+        }
       } else {
-        recipe.image_url = image_url;
+        console.log('🔗 Assigning direct URL string to recipe.image_url:', rawImageUrl);
+        recipe.image_url = rawImageUrl;
       }
+    } else {
+      console.log('⚠️ rawImageUrl is UNDEFINED or NULL. Image field will NOT be modified.');
     }
-    
+
+    console.log('💾 Image URL about to be saved in DB:', recipe.image_url);
+
     if (cooking_time !== undefined) recipe.cooking_time = Number(cooking_time);
     if (base_servings !== undefined) recipe.base_servings = Number(base_servings);
     if (status) recipe.status = status;
     if (level_cooking) recipe.level_cooking = level_cooking;
-    await recipe.save();
 
+    // 4. Update steps array in main document
+    let stepsList = [];
+    if (steps && Array.isArray(steps)) {
+      stepsList = steps.map(stepContent => typeof stepContent === 'object' ? stepContent.instruction : stepContent);
+      recipe.steps = stepsList;
+    }
+
+    // Save main recipe document
+    await recipe.save({ session });
+    console.log('💾 Main Recipe Document saved successfully.');
+
+    // 5. Handle Ingredients & Nutrition
     let savedNutrition = { calories: 0, protein: 0, fat: 0, carbs: 0 };
     let enrichedIngredients = [];
 
     if (ingredients && Array.isArray(ingredients)) {
-      await RecipeIngredient.deleteMany({ recipe_id: recipeId });
+      await RecipeIngredient.deleteMany({ recipe_id: recipeId }, { session });
+
       if (ingredients.length > 0) {
         const processed = await processRecipeIngredients(recipeId, ingredients);
         if (processed.recipeIngredientDocs.length > 0) {
-          await RecipeIngredient.insertMany(processed.recipeIngredientDocs);
-          const nutDoc = await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { ...processed.nutrition }, { upsert: true, new: true });
+          await RecipeIngredient.insertMany(processed.recipeIngredientDocs, { session });
+
+          const nutDoc = await RecipeNutrition.findOneAndUpdate(
+            { recipe_id: recipeId },
+            { ...processed.nutrition },
+            { upsert: true, returnDocument: 'after', session }
+          );
           if (nutDoc) savedNutrition = nutDoc.toObject();
 
           const ingIds = processed.recipeIngredientDocs.map(i => i.ingredient_id);
           const ingsData = await Ingredient.find({ _id: { $in: ingIds } }).lean();
           const ingMap = {};
           ingsData.forEach(d => { ingMap[d._id.toString()] = d; });
-          
+
           enrichedIngredients = processed.recipeIngredientDocs.map(item => ({
             ...item,
-            name: ingMap[item.ingredient_id]?.name || "Nguyên liệu ẩn",
+            name: ingMap[item.ingredient_id]?.name || "Unknown ingredient",
             unit: item.unit || ingMap[item.ingredient_id]?.unit || "g"
           }));
         }
       } else {
-        await RecipeNutrition.findOneAndUpdate({ recipe_id: recipeId }, { calories: 0, protein: 0, fat: 0, carbs: 0 }, { upsert: true });
+        await RecipeNutrition.findOneAndUpdate(
+          { recipe_id: recipeId },
+          { calories: 0, protein: 0, fat: 0, carbs: 0 },
+          { upsert: true, returnDocument: 'after', session }
+        );
       }
     }
 
-    let stepsList = [];
+    // 6. Save steps to RecipeStep auxiliary table
     if (steps && Array.isArray(steps)) {
-      await RecipeStep.deleteMany({ recipe_id: recipeId });
+      await RecipeStep.deleteMany({ recipe_id: recipeId }, { session });
       if (steps.length > 0) {
-        const recipeStepDocs = steps.map((stepContent, index) => ({ recipe_id: recipeId, step_number: index + 1, instruction: typeof stepContent === 'object' ? stepContent.instruction : stepContent }));
-        await RecipeStep.insertMany(recipeStepDocs);
-        stepsList = recipeStepDocs.map(s => s.instruction);
+        const recipeStepDocs = steps.map((stepContent, index) => ({
+          recipe_id: recipeId,
+          step_number: index + 1,
+          instruction: typeof stepContent === 'object' ? stepContent.instruction : stepContent
+        }));
+        await RecipeStep.insertMany(recipeStepDocs, { session });
       }
     }
 
-    const responseData = mapRecipeForAdmin(recipe.toObject(), savedNutrition, null, ingredients?.length || 0, stepsList.length, [], stepsList);
+    // Commit Transaction
+    await session.commitTransaction();
+    session.endSession();
+    console.log('🎉 Transaction Committed Successfully!');
 
-    return res.json({ success: true, message: 'Cập nhật công thức thành công!', data: responseData });
+    // Map updated data for response
+    const responseData = mapRecipeForAdmin(
+      recipe.toObject(),
+      savedNutrition,
+      null,
+      enrichedIngredients.length,
+      stepsList.length,
+      enrichedIngredients,
+      stepsList
+    );
+
+    console.log('📤 Final Response image_url:', responseData.image_url || responseData.imageUrl);
+    console.log(`=================== 🏁 UPDATE RECIPE END [ID: ${recipeId}] ===================\n`);
+
+    return res.json({
+      success: true,
+      message: 'Recipe updated successfully!',
+      data: responseData
+    });
+
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     console.error('❌ Error updating recipe:', err);
-    return next(new AppError(err.message || 'Cập nhật công thức thất bại.', 500));
+    return next(new AppError(err.message || 'Failed to update recipe.', 500));
   }
 }
 
@@ -524,8 +657,13 @@ async function searchAndFilterRecipes(req, res, next) {
  * UC-76: POST /api/admin/recipes/import-excel
  */
 async function importRecipesExcel(req, res, next) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     if (!req.file) {
+      await session.abortTransaction();
+      session.endSession();
       return next(new AppError('Vui lòng cung cấp tệp Excel (.xlsx hoặc .xls).', 400));
     }
 
@@ -535,6 +673,8 @@ async function importRecipesExcel(req, res, next) {
     const rows = xlsx.utils.sheet_to_json(worksheet);
 
     if (rows.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
       return next(new AppError('Tệp Excel trống không có dữ liệu.', 400));
     }
 
@@ -618,16 +758,23 @@ async function importRecipesExcel(req, res, next) {
     }
 
     if (errorLog.length > 0) {
+      await session.abortTransaction();
+      session.endSession();
       return next(new AppError('Import thất bại do dữ liệu file Excel chứa lỗi logic.', 422, null, errorLog));
     }
 
-    if (recipesToInsert.length > 0) { await Recipe.insertMany(recipesToInsert); }
-    if (ingredientsToInsert.length > 0) { await RecipeIngredient.insertMany(ingredientsToInsert); }
-    if (stepsToInsert.length > 0) { await RecipeStep.insertMany(stepsToInsert); }
-    if (nutritionsToInsert.length > 0) { await RecipeNutrition.insertMany(nutritionsToInsert); }
+    if (recipesToInsert.length > 0) { await Recipe.insertMany(recipesToInsert, { session }); }
+    if (ingredientsToInsert.length > 0) { await RecipeIngredient.insertMany(ingredientsToInsert, { session }); }
+    if (stepsToInsert.length > 0) { await RecipeStep.insertMany(stepsToInsert, { session }); }
+    if (nutritionsToInsert.length > 0) { await RecipeNutrition.insertMany(nutritionsToInsert, { session }); }
+
+    await session.commitTransaction();
+    session.endSession();
 
     return res.status(201).json({ success: true, message: 'Import công thức từ Excel thành công!', data: { totalProcessed: rows.length, totalImported: recipesToInsert.length } });
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     console.error('❌ Error Importing Excel Recipes:', err);
     return next(new AppError(err.message || 'Xảy ra lỗi hệ thống khi nhập dữ liệu tệp Excel.', 500));
   }

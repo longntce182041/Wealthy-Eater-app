@@ -6,7 +6,8 @@ import '../widgets/custom_elevated_button.dart';
 import '../widgets/custom_text_field.dart';
 
 class ForgetPasswordScreen extends StatefulWidget {
-  const ForgetPasswordScreen({super.key});
+  final bool isNutritionist;
+  const ForgetPasswordScreen({super.key, this.isNutritionist = false});
 
   @override
   State<ForgetPasswordScreen> createState() => _ForgetPasswordScreenState();
@@ -99,7 +100,7 @@ class _ForgetPasswordScreenState extends State<ForgetPasswordScreen> {
     final otp = _otpCtrl.text.trim();
     final newPassword = _newPasswordCtrl.text;
 
-    final success = await auth.resetPassword(identifier, otp, newPassword);
+    final success = await auth.resetPassword(identifier, otp, newPassword, isNutritionist: widget.isNutritionist);
     if (!mounted) return;
 
     if (success) {

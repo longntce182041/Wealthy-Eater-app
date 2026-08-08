@@ -12,9 +12,13 @@ import 'recipe_likes_tab.dart';
 import 'recipe_list_view.dart';
 import 'recipe_my_reviews_tab.dart';
 import 'shopping_list_tab.dart';
+import 'ai_recipes_tab.dart';
 import 'dashboard_home_tab.dart';
 import 'customer_profile_tab.dart';
 import 'meal_plans_tab.dart';
+
+import 'package:socket_io_client/socket_io_client.dart' as socket_io;
+import '../../core/config/env_config.dart';
 
 class HomeScreen extends StatefulWidget {
   final UserEntity? user;
@@ -27,16 +31,57 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  socket_io.Socket? _socket;
 
   @override
   void initState() {
     super.initState();
+    _initSocket();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<RecipeProvider>().loadRecipes();
       context.read<NotificationProvider>().fetchSettings();
       context.read<NotificationProvider>().fetchHistory();
       context.read<ShoppingListProvider>().loadList();
     });
+  }
+
+  void _initSocket() {
+    final token = context.read<AuthProvider>().token;
+    if (token == null) return;
+    
+    final baseUrl = EnvConfig.baseUrl;
+    _socket = socket_io.io(
+      baseUrl,
+      socket_io.OptionBuilder()
+          .setTransports(['websocket', 'polling'])
+          .enableAutoConnect()
+          .setExtraHeaders({'Authorization': 'Bearer $token'})
+          .build(),
+    );
+
+    _socket?.on('macro_rings_update', (data) {
+      if (!mounted) return;
+      final payload = data['payload'] ?? {};
+      final route = payload['route'] ?? 'UNKNOWN';
+      final delta = payload['delta_cal'] ?? 0;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🔔 UC-42 Auto-Adjust: $route (Delta: $delta kcal)'),
+          backgroundColor: Colors.blueAccent,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    });
+
+    _socket?.connect();
+  }
+
+  @override
+  void dispose() {
+    _socket?.disconnect();
+    _socket?.dispose();
+    super.dispose();
   }
 
   void _selectTab(int index) => setState(() => _selectedIndex = index);
@@ -200,7 +245,7 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -216,11 +261,16 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
         // Sub-tab bar
         TabBar(
           controller: _tabController,
+          isScrollable: false,
+          labelPadding: EdgeInsets.zero,
+          indicatorSize: TabBarIndicatorSize.label,
           tabs: const [
-            Tab(icon: Icon(Icons.menu_book_outlined),       text: 'Browse'),
-            Tab(icon: Icon(Icons.favorite_outline),          text: 'Liked'),
-            Tab(icon: Icon(Icons.rate_review),               text: 'Reviews'),
-            Tab(icon: Icon(Icons.shopping_cart_outlined),    text: 'Shopping'),
+
+            Tab(icon: Icon(Icons.menu_book_outlined),    text: 'Browse'),
+            Tab(icon: Icon(Icons.favorite_outline),       text: 'Liked'),
+            Tab(icon: Icon(Icons.rate_review_outlined),   text: 'Reviews'),
+            Tab(icon: Icon(Icons.shopping_cart_outlined), text: 'Shopping'),
+            Tab(icon: Icon(Icons.smart_toy_outlined),     text: 'AI Saved'),
           ],
         ),
         // Sub-tab content
@@ -228,10 +278,12 @@ class _RecipeNavTabState extends State<_RecipeNavTab>
           child: TabBarView(
             controller: _tabController,
             children: const [
+
               RecipeListView(showHeader: false),
               RecipeLikesTab(),
               RecipeMyReviewsTab(),
               ShoppingListTab(),
+              AiRecipesTab(),
             ],
           ),
         ),

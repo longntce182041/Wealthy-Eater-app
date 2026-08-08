@@ -1,12 +1,5 @@
 /**
  * cloudinary.config.js — Multer configuration for image uploads using Cloudinary.
- *
- * Configures Cloudinary storage engines for different upload contexts.
- * Currently supports 'chat' uploads stored in the 'WealthyEater/chat' folder.
- *
- * Constraints:
- * - Max file size: 10 MB
- * - Allowed formats: JPEG, PNG, WebP, GIF
  */
 
 const multer = require('multer');
@@ -49,20 +42,14 @@ function fileFilter(_req, file, cb) {
   }
 }
 
-// ── Storage Engines (DRY Principle Applied) ──────────────────────────────────
+// ── Storage Engines ──────────────────────────────────────────────────────────
 
-/**
- * Tạo cấu hình CloudinaryStorage chung giúp dễ dàng mở rộng và tối ưu hóa
- * @param {string} folderName - Tên thư mục con bên trong 'WealthyEater/'
- * @returns {CloudinaryStorage}
- */
 const createCloudinaryStorage = (folderName) => {
   return new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
       folder: `WealthyEater/${folderName}`,
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-      // Tự động chuyển đổi sang webp/avif tùy thiết bị và nén tự động để tối ưu hiệu năng (Performance Optimization)
       transformation: [{ fetch_format: 'auto' }, { quality: 'auto' }],
       public_id: (req, file) => `${folderName}_${Date.now()}_${Math.floor(Math.random() * 100000)}`,
     },
@@ -71,6 +58,8 @@ const createCloudinaryStorage = (folderName) => {
 
 const chatStorage = createCloudinaryStorage('chat');
 const avatarStorage = createCloudinaryStorage('avatars');
+// 🟢 1. Khai báo Storage cho Recipes
+const recipeStorage = createCloudinaryStorage('recipes'); 
 
 // ── Export Configured Multer Instances ────────────────────────────────────────
 
@@ -86,19 +75,21 @@ const avatarUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
 });
 
-// 🆕 ── Cấu hình bổ sung phục vụ Recipe & Excel ───────────────────────────────
+// 🟢 2. KHAI BÁO BIẾN recipeUpload Ở ĐÂY
+const recipeUpload = multer({
+  storage: recipeStorage,
+  fileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+});
 
-/**
- * Helper hỗ trợ upload một chuỗi ảnh Base64 từ Frontend lên Cloudinary nhằm giải quyết lỗi 413 Payload Too Large
- * @param {String} base64Str Chuỗi ảnh base64 từ frontend gửi lên
- * @returns {Promise<String>} Trả về đường dẫn URL của ảnh sau khi upload thành công
- */
+// ── Cấu hình bổ sung phục vụ Recipe & Excel ───────────────────────────────
+
 const uploadBase64ToCloudinary = async (base64Str) => {
   if (!base64Str || !base64Str.startsWith('data:image')) return base64Str;
   
   try {
     const uploadResponse = await cloudinary.uploader.upload(base64Str, {
-      folder: 'WealthyEater/recipes', // Đưa vào cụm thư mục gốc chung WealthyEater
+      folder: 'WealthyEater/recipes',
       resource_type: 'image'
     });
     return uploadResponse.secure_url;
@@ -108,17 +99,11 @@ const uploadBase64ToCloudinary = async (base64Str) => {
   }
 };
 
-// Cấu hình lưu tạm file Excel vào RAM để làm sạch payload trung gian
 const uploadExcel = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // Giới hạn file excel 10MB
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-/**
- * Trích xuất public_id từ URL Cloudinary để dọn dẹp file cũ (tránh leak storage)
- * @param {string} url - URL của ảnh trên Cloudinary
- * @returns {string|null}
- */
 const extractCloudinaryPublicId = (url) => {
   if (!url || !url.includes('cloudinary.com')) return null;
   try {
@@ -126,24 +111,20 @@ const extractCloudinaryPublicId = (url) => {
     if (parts.length < 2) return null;
     let path = parts[1];
 
-    // Loại bỏ version (ex: v1234567890/)
     if (path.match(/^v\d+\//)) {
       path = path.replace(/^v\d+\//, '');
     }
 
-    // Loại bỏ transformation (ex: f_auto,q_auto/)
     if (path.includes('/')) {
       const firstSegment = path.substring(0, path.indexOf('/'));
-      if (firstSegment.includes(',')) { // Khả năng cao là transformation
+      if (firstSegment.includes(',')) {
         path = path.substring(path.indexOf('/') + 1);
-        // Loại bỏ version nếu version đứng sau transformation
         if (path.match(/^v\d+\//)) {
           path = path.replace(/^v\d+\//, '');
         }
       }
     }
 
-    // Loại bỏ extension
     const dotIndex = path.lastIndexOf('.');
     if (dotIndex !== -1) {
       path = path.substring(0, dotIndex);
@@ -155,11 +136,6 @@ const extractCloudinaryPublicId = (url) => {
   }
 };
 
-/**
- * Tải lên chứng chỉ chuyên gia dinh dưỡng (hỗ trợ buffer stream)
- * @param {Express.Multer.File} file 
- * @param {string} certificateUrl 
- */
 function uploadNutritionistCertificate(file, certificateUrl) {
   if (certificateUrl) {
     if (typeof certificateUrl !== "string" || !certificateUrl.trim()) {
@@ -205,13 +181,15 @@ function uploadNutritionistCertificate(file, certificateUrl) {
   });
 }
 
-// 🔥 Cập nhật xuất bản đầy đủ hàm ra bên ngoài
+// 🟢 3. EXPORT CÁC BIẾN ĐÃ ĐƯỢC KHAI BÁO
 module.exports = {
   cloudinary,
   chatUpload,
   avatarUpload,
-  uploadExcel,               // 🆕 Xuất bản cho route Excel nhận diện
-  uploadBase64ToCloudinary,  // 🆕 Xuất bản cho controller xử lý chuỗi ảnh
+  recipeUpload,               // Đã có khai báo ở trên!
+  uploadImage: recipeUpload,  // Alias hỗ trợ route
+  uploadExcel,
+  uploadBase64ToCloudinary,
   extractCloudinaryPublicId,
   uploadNutritionistCertificate
 };
