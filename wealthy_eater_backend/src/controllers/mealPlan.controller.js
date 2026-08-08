@@ -665,7 +665,7 @@ const scanMealImageEndpoint = async (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        error: "Missing image file. Use multipart/form-data with field 'image'.",
+        error: { message: "Missing image file. Please upload a clear photo of your meal plate." },
       });
     }
 
@@ -676,7 +676,15 @@ const scanMealImageEndpoint = async (req, res, next) => {
       data: result,
     });
   } catch (error) {
-    next(error);
+    console.error("⚠️ [Scan Meal Error]:", error.message);
+    const friendlyMsg = error.message && !error.message.includes("N8N_") && !error.message.includes("HTTP_")
+      ? error.message
+      : "No valid meal detected in image. Please take a clear photo of your meal plate and try again.";
+
+    return res.status(400).json({
+      success: false,
+      error: { message: friendlyMsg },
+    });
   }
 };
 
