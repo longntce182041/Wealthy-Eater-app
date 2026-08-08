@@ -3,11 +3,6 @@ enum Environment { dev, staging, prod }
 
 class EnvConfig {
   static Environment environment = Environment.dev;
-
-  static String get _localDevBaseUrl {
-    return 'https://wealthy-eater-app.onrender.com';
-  }
-
   static String get baseUrl {
     switch (environment) {
       case Environment.prod:

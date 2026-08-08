@@ -1191,14 +1191,14 @@ class _RecipeSearchSheetState extends State<_RecipeSearchSheet> {
             const SizedBox(height: 16),
             Text(
               _searchController.text.isEmpty
-                  ? 'Không có món nào phù hợp.'
-                  : 'Không tìm thấy\n"${_searchController.text}"',
+                  ? 'No matching recipes found.'
+                  : 'No results for\n"${_searchController.text}"',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[500], fontSize: 15),
             ),
             const SizedBox(height: 8),
             Text(
-              'Thử từ khoá khác hoặc bỏ filter loại bữa.',
+              'Try different keywords or clear the meal type filter.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[400], fontSize: 13),
             ),
@@ -1217,14 +1217,14 @@ class _RecipeSearchSheetState extends State<_RecipeSearchSheet> {
           children: [
             Icon(Icons.wifi_off_outlined, size: 48, color: Colors.grey[400]),
             const SizedBox(height: 12),
-            const Text('Không tải được danh sách', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Failed to load recipe list', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text(error, style: TextStyle(color: Colors.grey[400], fontSize: 12), textAlign: TextAlign.center),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () => _triggerSearch(reset: true),
               icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Thử lại'),
+              label: const Text('Retry'),
             ),
           ],
         ),
@@ -1307,7 +1307,7 @@ class _RecipeCard extends StatelessWidget {
                           Icon(Icons.timer_outlined, size: 11, color: Colors.grey[500]),
                           const SizedBox(width: 3),
                           Text(
-                            '$cookTime phút',
+                            '$cookTime min',
                             style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                           ),
                         ],

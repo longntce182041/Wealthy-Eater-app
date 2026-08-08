@@ -10,6 +10,7 @@ import 'chatbot_screen.dart';
 import 'profile_form_screen.dart';
 import 'meal_image_scan_screen.dart';
 import 'pantry_screen.dart';
+import '../widgets/base_card.dart';
 
 class DashboardHomeTab extends StatefulWidget {
   final UserEntity? user;
@@ -119,16 +120,11 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               const SizedBox(height: 10),
               
               // BMI Card
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              BaseCard(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -191,7 +187,6 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                       ),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 16),
 
@@ -199,16 +194,11 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               Row(
                 children: [
                   Expanded(
-                    child: Card(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                    child: BaseCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                             Row(
                               children: [
                                 Container(
@@ -262,21 +252,15 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                             ),
                           ],
                         ),
-                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Card(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                    child: BaseCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                             Row(
                               children: [
                                 Container(
@@ -332,7 +316,6 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                             ),
                           ],
                         ),
-                      ),
                     ),
                   ),
                 ],
@@ -340,18 +323,11 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
               const SizedBox(height: 16),
               
               // Basic stats summary
-              Card(
-                color: Colors.grey.shade50,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
+              BaseCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
                       _buildStatSubItem('Height', '${height.toStringAsFixed(0)} cm'),
                       _buildDivider(),
                       _buildStatSubItem('Weight', '${weight.toStringAsFixed(1)} kg'),
@@ -361,7 +337,6 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                       _buildStatSubItem('Goal', goal.toUpperCase()),
                     ],
                   ),
-                ),
               ),
               const SizedBox(height: 20),
 
@@ -642,16 +617,11 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
       }
     }
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return BaseCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -832,7 +802,6 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
             ],
           ],
         ),
-      ),
     );
   }
 }

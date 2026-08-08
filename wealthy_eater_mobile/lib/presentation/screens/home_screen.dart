@@ -18,7 +18,6 @@ import 'customer_profile_tab.dart';
 import 'meal_plans_tab.dart';
 
 import 'package:socket_io_client/socket_io_client.dart' as socket_io;
-import 'package:flutter/foundation.dart';
 import '../../core/config/env_config.dart';
 
 class HomeScreen extends StatefulWidget {
