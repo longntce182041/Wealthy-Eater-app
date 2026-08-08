@@ -109,19 +109,21 @@ class N8nService {
   }
 
   async callGeminiVisionFallback(file, apiKey) {
-    // Model verified at ai.google.dev/gemini-api/docs/models (updated 2026-08)
-    const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.5-flash'; // gemini-flash-latest has been deprecated
+    // Model verified at ai.google.dev/gemini-api/docs/models
+    const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt = [
       "You are an elite clinical research dietitian and expert culinary vision assistant.",
       "Analyze the meal image and return the estimated meal name, confidence score, ingredients list, and macro-nutritional totals.",
-      "CRITICAL: Camera photos are 2D representations without depth or density measurements. Weight estimations carry inherent visual uncertainty. Score confidence strictly between 0.30 and 0.65 for 2D portion estimates. Never score above 0.65.",
+      "CRITICAL - 2D ESTIMATION: Camera photos are 2D representations without depth or density measurements. Weight estimations carry inherent visual uncertainty. Score confidence strictly between 0.30 and 0.65 for 2D portion estimates. Never score above 0.65.",
+      "CRITICAL - NON-FOOD IMAGES: If the photo does NOT depict a food dish or meal plate (e.g. human face, person, document, animal, or non-food object), set 'is_valid_meal': false, 'meal_name': 'No Food Detected', 'confidence': 0, 'ingredients': [], and 'note': 'No valid meal detected in image. Please take a clear photo of your meal plate and try again.'",
       "You must output your response exclusively as a minified, valid JSON object that strictly adheres to the requested application schema. Do not append any conversational prefaces, explanation, or markdown fences (e.g. do not wrap with ```json).",
       "JSON schema:",
       "{",
+      '  "is_valid_meal": boolean,',
       '  "meal_name": "string (creative name of the dish)",',
-      '  "confidence": number (strictly between 0.30 and 0.65),',
+      '  "confidence": number (strictly between 0.30 and 0.65 for valid meals, or 0 for non-food),',
       '  "ingredients": [',
       '    {',
       '      "name": "string (simple singular ingredient name, e.g. Chicken breast)",',
@@ -179,6 +181,10 @@ class N8nService {
     }
 
     const parsed = JSON.parse(cleanText);
+
+    if (parsed.is_valid_meal === false || (parseFloat(parsed.confidence) === 0) || !parsed.ingredients || parsed.ingredients.length === 0) {
+      throw new Error("No valid meal detected in image. Please take a clear photo of your meal plate and try again.");
+    }
 
     // Enforce strict confidence cap for 2D camera image analysis (max 0.65)
     const rawConfidence = parseFloat(parsed.confidence);

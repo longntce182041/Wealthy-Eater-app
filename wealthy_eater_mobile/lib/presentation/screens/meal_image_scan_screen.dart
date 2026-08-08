@@ -28,7 +28,12 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
 
   @override
   void dispose() {
-    _scanProvider?.clear();
+    final provider = _scanProvider;
+    if (provider != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        provider.clear();
+      });
+    }
     super.dispose();
   }
 
@@ -119,7 +124,7 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
               // ── Error State ──
               if (provider.error != null) ...[
                 const SizedBox(height: 12),
-                _buildErrorCard(provider.error!),
+                _buildErrorCard(context, provider, provider.error!),
               ],
 
               // ── Result Summary ──
@@ -278,43 +283,109 @@ class _MealImageScanScreenState extends State<MealImageScanScreen> {
     );
   }
 
-  Widget _buildErrorCard(String message) {
+  Widget _buildErrorCard(BuildContext context, MealImageScanProvider provider, String message) {
+    final bool isNonFoodError = message.toLowerCase().contains('no valid meal') || 
+                                message.toLowerCase().contains('photo') || 
+                                message.toLowerCase().contains('food') ||
+                                message.toLowerCase().contains('detected');
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFEBEE),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFCDD2)),
+        color: const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFFB74D), width: 1.2),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Analysis Failed',
-                  style: TextStyle(
-                    color: Color(0xFFC62828),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFE0B2),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  message,
+                child: const Icon(
+                  Icons.no_meals_outlined,
+                  color: Color(0xFFE65100),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  isNonFoodError ? 'No Meal Detected' : 'Analysis Failed',
                   style: const TextStyle(
-                    color: Color(0xFFD32F2F),
-                    fontSize: 13,
-                    height: 1.3,
+                    color: Color(0xFFE65100),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
                   ),
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message.isNotEmpty
+                ? message
+                : 'No valid meal detected in image. Please take a clear photo of your meal plate and try again.',
+            style: const TextStyle(
+              color: Color(0xFF5D4037),
+              fontSize: 13,
+              height: 1.4,
+              fontWeight: FontWeight.w500,
             ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => provider.pickAndScan(ImageSource.gallery),
+                  icon: const Icon(Icons.photo_library_outlined, color: AppColors.primary, size: 18),
+                  label: const Text(
+                    'Choose Photo',
+                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: const BorderSide(color: AppColors.primary),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => provider.pickAndScan(ImageSource.camera),
+                  icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 18),
+                  label: const Text(
+                    'Retake Photo',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
