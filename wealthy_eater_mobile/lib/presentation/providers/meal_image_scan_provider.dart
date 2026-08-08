@@ -42,7 +42,7 @@ class MealImageScanProvider extends ChangeNotifier {
   /// and sends it to the backend for analysis.
   Future<void> pickAndScan(ImageSource source) async {
     if (source == ImageSource.camera && !supportsCameraSource) {
-      _error = 'Thiết bị hoặc nền tảng không hỗ trợ chụp ảnh trực tiếp.';
+      _error = 'This device or platform does not support live camera capture.';
       notifyListeners();
       return;
     }

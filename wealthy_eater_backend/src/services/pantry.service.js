@@ -100,16 +100,17 @@ class PantryService {
       if (apiKey) {
         console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis for Pantry Scan...");
         try {
-          const model = process.env.GEMINI_VISION_MODEL || "gemini-flash-latest";
+          // Model verified at ai.google.dev/gemini-api/docs/models (updated 2026-08)
+          const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.5-flash'; // gemini-flash-latest has been deprecated
           const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
           
           const prompt = [
             "You are an expert culinary AI assistant.",
             "Analyze the image of this pantry or fridge and return a list of visible ingredients.",
             "Output exclusively a minified JSON array of objects without markdown. Each object must have:",
-            '- "name": string (simple ingredient name, e.g., "Egg", "Milk", "Tomato")',
-            '- "quantity": number (estimated amount)',
-            '- "unit": string (e.g., "units", "ml", "g")'
+            '- "name": string (simple, clean ingredient name, e.g., "Egg", "Milk", "Tomato")',
+            '- "quantity": number (estimated realistic amount based on visual size)',
+            '- "unit": string. MUST be exactly one of: "g", "kg", "ml", "l", "pieces", "bunch". Use "pieces" for countable solid items (e.g. eggs, tomatoes) instead of generic terms.'
           ].join("\\n");
 
           const geminiPayload = {
@@ -140,17 +141,17 @@ class PantryService {
         } catch (geminiError) {
           console.error('❌ [Gemini Fallback Failed]:', geminiError.message);
           const AppError = require('../utils/AppError');
-          throw new AppError('Dịch vụ quét tủ lạnh và AI dự phòng đều không khả dụng. Vui lòng thử lại.', 503, 'SERVICE_UNAVAILABLE');
+          throw new AppError('Pantry scan service and AI fallback are both unavailable. Please try again.', 503, 'SERVICE_UNAVAILABLE');
         }
       } else {
         const AppError = require('../utils/AppError');
-        throw new AppError('Dịch vụ quét tủ lạnh không khả dụng và chưa cấu hình AI dự phòng.', 503, 'SERVICE_UNAVAILABLE');
+        throw new AppError('Pantry scan service is unavailable and no AI fallback is configured.', 503, 'SERVICE_UNAVAILABLE');
       }
     }
 
     // Normalize all items to objects
     const normalizedItems = rawIngredients
-      .map(item => typeof item === 'string' ? { name: item, quantity: 1, unit: 'units' } : item)
+      .map(item => typeof item === 'string' ? { name: item, quantity: 1, unit: 'pieces' } : item)
       .filter(item => item && item.name && item.name.trim());
 
     // Bulk query: 1 DB call instead of N (N+1 fix)

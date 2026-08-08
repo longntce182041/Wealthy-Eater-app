@@ -2,7 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 class DietAuditChart extends StatelessWidget {
-  // Nhận dữ liệu truyền vào từ API Backend
+  // Data received from Backend API
   final Map<String, dynamic> targetData;
   final Map<String, dynamic> actualData;
 
@@ -23,26 +23,26 @@ class DietAuditChart extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Đối chiếu Dinh dưỡng Song song",
+              "Nutrition Comparison",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            // Chú thích màu sắc cột
+            // Legend
             Row(
               children: [
-                _buildIndicator(Colors.blue, "Mục tiêu"),
+                _buildIndicator(Colors.blue, "Target"),
                 const SizedBox(width: 16),
-                _buildIndicator(Colors.orange, "Thực tế thực ăn"),
+                _buildIndicator(Colors.orange, "Actual"),
               ],
             ),
             const SizedBox(height: 24),
-            // Khung chứa Biểu đồ fl_chart
+            // Chart container
             SizedBox(
               height: 300,
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
-                  maxY: _getMaxY(), // Tự động tính chiều cao đỉnh biểu đồ
+                  maxY: _getMaxY(),
                   barTouchData: BarTouchData(enabled: true),
                   titlesData: FlTitlesData(
                     show: true,
@@ -50,7 +50,7 @@ class DietAuditChart extends StatelessWidget {
                       sideTitles: SideTitles(
                         showTitles: true,
                         getTitlesWidget: (value, meta) {
-                          const titles = ["Calo (x10)", "Protein", "Fat", "Carbs"];
+                          const titles = ["Cal (÷10)", "Protein", "Fat", "Carbs"];
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Text(titles[value.toInt()],
@@ -65,13 +65,13 @@ class DietAuditChart extends StatelessWidget {
                   ),
                   borderData: FlBorderData(show: false),
                   barGroups: [
-                    // Cột 0: Calories (Chia 10 để scale tỉ lệ vừa vặn với các chất Gram)
+                    // Column 0: Calories (÷10 to scale alongside gram-based values)
                     _makeBarGroup(0, (targetData['calories'] ?? 0) / 10, (actualData['calories'] ?? 0) / 10),
-                    // Cột 1: Protein (g)
+                    // Column 1: Protein (g)
                     _makeBarGroup(1, (targetData['protein'] ?? 0).toDouble(), (actualData['protein'] ?? 0).toDouble()),
-                    // Cột 2: Fat (g)
+                    // Column 2: Fat (g)
                     _makeBarGroup(2, (targetData['fat'] ?? 0).toDouble(), (actualData['fat'] ?? 0).toDouble()),
-                    // Cột 3: Carbs (g)
+                    // Column 3: Carbs (g)
                     _makeBarGroup(3, (targetData['carbs'] ?? 0).toDouble(), (actualData['carbs'] ?? 0).toDouble()),
                   ],
                 ),
@@ -83,7 +83,7 @@ class DietAuditChart extends StatelessWidget {
     );
   }
 
-  // Hàm helper tạo nhóm 2 cột đứng song song nhau
+  // Helper: creates a pair of side-by-side bars
   BarChartGroupData _makeBarGroup(int x, double targetValue, double actualValue) {
     return BarChartGroupData(
       x: x,
@@ -105,7 +105,7 @@ class DietAuditChart extends StatelessWidget {
   }
 
   double _getMaxY() {
-    // Tìm giá trị lớn nhất để làm trần biểu đồ không bị tràn viền
+    // Find max value to set chart ceiling without clipping
     double maxTarget = [(targetData['calories'] ?? 0) / 10, targetData['protein'] ?? 0, targetData['fat'] ?? 0, targetData['carbs'] ?? 0].reduce((a, b) => a > b ? a : b).toDouble();
     double maxActual = [(actualData['calories'] ?? 0) / 10, actualData['protein'] ?? 0, actualData['fat'] ?? 0, actualData['carbs'] ?? 0].reduce((a, b) => a > b ? a : b).toDouble();
     return (maxTarget > maxActual ? maxTarget : maxActual) + 30;

@@ -5,13 +5,24 @@
  * when calling from external automation tools (e.g., n8n).
  */
 
-const GEMINI_API_KEY = (process.env.GOOGLE_API_KEY || '').split(',')[0].trim();
-const GEMINI_PRO_MODEL = 'gemini-pro-latest';
-const GEMINI_FLASH_MODEL = 'gemini-flash-latest';
-const GEMINI_PRO_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_PRO_MODEL}:generateContent`;
-const GEMINI_FLASH_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_FLASH_MODEL}:generateContent`;
+// Đọc toàn bộ danh sách key (phân cách bằng dấu phẩy), không chỉ key đầu tiên.
+const rawGeminiKeys = (process.env.GOOGLE_API_KEYS || process.env.GOOGLE_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
+let _geminiKeyIndex = 0;
+function _getGeminiKey() {
+  if (rawGeminiKeys.length === 0) return null;
+  const key = rawGeminiKeys[_geminiKeyIndex];
+  _geminiKeyIndex = (_geminiKeyIndex + 1) % rawGeminiKeys.length;
+  return key;
+}
 
-if (!GEMINI_API_KEY) {
+// Models được xác minh tại ai.google.dev/gemini-api/docs/models (cập nhật 2026-08)
+const GEMINI_PRO_MODEL   = 'gemini-3.6-flash';    // Stable — thay thế gemini-pro-latest (đã tắt)
+const GEMINI_FLASH_MODEL = 'gemini-3.5-flash';    // Stable — thay thế gemini-flash-latest (đã tắt)
+const GEMINI_BASE       = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GEMINI_PRO_URL    = `${GEMINI_BASE}/${GEMINI_PRO_MODEL}:generateContent`;
+const GEMINI_FLASH_URL  = `${GEMINI_BASE}/${GEMINI_FLASH_MODEL}:generateContent`;
+
+if (rawGeminiKeys.length === 0) {
   console.error('[GeminiService] CRITICAL: GOOGLE_API_KEY is not set. All Gemini calls will fail.');
 }
 
@@ -101,11 +112,21 @@ Required JSON schema:
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const response = await fetch(`${GEMINI_PRO_URL}?key=${GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        });
+        const apiKey = _getGeminiKey();
+        if (!apiKey) throw new Error('GOOGLE_API_KEY not configured.');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
+        let response;
+        try {
+          response = await fetch(`${GEMINI_PRO_URL}?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -181,37 +202,47 @@ Output ONLY the JSON array. No extra text, no markdown.`;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const response = await fetch(`${GEMINI_FLASH_URL}?key=${GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            safetySettings: [
-              { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-              { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
-            ],
-            generationConfig: {
-              temperature: 0.7,
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: "ARRAY",
-                items: {
-                  type: "OBJECT",
-                  properties: {
-                    mealName: { type: "STRING" },
-                    description: { type: "STRING" },
-                    cookingTimeMinutes: { type: "INTEGER" },
-                    difficulty: { type: "STRING" },
-                    cookingSteps: { type: "ARRAY", items: { type: "STRING" } }
-                  },
-                  required: ["mealName", "description", "cookingTimeMinutes", "difficulty", "cookingSteps"]
+        const apiKey = _getGeminiKey();
+        if (!apiKey) throw new Error('GOOGLE_API_KEY not configured.');
+        const controller2 = new AbortController();
+        const timeoutId2 = setTimeout(() => controller2.abort(), 20000);
+        let response;
+        try {
+          response = await fetch(`${GEMINI_FLASH_URL}?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
+              ],
+              generationConfig: {
+                temperature: 0.7,
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: "ARRAY",
+                  items: {
+                    type: "OBJECT",
+                    properties: {
+                      mealName: { type: "STRING" },
+                      description: { type: "STRING" },
+                      cookingTimeMinutes: { type: "INTEGER" },
+                      difficulty: { type: "STRING" },
+                      cookingSteps: { type: "ARRAY", items: { type: "STRING" } }
+                    },
+                    required: ["mealName", "description", "cookingTimeMinutes", "difficulty", "cookingSteps"]
+                  }
                 }
-              }
-            },
-          })
-        });
+              },
+            }),
+            signal: controller2.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId2);
+        }
 
         if (!response.ok) {
           const errText = await response.text();

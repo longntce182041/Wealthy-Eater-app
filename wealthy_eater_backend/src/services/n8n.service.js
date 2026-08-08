@@ -92,7 +92,8 @@ class N8nService {
   }
 
   async callGeminiVisionFallback(file, apiKey) {
-    const model = process.env.GEMINI_VISION_MODEL || "gemini-flash-latest";
+    // Model verified at ai.google.dev/gemini-api/docs/models (updated 2026-08)
+    const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.5-flash'; // gemini-flash-latest has been deprecated
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt = [
@@ -162,10 +163,10 @@ class N8nService {
     const parsed = JSON.parse(cleanText);
 
     return {
-      meal_name: parsed.meal_name || "Món ăn từ hình ảnh",
+      meal_name: parsed.meal_name || "Meal from image",
       confidence: parsed.confidence || 0.8,
       ingredients: (parsed.ingredients || []).map((item) => ({
-        name: item.name || "Thành phần",
+        name: item.name || "Ingredient",
         estimated_amount: item.estimated_amount || 0,
         estimated_unit: item.estimated_unit || "g",
         nutrition: {

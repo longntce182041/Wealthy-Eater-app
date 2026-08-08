@@ -118,7 +118,7 @@ class _AppRootState extends State<_AppRoot> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+            'Your session has expired. Please log in again.',
           ),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 4),

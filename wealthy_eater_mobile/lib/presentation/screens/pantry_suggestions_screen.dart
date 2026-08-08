@@ -53,36 +53,24 @@ class PantrySuggestionsScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.bug_report_outlined, size: 52, color: AppColors.error),
+              const Icon(Icons.cloud_off_outlined, size: 52, color: AppColors.error),
               const SizedBox(height: 16),
               const Text(
-                '⚠️ Suggestion Failed (Dev Mode)',
+                'Unable to generate suggestions',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFEBEB),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.error),
-                ),
-                child: SelectableText(
-                  provider.error!,
-                  style: const TextStyle(
-                    color: AppColors.error,
-                    fontSize: 13,
-                    fontFamily: 'monospace',
-                  ),
-                  textAlign: TextAlign.left,
-                ),
+              const SizedBox(height: 8),
+              Text(
+                'Something went wrong while connecting to the AI service. Please check your connection and try again.',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.5),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: () => provider.suggestMeals(),
                 icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                label: const Text('Try Again'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
