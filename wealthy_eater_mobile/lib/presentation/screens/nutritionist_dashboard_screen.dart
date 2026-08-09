@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -421,12 +422,27 @@ class _NutritionistRequestsTab extends StatefulWidget {
 }
 
 class _NutritionistRequestsTabState extends State<_NutritionistRequestsTab> {
+  Timer? _autoRefreshTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<NutritionistProvider>().loadMealPlanRequests();
     });
+
+    // Auto-refresh (hot reload) incoming customer requests silently every 5 seconds
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) {
+        context.read<NutritionistProvider>().loadMealPlanRequests(silent: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
   }
 
   String _formatDate(String? isoString) {
