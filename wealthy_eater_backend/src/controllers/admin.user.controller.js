@@ -1,5 +1,6 @@
 /**
  * Admin User Controller - UC-77: View List User & UC-79: Edit/Delete/Create User
+ * System user management APIs: Fetch list, create role-based users, update profile, and manage status.
  */
 
 const mongoose = require('mongoose');
@@ -16,8 +17,9 @@ const redisClient = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379',
   connectTimeout: 2000
 });
 
-redisClient.on('error', () => {
+redisClient.on('error', (err) => {
   if (redisClient.status === 'end') return;
+  console.error('⚠️ [Redis Offline]: Redis service connection lost or disabled.');
   redisClient.disconnect();
 });
 
@@ -40,6 +42,9 @@ function buildUserFilter(query) {
   return filter;
 }
 
+/**
+ * Helper Mapper function to map User and related Profiles accurately
+ */
 function mapUserForAdmin(user, profile, dietary, nutritionistProfile) {
   return {
     id: user._id.toString(),  
@@ -83,7 +88,7 @@ function mapUserForAdmin(user, profile, dietary, nutritionistProfile) {
 }
 
 /**
- * 1. GET USERS LIST
+ * 1. GET USERS LIST (WITH POPULATED PROFILES & DIETARY)
  */
 async function getUsersList(req, res, next) {
   try {
@@ -117,23 +122,37 @@ async function getUsersList(req, res, next) {
       });
     }
 
-    const userObjectIds = users.map(u => u._id);
-    const userStringIds = users.map(u => u._id.toString());
+    // Convert ObjectIds/Strings for reliable profile matching
+    const userIdsRaw = users.map(u => u._id.toString());
+    const userObjectIds = userIdsRaw
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+    
+    const queryIds = [...new Set([...userIdsRaw, ...userObjectIds])];
 
     const [profiles, dietaries, nutritionists] = await Promise.all([
-      UserProfile.find({ user_id: { $in: [...userObjectIds, ...userStringIds] } }).lean(),
-      UserDietary.find({ user_id: { $in: [...userObjectIds, ...userStringIds] } }).lean(),
-      Nutritionist.find({ user_id: { $in: [...userObjectIds, ...userStringIds] } }).lean(),
+      UserProfile.find({ user_id: { $in: queryIds } }).lean(),
+      UserDietary.find({ user_id: { $in: queryIds } }).lean(),
+      Nutritionist.find({ user_id: { $in: queryIds } }).lean(),
     ]);
 
     const profileMap = {};
-    profiles.forEach(p => { if (p.user_id) profileMap[p.user_id.toString()] = p; });
+    profiles.forEach(p => { 
+      const uid = p.user_id?.toString(); 
+      if (uid) profileMap[uid] = p; 
+    });
 
     const dietaryMap = {};
-    dietaries.forEach(d => { if (d.user_id) dietaryMap[d.user_id.toString()] = d; });
+    dietaries.forEach(d => { 
+      const uid = d.user_id?.toString(); 
+      if (uid) dietaryMap[uid] = d; 
+    });
 
     const nutritionistMap = {};
-    nutritionists.forEach(n => { if (n.user_id) nutritionistMap[n.user_id.toString()] = n; });
+    nutritionists.forEach(n => {
+      const uid = n.user_id?.toString();
+      if (uid) nutritionistMap[uid] = n;
+    });
 
     const data = users.map(u => {
       const uid = u._id.toString();
@@ -161,28 +180,65 @@ const DEFAULT_PASSWORD = process.env.DEFAULT_USER_PASSWORD || 'ChangeMe123!';
 const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
 
 /**
- * 2. CREATE USER
+ * 2. CREATE USER (WITH ROLE-BASED PROFILE CREATION)
  */
 async function createUser(req, res, next) {
-  let savedUser = null;
   try {
     const { 
-      email, phone, password, role = 'customer', status = 'active', 
-      fullName = '', name = '', age, gender, height, weight, healthGoal = '',
-      activityLevel = null, dietPreferences = [], cookingSkillLevel = 'medium', availableCookingTime = 30,
-      specialization = 'General Nutrition', professionalTitle = 'Specialist', licenseNumber = '', certificationUrl = '', serviceFee = 0, approvalStatus = 'APPROVED'
+      email, 
+      phone, 
+      password, 
+      role = 'customer', 
+      status = 'active', 
+      
+      // Common UserProfile Fields
+      fullName = '', 
+      name = '',
+      age,
+      gender,
+      height,
+      weight,
+      healthGoal = '',
+
+      // UserDietary Fields
+      activityLevel = null,
+      dietPreferences = [],
+      cookingSkillLevel = 'medium',
+      availableCookingTime = 30,
+
+      // Nutritionist Specific Fields
+      specialization = 'General Nutrition',
+      professionalTitle = 'Specialist',
+      licenseNumber = '',
+      certificationUrl = '',
+      serviceFee = 0,
+      approvalStatus = 'APPROVED'
     } = req.body || {};
     
+    // Validation: Email
     if (!email || typeof email !== 'string') {
       return next(new AppError('Email is required.', 400, 'VALIDATION_ERROR'));
     }
     const normalizedEmail = String(email).trim().toLowerCase();
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return next(new AppError('Invalid email format.', 400, 'VALIDATION_ERROR'));
+    }
 
     const existing = await User.findOne({ email: normalizedEmail }).lean();
     if (existing) {
       return next(new AppError('This email is already registered in the system.', 409, 'ALREADY_REGISTERED'));
     }
 
+    if (phone) {
+      const existingPhone = await User.findOne({ phone: String(phone).trim() }).lean();
+      if (existingPhone) {
+        return next(new AppError('This phone number is already registered in the system.', 409, 'ALREADY_REGISTERED'));
+      }
+    }
+
+    // Password setup
     const rawPassword = password && String(password).trim().length >= 6
       ? String(password).trim()
       : DEFAULT_PASSWORD;
@@ -195,7 +251,7 @@ async function createUser(req, res, next) {
     const normalizedStatus = String(status).trim().toLowerCase();
     const targetRole = String(role).trim().toLowerCase();
 
-    // 1. Tạo Base User
+    // 1. Create Base User
     const userData = {
       email: normalizedEmail,
       phone: phone ? String(phone).trim() : undefined,
@@ -207,52 +263,58 @@ async function createUser(req, res, next) {
     };
 
     const newUser = new User(userData);
-    savedUser = await newUser.save();
+    const savedUser = await newUser.save();
     const userIdStr = savedUser._id.toString();
 
-    // 2. Tạo UserProfile
-    const createdProfile = await UserProfile.create({
-      user_id: userIdStr,
-      full_name: displayName,
-      age: age ? Number(age) : 25,
-      gender: gender ? String(gender) : 'other',
-      height: height ? Number(height) : 170,
-      weight: weight ? Number(weight) : 65,
-      health_goal: healthGoal || 'maintain_weight'
-    });
-
-    // 3. Tạo UserDietary
-    const createdDietary = await UserDietary.create({
-      user_id: userIdStr,
-      allergies: [],
-      dislike_ingredients: [],
-      cooking_skill_level: cookingSkillLevel || 'medium',
-      available_cooking_time: Number(availableCookingTime) || 30,
-      activity_level: activityLevel || null,
-      diet_preferences: Array.isArray(dietPreferences) ? dietPreferences : []
-    });
-
-    // 4. Tạo Nutritionist Profile nếu role là 'nutritionist'
+    let createdProfile = null;
+    let createdDietary = null;
     let createdNutritionist = null;
+
+    // 2. Create UserProfile (Satisfies strict required schema fields)
+    try {
+      createdProfile = await UserProfile.create({
+        user_id: userIdStr,
+        full_name: displayName,
+        age: age ? Number(age) : 25,             // Fallback for required: true
+        gender: gender ? String(gender) : 'other', // Fallback for required: true
+        height: height ? Number(height) : 170,    // Fallback for required: true
+        weight: weight ? Number(weight) : 65,     // Fallback for required: true
+        health_goal: healthGoal || 'maintain_weight'
+      });
+    } catch (pErr) {
+      console.warn('⚠️ UserProfile creation warning:', pErr.message);
+    }
+
+    // 3. Create UserDietary
+    try {
+      createdDietary = await UserDietary.create({
+        user_id: userIdStr,
+        allergies: [],
+        dislike_ingredients: [],
+        cooking_skill_level: cookingSkillLevel || 'medium',
+        available_cooking_time: Number(availableCookingTime) || 30,
+        activity_level: activityLevel || null,
+        diet_preferences: Array.isArray(dietPreferences) ? dietPreferences : []
+      });
+    } catch (dErr) {
+      console.warn('⚠️ UserDietary creation warning:', dErr.message);
+    }
+
+    // 4. Create Nutritionist Profile if Role === 'nutritionist'
     if (targetRole === 'nutritionist') {
       try {
-        const cleanLicense = licenseNumber && String(licenseNumber).trim() !== '' 
-          ? String(licenseNumber).trim() 
-          : undefined;
-
         createdNutritionist = await Nutritionist.create({
           user_id: userIdStr,
           full_name: displayName,
           specialization: specialization || 'General Nutrition',
           professional_title: professionalTitle || 'Specialist',
-          license_number: cleanLicense,
+          license_number: licenseNumber || '',
           certification_url: certificationUrl || '',
-          service_fee: serviceFee !== undefined && serviceFee !== '' ? Number(serviceFee) : 0,
+          service_fee: Number(serviceFee) || 0,
           approval_status: approvalStatus || 'APPROVED'
         });
       } catch (nErr) {
-        console.error('💥 Lỗi khi tạo bản ghi Nutritionist:', nErr.message);
-        throw new AppError(`Không thể tạo hồ sơ Nutritionist: ${nErr.message}`, 400, 'NUTRITIONIST_CREATION_FAILED');
+        console.warn('⚠️ Nutritionist Profile creation warning:', nErr.message);
       }
     }
 
@@ -261,11 +323,7 @@ async function createUser(req, res, next) {
       message: `Successfully created ${targetRole.toUpperCase()} account!`,
       data: mapUserForAdmin(savedUser, createdProfile, createdDietary, createdNutritionist),
     });
-
   } catch (err) {
-    if (savedUser) {
-      await User.findByIdAndDelete(savedUser._id);
-    }
     console.error('💥 Error in createUser:', err);
     return next(new AppError(err.message || 'System error occurred while creating user.', 500, 'INTERNAL_SERVER_ERROR'));
   }
@@ -287,7 +345,7 @@ async function updateUserStatus(req, res, next) {
     const rawId = req.params.id || req.params.userId;
     const cleanId = toSafeId(rawId);
 
-    if (!cleanId || !mongoose.Types.ObjectId.isValid(cleanId)) {
+    if (!cleanId) {
       return next(new AppError(`Invalid user ID format: ${rawId}`, 400, 'VALIDATION_ERROR'));
     }
 
@@ -306,6 +364,17 @@ async function updateUserStatus(req, res, next) {
     user.is_active = normalizedStatus === 'active';
     await user.save();
 
+    if (normalizedStatus === 'banned' || normalizedStatus === 'suspended') {
+      try {
+        if (redisClient.status === 'ready' || redisClient.status === 'connect') {
+          const keys = await redisClient.keys(`*${cleanId}*`);
+          if (keys && keys.length > 0) await redisClient.del(keys);
+        }
+      } catch (redisErr) {
+        console.error('⚠️ Redis error when revoking user tokens:', redisErr.message);
+      }
+    }
+
     return res.json({
       success: true,
       message: 'Successfully updated user status!',
@@ -317,14 +386,14 @@ async function updateUserStatus(req, res, next) {
 }
 
 /**
- * 4. UPDATE USER INFORMATION
+ * 4. UPDATE USER INFORMATION & PROFILE
  */
 async function updateUser(req, res, next) {
   try {
     const rawId = req.params.id || req.params.userId;
     const cleanId = toSafeId(rawId);
 
-    if (!cleanId || !mongoose.Types.ObjectId.isValid(cleanId)) {
+    if (!cleanId) {
       return next(new AppError(`Invalid user ID structure: ${rawId}`, 400, 'VALIDATION_ERROR'));
     }
 
@@ -333,11 +402,9 @@ async function updateUser(req, res, next) {
       return next(new AppError(`User with ID [${rawId}] was not found in system.`, 404, 'NOT_FOUND'));
     }
 
-    let { 
-      email, role, status, password, fullName, age, gender, height, weight, healthGoal,
-      specialization, professionalTitle, licenseNumber, serviceFee, certificationUrl 
-    } = req.body || {};
+    let { email, role, status, password, fullName, age, gender, height, weight, healthGoal } = req.body || {};
 
+    // Update User core fields
     if (email && typeof email === 'string' && email.trim()) {
       const normalizedEmail = email.trim().toLowerCase();
       if (normalizedEmail !== user.email.toLowerCase()) {
@@ -371,13 +438,13 @@ async function updateUser(req, res, next) {
 
     await user.save();
 
-    // Cập nhật UserProfile
+    // Synchronize UserProfile updates
     const profileUpdates = {};
     if (fullName) profileUpdates.full_name = fullName.trim();
-    if (age !== undefined && age !== '') profileUpdates.age = Number(age);
+    if (age !== undefined) profileUpdates.age = Number(age);
     if (gender !== undefined) profileUpdates.gender = String(gender);
-    if (height !== undefined && height !== '') profileUpdates.height = Number(height);
-    if (weight !== undefined && weight !== '') profileUpdates.weight = Number(weight);
+    if (height !== undefined) profileUpdates.height = Number(height);
+    if (weight !== undefined) profileUpdates.weight = Number(weight);
     if (healthGoal !== undefined) profileUpdates.health_goal = String(healthGoal);
 
     if (Object.keys(profileUpdates).length > 0) {
@@ -388,22 +455,14 @@ async function updateUser(req, res, next) {
       );
     }
 
-    // Cập nhật Nutritionist Profile nếu có
-    if (user.role === 'nutritionist') {
-      const nutritionistUpdates = {};
-      if (fullName) nutritionistUpdates.full_name = fullName.trim();
-      if (specialization !== undefined) nutritionistUpdates.specialization = String(specialization);
-      if (professionalTitle !== undefined) nutritionistUpdates.professional_title = String(professionalTitle);
-      if (licenseNumber !== undefined && licenseNumber !== '') nutritionistUpdates.license_number = String(licenseNumber);
-      if (serviceFee !== undefined && serviceFee !== '') nutritionistUpdates.service_fee = Number(serviceFee);
-      if (certificationUrl !== undefined) nutritionistUpdates.certification_url = String(certificationUrl);
-
-      if (Object.keys(nutritionistUpdates).length > 0) {
-        await Nutritionist.updateOne(
-          { user_id: user._id.toString() },
-          { $set: nutritionistUpdates },
-          { upsert: true }
-        );
+    if (user.status === 'banned' || user.status === 'suspended') {
+      try {
+        if (redisClient.status === 'ready' || redisClient.status === 'connect') {
+          const keys = await redisClient.keys(`*${user._id.toString()}*`);
+          if (keys && keys.length > 0) await redisClient.del(keys);
+        }
+      } catch (redisErr) {
+        console.error('⚠️ Redis error when revoking tokens:', redisErr.message);
       }
     }
 
@@ -426,7 +485,7 @@ async function deleteUser(req, res, next) {
     const rawId = req.params.id || req.params.userId;
     const cleanId = toSafeId(rawId);
 
-    if (!cleanId || !mongoose.Types.ObjectId.isValid(cleanId)) {
+    if (!cleanId) {
       return next(new AppError(`Invalid ID format for deletion: ${rawId}`, 400, 'VALIDATION_ERROR'));
     }
 
@@ -437,11 +496,22 @@ async function deleteUser(req, res, next) {
 
     const userIdStr = deletedUser._id.toString();
 
+    // Clean up all user auxiliary documents
     await Promise.all([
       UserProfile.deleteOne({ user_id: userIdStr }),
       UserDietary.deleteOne({ user_id: userIdStr }),
       Nutritionist.deleteOne({ user_id: userIdStr })
     ]).catch(err => console.warn('⚠️ Error cleaning up auxiliary profiles:', err.message));
+
+    // Clear session cache in Redis
+    try {
+      if (redisClient.status === 'ready' || redisClient.status === 'connect') {
+        const keys = await redisClient.keys(`*${userIdStr}*`);
+        if (keys && keys.length > 0) await redisClient.del(keys);
+      }
+    } catch (redisErr) {
+      console.error('⚠️ Redis error when cleaning deleted user tokens:', redisErr.message);
+    }
 
     return res.json({
       success: true,
