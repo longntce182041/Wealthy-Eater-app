@@ -210,12 +210,12 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
             <div className="space-y-2.5 text-xs">
               <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
                 <span className="text-slate-500 font-medium flex items-center gap-1"><DollarSign className="w-3.5 h-3.5 text-slate-400" /> Service Fee:</span>
-                <span className="font-bold text-emerald-700 text-sm">{expertData.serviceFee ? expertData.serviceFee.toLocaleString() : '0'} VND</span>
+                <span className="font-bold text-emerald-700 text-sm">{Number(expertData.serviceFee || 0).toLocaleString()} VND</span>
               </div>
 
               <div className="flex justify-between items-center px-1">
                 <span className="text-slate-500 font-medium flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" /> Rating:</span>
-                <span className="font-bold text-slate-700">{expertData.averageRating ? expertData.averageRating.toFixed(1) : '0.0'} / 5.0</span>
+                <span className="font-bold text-slate-700">{Number(expertData.averageRating || 0).toFixed(1)} / 5.0</span>
               </div>
 
               <div className="flex justify-between items-center px-1">
@@ -371,24 +371,27 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
                 {reviews.length === 0 ? (
                   <p className="text-center text-slate-400 py-12 text-xs font-medium">No reviews or feedback submitted yet.</p>
                 ) : (
-                  reviews.map((rev, index) => (
-                    <div key={rev.id || index} className="p-4 rounded-xl border border-slate-100 space-y-2 bg-white">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-700">{rev.customerName || 'Anonymous User'}</span>
-                          <div className="flex text-amber-400">
-                            {Array.from({ length: rev.rating || 5 }).map((_, i) => (
-                              <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                            ))}
+                  reviews.map((rev, index) => {
+                    const starCount = Math.max(1, Math.min(5, Number(rev.rating || 5)));
+                    return (
+                      <div key={rev.id || index} className="p-4 rounded-xl border border-slate-100 space-y-2 bg-white">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-700">{rev.customerName || 'Anonymous User'}</span>
+                            <div className="flex text-amber-400">
+                              {Array.from({ length: starCount }).map((_, i) => (
+                                <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                              ))}
+                            </div>
                           </div>
+                          <span className="text-[10px] text-slate-400">{rev.date ? new Date(rev.date).toLocaleDateString('en-US') : '—'}</span>
                         </div>
-                        <span className="text-[10px] text-slate-400">{rev.date ? new Date(rev.date).toLocaleDateString('en-US') : '—'}</span>
+                        <p className="m-0 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg italic border border-slate-100">
+                          "{rev.comment || 'No detailed review provided.'}"
+                        </p>
                       </div>
-                      <p className="m-0 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg italic border border-slate-100">
-                        "{rev.comment || 'No detailed review provided.'}"
-                      </p>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
