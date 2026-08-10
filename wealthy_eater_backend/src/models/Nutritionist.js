@@ -57,7 +57,6 @@ const NutritionistSchema = new mongoose.Schema(
       max: 5,
       alias: "averageRating",
     },
-    about: { type: String, default: "" }
   },
   {
     timestamps: true,

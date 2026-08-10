@@ -408,13 +408,13 @@ export default function NutritionistListPage() {
                         </span>
                       </td>
 
-                    {/* Rating */}
-                    <td className="px-5 py-4">
-                      <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                        <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                        {Number(expert.averageRating || 0).toFixed(1)}
-                      </span>
-                    </td>
+                      {/* Rating */}
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                          <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                          {expert.averageRating ? expert.averageRating.toFixed(1) : '0.0'}
+                        </span>
+                      </td>
 
                       {/* Status */}
                       <td className="px-5 py-4">
