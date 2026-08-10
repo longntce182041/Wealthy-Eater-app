@@ -17,6 +17,21 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
 
+  // Helper formatting Date & Time -> DD/MM/YYYY - HH:mm
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return "—";
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "—";
+
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+
+    return `${day}/${month}/${year} - ${hours}:${minutes}`;
+  };
+
   // Load expert profile details
   const loadExpertDetails = useCallback(async () => {
     try {
@@ -34,7 +49,7 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
     } catch (error) {
       console.error("⚠️ Error fetching expert profile:", error);
       
-      // Fallback Mock Data to prevent UI crash in case of API failure
+      // Fallback Mock Data
       setExpertData({
         _id: expertId,
         fullName: "Dr. Alex Johnson",
@@ -50,12 +65,12 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
         createdAt: "2026-01-15T08:00:00.000Z"
       });
       setConsultationHistory([
-        { id: "H1", customerName: "Leonard Smith", date: "2026-06-18", status: "Completed", type: "Keto Diet Plan Consultation" },
-        { id: "H2", customerName: "Sarah Connor", date: "2026-06-15", status: "Completed", type: "Gestational Diabetes Meal Plan" }
+        { _id: "H1", customerName: "Leonard Smith", date: "2026-06-18T07:28:10.662Z", status: "completed", type: "1-Month Package" },
+        { _id: "H2", customerName: "Sarah Connor", date: "2026-06-15T05:23:25.160Z", status: "active", type: "1-Month Package" }
       ]);
       setReviews([
-        { id: "R1", customerName: "Leonard Smith", rating: 5, comment: "Very practical meal guidance. Visceral fat loss plan worked great!", date: "2026-06-18" },
-        { id: "R2", customerName: "David Miller", rating: 4, comment: "Deep expertise, explained Glycemic Index concepts thoroughly.", date: "2026-06-11" }
+        { id: "R1", customerName: "Leonard Smith", rating: 5, comment: "Very practical meal guidance. Visceral fat loss plan worked great!", date: "2026-06-18T08:30:00.000Z" },
+        { id: "R2", customerName: "David Miller", rating: 4, comment: "Deep expertise, explained Glycemic Index concepts thoroughly.", date: "2026-06-11T14:15:00.000Z" }
       ]);
     } finally {
       setLoading(false);
@@ -210,12 +225,12 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
             <div className="space-y-2.5 text-xs">
               <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
                 <span className="text-slate-500 font-medium flex items-center gap-1"><DollarSign className="w-3.5 h-3.5 text-slate-400" /> Service Fee:</span>
-                <span className="font-bold text-emerald-700 text-sm">{expertData.serviceFee ? expertData.serviceFee.toLocaleString() : '0'} VND</span>
+                <span className="font-bold text-emerald-700 text-sm">{expertData.serviceFee ? expertData.serviceFee.toLocaleString('en-US') : '0'} VND</span>
               </div>
 
               <div className="flex justify-between items-center px-1">
                 <span className="text-slate-500 font-medium flex items-center gap-1"><Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" /> Rating:</span>
-                <span className="font-bold text-slate-700">{expertData.averageRating ? expertData.averageRating.toFixed(1) : '0.0'} / 5.0</span>
+                <span className="font-bold text-slate-700">{expertData.averageRating ? Number(expertData.averageRating).toFixed(1) : '0.0'} / 5.0</span>
               </div>
 
               <div className="flex justify-between items-center px-1">
@@ -281,7 +296,7 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
                 rows="3" 
                 value={rejectionReason} 
                 onChange={(e) => setRejectionReason(e.target.value)} 
-                placeholder="E.g., Blur diploma, missing official stamp, mismatched license information..." 
+                placeholder="E.g., Blurry diploma image, missing official seal/stamp, mismatched license information..." 
                 className="w-full p-2.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-400" 
               />
               <div className="flex justify-end gap-2">
@@ -346,20 +361,47 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
                   <p className="text-center text-slate-400 py-12 text-xs font-medium">This expert has not conducted any consultations yet.</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {consultationHistory.map((item, index) => (
-                      <div key={item.id || index} className="p-4 rounded-xl border border-slate-100 bg-slate-50/40 space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-xs text-slate-800">{item.customerName || 'Client'}</span>
-                          <span className="text-[10px] px-2 py-0.5 font-bold bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200">
-                            {item.status || 'Completed'}
-                          </span>
+                    {consultationHistory.map((item, index) => {
+                      // Normalize MongoDB user fields
+                      const customerName = 
+                        typeof item.user_id === 'object' 
+                          ? (item.user_id?.fullName || item.user_id?.name || item.user_id?.email)
+                          : (item.customerName || item.user_id || 'Client');
+
+                      // Normalize MongoDB package fields
+                      const rawPackage = item.package_type || item.type || item.packageType || 'Nutrition Consultation';
+                      const packageType = String(rawPackage).replace('_', ' ');
+
+                      // Normalize MongoDB date fields
+                      const recordDate = item.date || item.create_at || item.created_at || item.createdAt || item.start_date;
+
+                      // Normalize MongoDB status
+                      const rawStatus = (item.status || 'completed').toLowerCase();
+
+                      return (
+                        <div key={item._id || item.id || index} className="p-4 rounded-xl border border-slate-100 bg-slate-50/40 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-xs text-slate-800" title={customerName}>{customerName}</span>
+                            <span className={`text-[10px] px-2 py-0.5 font-bold rounded-md border uppercase ${
+                              rawStatus === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                              rawStatus === 'active' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                              rawStatus === 'cancelled' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                              'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}>
+                              {rawStatus}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-500 space-y-1">
+                            <p className="m-0 flex items-center gap-1.5">
+                              💡 Package: <strong className="text-slate-700 capitalize">{packageType}</strong>
+                            </p>
+                            <p className="m-0 flex items-center gap-1.5">
+                              📅 Date: <span className="text-slate-700 font-semibold">{formatDateTime(recordDate)}</span>
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-xs text-slate-500 space-y-1">
-                          <p className="m-0">💡 Package: <strong className="text-slate-700">{item.type || 'Nutrition Consultation'}</strong></p>
-                          <p className="m-0">📅 Date: {item.date ? new Date(item.date).toLocaleDateString('en-US') : '—'}</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -371,24 +413,28 @@ export default function ExpertProfileDetail({ expertId, onBack, onStatusUpdated 
                 {reviews.length === 0 ? (
                   <p className="text-center text-slate-400 py-12 text-xs font-medium">No reviews or feedback submitted yet.</p>
                 ) : (
-                  reviews.map((rev, index) => (
-                    <div key={rev.id || index} className="p-4 rounded-xl border border-slate-100 space-y-2 bg-white">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-700">{rev.customerName || 'Anonymous User'}</span>
-                          <div className="flex text-amber-400">
-                            {Array.from({ length: rev.rating || 5 }).map((_, i) => (
-                              <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                            ))}
+                  reviews.map((rev, index) => {
+                    const reviewDate = rev.date || rev.created_at || rev.create_at || rev.createdAt;
+
+                    return (
+                      <div key={rev.id || rev._id || index} className="p-4 rounded-xl border border-slate-100 space-y-2 bg-white">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-700">{rev.customerName || rev.user_id?.fullName || 'Anonymous User'}</span>
+                            <div className="flex text-amber-400">
+                              {Array.from({ length: rev.rating || 5 }).map((_, i) => (
+                                <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                              ))}
+                            </div>
                           </div>
+                          <span className="text-[10px] text-slate-400 font-medium">{formatDateTime(reviewDate)}</span>
                         </div>
-                        <span className="text-[10px] text-slate-400">{rev.date ? new Date(rev.date).toLocaleDateString('en-US') : '—'}</span>
+                        <p className="m-0 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg italic border border-slate-100">
+                          "{rev.comment || rev.content || rev.review || 'No detailed review provided.'}"
+                        </p>
                       </div>
-                      <p className="m-0 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg italic border border-slate-100">
-                        "{rev.comment || 'No detailed review provided.'}"
-                      </p>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}

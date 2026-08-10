@@ -40,13 +40,13 @@ export default function NutritionistListPage() {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // UC-85 subview state for detailed profile inspection
+  // State to manage viewing expert profile details
   const [selectedExpertId, setSelectedExpertId] = useState(null);
   
-  // Tab filtering matching database enums: ALL | PENDING | APPROVED | REJECTED | SUSPENDED | BANNED
+  // Status filter tab: ALL | PENDING | APPROVED | REJECTED | SUSPENDED | BANNED
   const [activeTab, setActiveTab] = useState('ALL');
 
-  // Sorting & Pagination state
+  // Sorting & Pagination
   const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -76,7 +76,7 @@ export default function NutritionistListPage() {
         handleForceLogout();
         return;
       }
-      setError(err?.response?.data?.message || err.message || 'Failed to load nutritionists directory.');
+      setError(err?.response?.data?.message || err.message || 'Failed to load nutritionists list.');
     } finally {
       setLoading(false);
     }
@@ -97,7 +97,7 @@ export default function NutritionistListPage() {
     setCurrentPage(1);
   }, [searchTerm, activeTab]);
 
-  // Helper đồng bộ để lấy Status chuẩn nhất của Chuyên gia
+  // Helper to normalize and get effective status
   const getEffectiveStatus = (item) => {
     const userStatus = item.userStatus?.toUpperCase() || item.status?.toUpperCase();
     if (userStatus === 'SUSPENDED' || userStatus === 'BANNED') return userStatus;
@@ -105,7 +105,7 @@ export default function NutritionistListPage() {
     return item.approvalStatus?.toUpperCase() || userStatus || 'PENDING';
   };
 
-  // Handler for Approval / Suspension / Activation (Đồng bộ chuẩn hóa với BE)
+  // Handle Approval / Suspension / Reactivation
   async function handleProcessApproval(id, actionStatus) {
     let actionText = 'UPDATE STATUS';
     if (actionStatus === 'APPROVED') actionText = 'APPROVE PROFILE';
@@ -114,12 +114,11 @@ export default function NutritionistListPage() {
     if (actionStatus === 'REACTIVATE') actionText = 'REACTIVATE ACCOUNT';
 
     let rejectionReason = '';
-    // Nếu là Từ chối profile, hỏi lý do gửi mail cho người dùng
     if (actionStatus === 'REJECTED') {
-      rejectionReason = window.prompt('Please enter the reason for rejection (will be sent via email):', 'Profile or certificates do not meet verification standards.');
-      if (rejectionReason === null) return; // Bấm Cancel thì dừng
+      rejectionReason = window.prompt('Enter rejection reason (will be sent via email to expert):', 'Profile or professional qualification does not meet verification standards.');
+      if (rejectionReason === null) return;
     } else {
-      if (!window.confirm(`Are you sure you want to perform this action: ${actionText}?`)) return;
+      if (!window.confirm(`Are you sure you want to perform: ${actionText}?`)) return;
     }
 
     try {
@@ -141,7 +140,7 @@ export default function NutritionistListPage() {
       const response = await apiClient.put(endpoint, payload);
 
       if (response.data?.success || response.status === 200) {
-        alert(response.data?.message || 'Nutritionist status updated successfully!');
+        alert(response.data?.message || 'Status updated successfully!');
         fetchNutritionists();
       } else {
         alert(response.data?.message || 'An error occurred.');
@@ -232,10 +231,10 @@ export default function NutritionistListPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight m-0 flex items-center gap-2">
-            <Users className="w-8 h-8 text-emerald-600" /> Nutritionists Management
+            <Users className="w-8 h-8 text-emerald-600" /> Nutritionist Management
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Filtered: <strong className="text-emerald-600">{filteredNutritionists.length}</strong> / Total: <strong>{nutritionists.length}</strong> nutritionists in system.
+            Filtered: <strong className="text-emerald-600">{filteredNutritionists.length}</strong> / Total: <strong>{nutritionists.length}</strong> nutritionists in the system.
           </p>
         </div>
         <div>
@@ -318,7 +317,7 @@ export default function NutritionistListPage() {
             <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
               <tr>
                 <th onClick={() => requestSort('fullName')} className="px-5 py-4 cursor-pointer hover:bg-slate-100 select-none transition-colors w-[220px]">
-                  <div className="flex items-center gap-1">Nutritionist <ArrowUpDown className="w-3.5 h-3.5" /></div>
+                  <div className="flex items-center gap-1">Expert Name <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
                 <th className="px-5 py-4">Account & License</th>
                 <th className="px-5 py-4">Specialization</th>
@@ -337,14 +336,14 @@ export default function NutritionistListPage() {
                 <tr>
                   <td colSpan="7" className="text-center py-10 text-slate-400">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-500" />
-                    Syncing data from server...
+                    Synchronizing data from server...
                   </td>
                 </tr>
               ) : paginatedNutritionists.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="text-center py-12 text-slate-400">
                     <SearchX className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                    <p className="font-medium text-base text-slate-700 m-0">No nutritionists found</p>
+                    <p className="font-medium text-base text-slate-700 m-0">No matching nutritionists found</p>
                   </td>
                 </tr>
               ) : (
@@ -361,7 +360,7 @@ export default function NutritionistListPage() {
 
                   return (
                     <tr key={expertId} className="hover:bg-slate-50/50 transition-colors">
-                      {/* Name & Joined Date */}
+                      {/* Name & Created Date */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 flex items-center justify-center font-bold shrink-0">
@@ -369,7 +368,7 @@ export default function NutritionistListPage() {
                           </div>
                           <div className="flex flex-col max-w-[160px]">
                             <span className="font-bold text-slate-800 truncate" title={expert.fullName}>
-                              {expert.fullName || 'Unassigned Name'}
+                              {expert.fullName || 'Unnamed Specialist'}
                             </span>
                             <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
                               <Calendar className="w-3 h-3" />
@@ -386,7 +385,7 @@ export default function NutritionistListPage() {
                             <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {expert.email}
                           </span>
                           <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 w-fit font-mono">
-                            No: {expert.licenseNumber || 'N/A'}
+                            Lic No: {expert.licenseNumber || 'N/A'}
                           </span>
                         </div>
                       </td>
@@ -395,7 +394,7 @@ export default function NutritionistListPage() {
                       <td className="px-5 py-4">
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                            <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" /> {expert.professionalTitle || 'Nutritionist'}
+                            <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" /> {expert.professionalTitle || 'Specialist'}
                           </span>
                           <span className="text-xs text-slate-500 mt-0.5 line-clamp-1">{expert.specialization || 'General Nutrition'}</span>
                         </div>
@@ -408,13 +407,18 @@ export default function NutritionistListPage() {
                         </span>
                       </td>
 
-                      {/* Rating */}
-                      <td className="px-5 py-4">
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                          <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                          {expert.averageRating ? expert.averageRating.toFixed(1) : '0.0'}
-                        </span>
-                      </td>
+                                                {/* Cột hiển thị RATING trong bảng */}
+                          <td className="px-4 py-3 text-center align-middle">
+                            {expert.rating || expert.averageRating ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 font-bold rounded-lg text-xs border border-amber-200">
+                                ⭐ {Number(expert.rating || expert.averageRating).toFixed(1)}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-1 bg-slate-100 text-slate-400 font-medium rounded-lg text-xs border border-slate-200 italic">
+                                N/A
+                              </span>
+                            )}
+                          </td>
 
                       {/* Status */}
                       <td className="px-5 py-4">
@@ -430,20 +434,20 @@ export default function NutritionistListPage() {
                           {/* View Detail */}
                           <button 
                             type="button"
-                            title="View detailed profile"
+                            title="View Profile Detail"
                             className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors cursor-pointer"
                             onClick={() => setSelectedExpertId(expertId)}
                           >
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {/* View Certificate */}
+                          {/* View Certification */}
                           {expert.certificationUrl ? (
                             <a 
                               href={expert.certificationUrl} 
                               target="_blank" 
                               rel="noreferrer"
-                              title="Open original certificate file"
+                              title="Open original certification file"
                               className="p-1.5 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-md transition-colors border border-slate-200"
                             >
                               <FileText className="w-4 h-4" />
@@ -451,7 +455,7 @@ export default function NutritionistListPage() {
                           ) : (
                             <button 
                               disabled 
-                              title="No certificate attached"
+                              title="No certificate uploaded"
                               className="p-1.5 bg-slate-50 text-slate-300 rounded-md border border-slate-100 opacity-50"
                             >
                               <FileText className="w-4 h-4" />
@@ -463,7 +467,7 @@ export default function NutritionistListPage() {
                             <>
                               <button 
                                 type="button"
-                                title="Approve profile"
+                                title="Approve Profile"
                                 className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-md border border-emerald-200 cursor-pointer"
                                 onClick={() => handleProcessApproval(expertId, 'APPROVED')}
                               >
@@ -471,7 +475,7 @@ export default function NutritionistListPage() {
                               </button>
                               <button 
                                 type="button"
-                                title="Reject profile"
+                                title="Reject Profile"
                                 className="p-1.5 bg-red-50 text-red-500 hover:bg-red-100 rounded-md border border-red-200 cursor-pointer"
                                 onClick={() => handleProcessApproval(expertId, 'REJECTED')}
                               >
@@ -484,7 +488,7 @@ export default function NutritionistListPage() {
                           {appStatus === 'APPROVED' && (
                             <button 
                               type="button"
-                              title="Suspend account"
+                              title="Suspend Account"
                               className="flex items-center gap-1 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-md px-2 py-1 text-xs font-bold cursor-pointer"
                               onClick={() => handleProcessApproval(expertId, 'SUSPENDED')}
                             >
@@ -496,7 +500,7 @@ export default function NutritionistListPage() {
                           {(appStatus === 'REJECTED' || appStatus === 'SUSPENDED' || appStatus === 'BANNED') && (
                             <button 
                               type="button"
-                              title="Reactivate account"
+                              title="Reactivate Account"
                               className="flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-md px-2 py-1 text-xs font-bold cursor-pointer"
                               onClick={() => handleProcessApproval(expertId, 'REACTIVATE')}
                             >
@@ -513,7 +517,7 @@ export default function NutritionistListPage() {
           </table>
         </div>
 
-        {/* Pagination Bar */}
+        {/* Pagination Navigation */}
         {totalItems > itemsPerPage && (
           <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-between">
             <span className="text-xs text-slate-500 font-medium">

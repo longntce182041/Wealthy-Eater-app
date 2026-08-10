@@ -1,30 +1,38 @@
-const { default: mongoose } = require("mongoose");
+const mongoose = require("mongoose");
 
-mongoose.model("NutritionistReview", new mongoose.Schema({
+const NutritionistReviewSchema = new mongoose.Schema(
+  {
+    _id: {
+      type: String,
+      default: () => new mongoose.Types.ObjectId().toString(),
+    },
     nutritionist_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Nutritionist"
+      type: String,
+      ref: "Nutritionist",
+      required: true,
+      index: true,
     },
     user_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User"
+      type: String,
+      ref: "User",
+      required: true,
     },
     rating: {
-        type: Number,
-        required: true
+      type: Number,
+      required: true,
+      min: 1,
+      max: 5,
     },
     review: {
-        type: String,
-        required: true
+      type: String,
+      trim: true,
+      default: "",
     },
-    created_at: {
-        type: Date,
-        default: Date.now
-    },
-    updated_at: {
-        type: Date,
-        default: Date.now
-    }
-}));
+  },
+  {
+    timestamps: true, // Tự động tạo created_at/createdAt và updated_at/updatedAt
+    versionKey: false,
+  }
+);
 
 module.exports = mongoose.model("NutritionistReview", NutritionistReviewSchema);
