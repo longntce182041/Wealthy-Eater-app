@@ -32,6 +32,9 @@ function getTransporter() {
       port: SMTP_PORT,
       secure: SMTP_SECURE,
       auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      connectionTimeout: 4000, // 4 seconds max connection timeout (prevents 53s hang)
+      greetingTimeout: 4000,   // 4 seconds max greeting timeout
+      socketTimeout: 4000,     // 4 seconds max socket timeout
     });
     return transporter;
   } catch (err) {
@@ -64,8 +67,8 @@ async function sendMail(to, subject, text, html) {
       const info = await transport.sendMail({ from: FROM_EMAIL, to, subject, text, html });
       return info;
     } catch (err) {
-      console.error('[Mail] SMTP sendMail error:', err.message);
-      throw err;
+      console.error('[Mail] SMTP sendMail error (timing out or blocked):', err.message);
+      console.warn('[Mail] Falling back to console log for email delivery.');
     }
   }
 
