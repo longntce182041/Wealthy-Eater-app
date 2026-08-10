@@ -138,16 +138,9 @@ class RegistrationService {
           'ALREADY_REGISTERED'
         );
       }
-
-      // Prevent duplicate pending registration resends within the throttle window
-      const now = Date.now();
-      if (existing.otp_expires_at && existing.otp_expires_at.getTime() > now) {
-        throw new AppError(
-          'A verification code has already been sent. Please check your messages or request a new code later.',
-          429,
-          'RATE_LIMIT_EXCEEDED'
-        );
-      }
+      // If user exists but is_active === false (pending registration),
+      // we allow re-triggering registration to update the password/OTP
+      // so the client can navigate to the OTP screen smoothly.
     }
 
     let sessionInfo = null;
@@ -170,6 +163,9 @@ class RegistrationService {
     if (isEmail) {
       const otpHash = await bcrypt.hash(otp, 10);
       otpCodeToStore = `local_otp:${otpHash}`;
+      console.log(`\n======================================================`);
+      console.log(`[Email Verification Sandbox] Verification OTP for ${email}: ${otp}`);
+      console.log(`======================================================\n`);
     } else if (fallbackToLocal) {
       const otpHash = await bcrypt.hash(otp, 10);
       otpCodeToStore = `local_otp:${otpHash}`;
@@ -209,9 +205,11 @@ class RegistrationService {
     }
     await user.save();
 
-    // Send code
+    // Send code in background so HTTP response is returned immediately without waiting for SMTP delays
     if (isEmail) {
-      await sendVerificationEmail({ to: email, otp, ttlMinutes: 3 });
+      sendVerificationEmail({ to: email, otp, ttlMinutes: 3 }).catch((err) => {
+        console.error('[Registration] Non-blocking email send error:', err.message);
+      });
     }
 
     return { success: true, message: 'Verification code sent' };

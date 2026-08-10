@@ -51,22 +51,28 @@ class ExpertRegistrationValidator {
 
   /// Validate professional title
   static String? validateProfessionalTitle(String? value) {
-    if (value == null || value.isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return 'Professional title is required';
     }
-    if (value.trim().length < 5) {
-      return 'Professional title must be at least 5 characters';
+    if (value.trim().length < 3) {
+      return 'Professional title must be at least 3 characters';
+    }
+    if (value.trim().length > 100) {
+      return 'Professional title cannot exceed 100 characters';
     }
     return null;
   }
 
   /// Validate license number
   static String? validateLicenseNumber(String? value) {
-    if (value == null || value.isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return 'License number is required';
     }
-    if (value.trim().isEmpty) {
-      return 'License number cannot be empty';
+    if (value.trim().length < 3) {
+      return 'License number must be at least 3 characters';
+    }
+    if (value.trim().length > 50) {
+      return 'License number cannot exceed 50 characters';
     }
     return null;
   }
@@ -84,6 +90,12 @@ class ExpertRegistrationValidator {
     }
     if (fee <= 0) {
       return 'Consultation fee must be greater than zero';
+    }
+    if (fee < 20000) {
+      return 'Consultation fee must be at least 20,000 VND';
+    }
+    if (fee > 500000000) {
+      return 'Consultation fee cannot exceed 500,000,000 VND';
     }
     return null;
   }

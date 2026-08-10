@@ -42,17 +42,24 @@ class NutritionistProvider extends ChangeNotifier {
   bool get isLoadingRequests => _isLoadingRequests;
   String? get requestsError => _requestsError;
 
-  Future<void> loadMealPlanRequests() async {
-    _isLoadingRequests = true;
-    _requestsError = null;
-    notifyListeners();
+  Future<void> loadMealPlanRequests({bool silent = false}) async {
+    if (!silent) {
+      _isLoadingRequests = true;
+      _requestsError = null;
+      notifyListeners();
+    }
 
     try {
       _mealPlanRequests = await _service.fetchMealPlanRequests();
+      _requestsError = null;
     } catch (e) {
-      _requestsError = e.toString().replaceFirst('Exception: ', '');
+      if (!silent) {
+        _requestsError = e.toString().replaceFirst('Exception: ', '');
+      }
     } finally {
-      _isLoadingRequests = false;
+      if (!silent) {
+        _isLoadingRequests = false;
+      }
       notifyListeners();
     }
   }

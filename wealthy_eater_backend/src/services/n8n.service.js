@@ -217,16 +217,16 @@ class N8nService {
   async triggerAutoAdjustCalories(payload) {
     const url =
       process.env.N8N_AUTO_ADJUST_CALORIES_WEBHOOK_URL ||
-      "http://localhost:5678/webhook-test/auto-adjust-calories";
+      "http://127.0.0.1:5678/webhook-test/auto-adjust-calories";
+
+    console.info(`⚡ [n8n Webhook]: Triggering UC-42 Auto-Adjust Calories at ${url}...`);
 
     try {
-      // Fire-and-forget for async processing by n8n
-      axios.post(url, payload, { timeout: 10000 }).catch(error => {
-        console.warn("⚠️ [n8n Auto-Adjust Calories Background Failed]:", error.message);
-      });
+      const res = await axios.post(url, payload, { timeout: 10000 });
+      console.info(`✅ [n8n Auto-Adjust Calories Success]: Webhook responded with status ${res.status}`);
       return { success: true, message: "Webhook triggered" };
     } catch (error) {
-      console.warn("⚠️ [n8n Auto-Adjust Calories Trigger Failed]:", error.message);
+      console.warn(`⚠️ [n8n Auto-Adjust Calories Failed]: ${error.message} ${error.response?.status ? `(HTTP ${error.response.status})` : ''}`);
       return null;
     }
   }

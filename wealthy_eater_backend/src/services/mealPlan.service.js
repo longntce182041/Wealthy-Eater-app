@@ -825,8 +825,9 @@ class MealPlanService {
         itemDoc.custom_ingredients = [];
 
         const nutrients = await this.calculateRecipeNutrients(newRecipeId);
-        itemDoc.target_calories = nutrients.calories;
-        itemDoc.customized_servings_gram = nutrients.base_weight;
+        itemDoc.customized_servings_gram = updateItem.customized_servings_gram || updateItem.customizedServingsGram || itemDoc.customized_servings_gram || nutrients.base_weight;
+        const scale = itemDoc.customized_servings_gram / (nutrients.base_weight || 1);
+        itemDoc.target_calories = Math.round(nutrients.calories * scale);
 
         totalCalories += nutrients.calories;
       } else {
@@ -937,7 +938,7 @@ class MealPlanService {
       }).lean();
 
       const n8nService = require('./n8n.service');
-      n8nService.triggerAutoAdjustCalories({
+      await n8nService.triggerAutoAdjustCalories({
         user_id: userId.toString(),
         actual_calories: calories,
         meal_type: item.meal_type,

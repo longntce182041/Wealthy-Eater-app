@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../data/models/active_contract_model.dart';
@@ -15,12 +16,27 @@ class MyNutritionistDashboard extends StatefulWidget {
 }
 
 class _MyNutritionistDashboardState extends State<MyNutritionistDashboard> {
+  Timer? _autoRefreshTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ConsultationProvider>().loadMealPlanRequestStatus();
     });
+
+    // Auto-refresh (hot reload) request status silently every 5 seconds
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) {
+        context.read<ConsultationProvider>().loadMealPlanRequestStatus(silent: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
   }
 
   String _formatPackageType(String package) {

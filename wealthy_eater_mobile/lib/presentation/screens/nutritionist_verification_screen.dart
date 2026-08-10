@@ -183,31 +183,44 @@ class _NutritionistVerificationScreenState
 
                       TextFormField(
                         controller: _titleCtrl,
+                        maxLength: 100,
                         decoration: InputDecoration(
                           labelText: 'Professional Title',
                           hintText: 'e.g. Senior Dietitian / Nutrition Specialist',
                           prefixIcon: const Icon(Icons.badge_outlined),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        validator: (v) => v == null || v.trim().isEmpty ? 'Title is required' : null,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Title is required';
+                          if (v.trim().length < 3) return 'Title must be at least 3 characters';
+                          if (v.trim().length > 100) return 'Title cannot exceed 100 characters';
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 16),
 
                       TextFormField(
                         controller: _licenseCtrl,
+                        maxLength: 50,
                         decoration: InputDecoration(
                           labelText: 'License / Certification Number',
                           hintText: 'e.g. LC-1092837',
                           prefixIcon: const Icon(Icons.verified_user_outlined),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        validator: (v) => v == null || v.trim().isEmpty ? 'License number is required' : null,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'License number is required';
+                          if (v.trim().length < 3) return 'License number must be at least 3 characters';
+                          if (v.trim().length > 50) return 'License number cannot exceed 50 characters';
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 16),
 
                       TextFormField(
                         controller: _feeCtrl,
                         keyboardType: TextInputType.number,
+                        maxLength: 10,
                         decoration: InputDecoration(
                           labelText: 'Consultation Fee (VND)',
                           hintText: 'e.g. 200000',
@@ -218,6 +231,8 @@ class _NutritionistVerificationScreenState
                           if (v == null || v.trim().isEmpty) return 'Fee is required';
                           final val = int.tryParse(v.trim());
                           if (val == null || val <= 0) return 'Enter a valid positive fee';
+                          if (val < 20000) return 'Consultation fee must be at least 20,000 VND';
+                          if (val > 500000000) return 'Consultation fee cannot exceed 500,000,000 VND';
                           return null;
                         },
                       ),
@@ -258,6 +273,7 @@ class _NutritionistVerificationScreenState
                               Expanded(
                                 child: TextFormField(
                                   initialValue: entry.value,
+                                  maxLength: 500,
                                   decoration: InputDecoration(
                                     labelText: 'Certificate URL #${idx + 1}',
                                     hintText: 'https://credentials.com/verify/...',
@@ -273,6 +289,9 @@ class _NutritionistVerificationScreenState
                                       return null;
                                     }
                                     final trimmedVal = v.trim();
+                                    if (trimmedVal.length > 500) {
+                                      return 'Link cannot exceed 500 characters';
+                                    }
                                     if (!trimmedVal.startsWith('http://') && !trimmedVal.startsWith('https://')) {
                                       return 'Must start with http:// or https://';
                                     }

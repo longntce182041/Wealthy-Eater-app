@@ -23,6 +23,7 @@ class ApiClient {
           ),
         ) {
     dio.interceptors.add(_AuthInterceptor(storage ?? const FlutterSecureStorage(), dio));
+    dio.interceptors.add(_FallbackInterceptor(EnvConfig.localBaseUrl));
   }
 
   Future<Response<T>> get<T>(
@@ -202,3 +203,46 @@ class _AuthInterceptor extends Interceptor {
     await _storage.delete(key: 'user');
   }
 }
+
+/// Interceptor that attempts to fallback to the local backend if the deployed backend fails
+/// due to connection error, timeout, or server unavailable (5xx).
+class _FallbackInterceptor extends Interceptor {
+  final String _localBaseUrl;
+
+  _FallbackInterceptor(this._localBaseUrl);
+
+  @override
+  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
+    final options = err.requestOptions;
+    final isDeployedUrl = options.baseUrl.contains('onrender.com');
+
+    final isNetworkOrServerError = err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.sendTimeout ||
+        err.type == DioExceptionType.receiveTimeout ||
+        err.type == DioExceptionType.connectionError ||
+        err.type == DioExceptionType.unknown ||
+        (err.response != null && err.response!.statusCode! >= 500);
+
+    if (isDeployedUrl && isNetworkOrServerError && _localBaseUrl.isNotEmpty) {
+      try {
+        final fallbackOptions = options.copyWith(
+          baseUrl: _localBaseUrl,
+        );
+
+        final localDio = Dio(BaseOptions(
+          baseUrl: _localBaseUrl,
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: Duration(milliseconds: EnvConfig.receiveTimeout),
+          headers: options.headers,
+        ));
+
+        final response = await localDio.fetch(fallbackOptions);
+        return handler.resolve(response);
+      } catch (_) {
+        // Fallback failed as well, proceed with original error
+      }
+    }
+    handler.next(err);
+  }
+}
+

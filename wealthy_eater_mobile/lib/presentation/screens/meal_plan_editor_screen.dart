@@ -434,7 +434,26 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
     });
   }
 
-  // ── Macro recalculation ───────────────────────────────────────────────────
+  /// Recalculates total portion weight from recipe ingredients and updates macros.
+  void _recalculatePortionFromRecipeIngredients() {
+    if (_editingItem['ingredients'] == null) return;
+    final list = _editingItem['ingredients'] as List;
+    if (list.isEmpty) return;
+
+    double totalWeight = 0;
+    for (var ing in list) {
+      final num qty = ing['quantity'] ?? ing['amount_gram'] ?? ing['base_quantity'] ?? 0;
+      totalWeight += qty;
+    }
+
+    if (totalWeight > 0) {
+      setState(() {
+        _editingItem['customized_servings_gram'] = totalWeight;
+        _servingsController.text = totalWeight.round().toString();
+        _recalculateMacrosFromRecipe();
+      });
+    }
+  }
 
   /// Recalculates macros based on selected recipe + current weight in grams.
   ///
@@ -577,7 +596,23 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
           ),
           const SizedBox(height: 12),
 
-          const SizedBox(height: 8),
+          // ── Portion Weight / Serving (g) Field (Read-only) ────────────────
+          TextFormField(
+            controller: _servingsController,
+            readOnly: true,
+            decoration: InputDecoration(
+              labelText: 'Portion Weight (grams)',
+              helperText: isAI
+                  ? 'Total weight calculated from ingredients'
+                  : 'Original weight of 1 serving: ${((_editingItem['base_weight'] as num?) ?? 100).round()}g (${_baseNutrition?['calories'] ?? 0} kcal)',
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              suffixText: 'g',
+              filled: true,
+              fillColor: Colors.grey[100],
+            ),
+          ),
+          const SizedBox(height: 12),
 
           // ── Ingredients section ───────────────────────────────────────────
           if (isAI && _editingItem['custom_ingredients'] != null) ...[
@@ -642,11 +677,12 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
                 itemBuilder: (context, index) {
                   final ing = _editingItem['ingredients'][index];
                   final String ingName = ing['name'] ?? ing['ingredient']?['name'] ?? 'Ingredient';
-                  final num quantity = ing['quantity'] ?? ing['amount_gram'] ?? 0;
+                  final num qty = ing['quantity'] ?? ing['amount_gram'] ?? ing['base_quantity'] ?? 0;
                   final String unit = ing['unit'] ?? 'g';
+                  final String qtyText = (qty % 1 == 0) ? qty.round().toString() : qty.toStringAsFixed(1);
 
                   return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -656,20 +692,48 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
                             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.blue[50],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '$quantity $unit',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue[800],
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline, color: Colors.grey),
+                              onPressed: () {
+                                if (qty > 5) {
+                                  final num newQty = qty > 10 ? qty - 10 : qty - 1;
+                                  if (ing['quantity'] != null) {
+                                    ing['quantity'] = newQty;
+                                  } else {
+                                    ing['amount_gram'] = newQty;
+                                  }
+                                  _recalculatePortionFromRecipeIngredients();
+                                }
+                              },
                             ),
-                          ),
+                            Container(
+                              width: 65,
+                              alignment: Alignment.center,
+                              child: Text(
+                                '$qtyText $unit',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
+                              onPressed: () {
+                                final num newQty = qty + 10;
+                                if (ing['quantity'] != null) {
+                                  ing['quantity'] = newQty;
+                                } else {
+                                  ing['amount_gram'] = newQty;
+                                }
+                                _recalculatePortionFromRecipeIngredients();
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),

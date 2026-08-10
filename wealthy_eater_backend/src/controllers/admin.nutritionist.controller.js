@@ -21,16 +21,16 @@ async function getNutritionistsList(req, res, next) {
     const nutritionists = await Nutritionist.aggregate([
       {
         $lookup: {
-          from: "users",          
-          localField: "user_id",   
-          foreignField: "_id",    
+          from: "users",
+          localField: "user_id",
+          foreignField: "_id",
           as: "user_info"
         }
       },
       {
         $unwind: {
           path: "$user_info",
-          preserveNullAndEmptyArrays: true 
+          preserveNullAndEmptyArrays: true
         }
       },
       {
@@ -51,12 +51,13 @@ async function getNutritionistsList(req, res, next) {
         _id: item._id.toString(),
         userId: item.user_id ? item.user_id.toString() : null,
         email: item.user_info?.email || "N/A (Tài khoản ẩn/đã xóa)",
-        userStatus: item.user_info?.status || (item.user_info?.is_active === false ? "banned" : "active"), 
+        userStatus: item.user_info?.status || (item.user_info?.is_active === false ? "banned" : "active"),
         fullName: item.full_name || "Chưa cập nhật họ tên",
         specialization: item.specialization || "Dinh dưỡng tổng quát",
         professionalTitle: item.professional_title || "Chuyên gia",
         licenseNumber: item.license_number || "Chưa có số giấy phép",
         certificationUrl: item.certification_url || "",
+        about: item.about || "",
         serviceFee: item.service_fee || 0,
         approvalStatus: item.approval_status || "PENDING",
         averageRating: item.average_rating || 5.0,
@@ -104,6 +105,7 @@ async function getNutritionistById(req, res, next) {
       professionalTitle: nutritionist.professional_title || "Chuyên gia",
       licenseNumber: nutritionist.license_number || "Chưa có số giấy phép",
       certificationUrl: nutritionist.certification_url || "",
+      about: nutritionist.about || "",
       serviceFee: nutritionist.service_fee || 0,
       approvalStatus: nutritionist.approval_status || "PENDING",
       averageRating: nutritionist.average_rating || 5.0,
@@ -149,11 +151,11 @@ async function updateApprovalStatus(req, res, next) {
     // --- TRƯỜNG HỢP 1: TẠM NGƯNG TÀI KHOẢN (SUSPEND / BAN) ---
     if (['suspend', 'suspended', 'ban', 'banned'].includes(inputStatus)) {
       const userStatusTarget = inputStatus.includes('suspend') ? 'suspended' : 'banned';
-      
+
       if (nutritionist.user_id) {
-        await User.findByIdAndUpdate(nutritionist.user_id, { 
-          status: userStatusTarget, 
-          is_active: false 
+        await User.findByIdAndUpdate(nutritionist.user_id, {
+          status: userStatusTarget,
+          is_active: false
         });
       }
 
@@ -167,9 +169,9 @@ async function updateApprovalStatus(req, res, next) {
     // --- TRƯỜNG HỢP 2: KÍCH HOẠT LẠI TÀI KHOẢN (UNSUSPEND / ACTIVE) ---
     if (inputStatus === 'active' || inputStatus === 'unsuspend') {
       if (nutritionist.user_id) {
-        await User.findByIdAndUpdate(nutritionist.user_id, { 
-          status: 'active', 
-          is_active: true 
+        await User.findByIdAndUpdate(nutritionist.user_id, {
+          status: 'active',
+          is_active: true
         });
       }
 
@@ -192,7 +194,7 @@ async function updateApprovalStatus(req, res, next) {
       if (finalStatus === "APPROVED") {
         await User.findByIdAndUpdate(nutritionist.user_id, { role: "nutritionist", status: "active", is_active: true });
       } else if (finalStatus === "REJECTED") {
-        await User.findByIdAndUpdate(nutritionist.user_id, { role: "customer" }); 
+        await User.findByIdAndUpdate(nutritionist.user_id, { role: "customer" });
       }
     }
 
@@ -214,9 +216,9 @@ async function updateApprovalStatus(req, res, next) {
  */
 async function verifyNutritionistCertificate(req, res, next) {
   try {
-    const { id } = req.params; 
+    const { id } = req.params;
     const cleanId = cleanIdParam(id);
-    const { action, approvalStatus, rejectionReason } = req.body; 
+    const { action, approvalStatus, rejectionReason } = req.body;
 
     if (!cleanId || !mongoose.Types.ObjectId.isValid(cleanId)) {
       return res.status(400).json({ success: false, message: "Cấu trúc ID chuyên gia không hợp lệ." });
@@ -224,7 +226,7 @@ async function verifyNutritionistCertificate(req, res, next) {
 
     // Nhận diện trạng thái linh hoạt từ FE (Hỗ trợ cả 'action' và 'approvalStatus')
     const rawAction = (action || approvalStatus || '').toString().toUpperCase();
-    
+
     let finalStatus = '';
     if (['APPROVE', 'APPROVED'].includes(rawAction)) {
       finalStatus = 'APPROVED';
@@ -256,12 +258,12 @@ async function verifyNutritionistCertificate(req, res, next) {
     // Cập nhật trạng thái kiểm duyệt và Vai trò (Role)
     if (finalStatus === "APPROVED") {
       nutritionist.approval_status = "APPROVED";
-      user.role = "nutritionist"; 
+      user.role = "nutritionist";
       user.status = "active";
       user.is_active = true;
     } else {
       nutritionist.approval_status = "REJECTED";
-      user.role = "customer"; 
+      user.role = "customer";
     }
 
     await Promise.all([nutritionist.save(), user.save()]);
@@ -276,8 +278,8 @@ async function verifyNutritionistCertificate(req, res, next) {
           await sendApprovalEmail(userEmail, displayName);
         } else {
           await sendRejectionEmail(
-            userEmail, 
-            displayName, 
+            userEmail,
+            displayName,
             rejectionReason || "Hồ sơ hoặc bằng cấp chuyên môn chưa đạt yêu cầu kiểm định hệ thống."
           );
         }
@@ -369,11 +371,12 @@ async function getNutritionistDetails(req, res) {
       professionalTitle: expertData.professional_title || "Chuyên gia",
       licenseNumber: expertData.license_number || "Chưa cấp số",
       certificationUrl: expertData.certification_url || "",
+      about: expertData.about || "",
       serviceFee: expertData.service_fee || 0,
       approvalStatus: expertData.approval_status || "PENDING",
       averageRating: expertData.average_rating || 5.0,
       createdAt: expertData.createdAt,
-      
+
       consultations: (expertData.consultation_history || []).map(c => ({
         id: c._id,
         diagnosis: c.diagnosis || "Chưa có chẩn đoán",

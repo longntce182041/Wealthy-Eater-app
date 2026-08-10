@@ -26,6 +26,7 @@ const NutritionistSchema = new mongoose.Schema(
     // Legacy/public profile fields used by existing consultation flows
     full_name: { type: String, trim: true, default: "" },
     specialization: { type: String, trim: true },
+    about: { type: String, trim: true, default: "" },
 
     // UC-45 expert registration fields
     professional_title: {

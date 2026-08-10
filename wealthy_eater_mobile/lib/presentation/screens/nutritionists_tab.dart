@@ -19,6 +19,10 @@ class NutritionistsTab extends StatefulWidget {
 }
 
 class _NutritionistsTabState extends State<NutritionistsTab> {
+  String _selectedSpecialization = 'All';
+  String _searchQuery = '';
+  final TextEditingController _searchCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -26,6 +30,12 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
       context.read<NutritionistProvider>().fetchNutritionists();
       context.read<ConsultationProvider>().loadActiveContract();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   // Generate deterministic colors based on index for the avatar
@@ -95,19 +105,132 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
 
         final nutritionists = provider.nutritionists;
 
+        // Extract unique specializations for filter chips
+        final allSpecializations = <String>[
+          'All',
+          ...nutritionists
+              .map((doc) => doc.specialization.trim())
+              .where((s) => s.isNotEmpty)
+              .toSet(),
+        ];
+
+        // Filter nutritionists by selected specialization and search query
+        final filteredNutritionists = nutritionists.where((doc) {
+          final matchesSpec = _selectedSpecialization == 'All' ||
+              doc.specialization.trim().toLowerCase() == _selectedSpecialization.toLowerCase();
+          final matchesSearch = _searchQuery.isEmpty ||
+              doc.fullName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              doc.specialization.toLowerCase().contains(_searchQuery.toLowerCase());
+          return matchesSpec && matchesSearch;
+        }).toList();
+
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
           children: [
-            if (nutritionists.isEmpty)
-              const Center(
+            // Search Field
+            TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Search by name or specialty...',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded),
+                        onPressed: () {
+                          setState(() {
+                            _searchCtrl.clear();
+                            _searchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: theme.cardTheme.color ?? Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+              ),
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val.trim();
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Specialization Filter Bar
+            if (allSpecializations.length > 1) ...[
+              SizedBox(
+                height: 38,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: allSpecializations.length,
+                  separatorBuilder: (context, index) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final spec = allSpecializations[index];
+                    final isSelected = _selectedSpecialization == spec;
+                    return ChoiceChip(
+                      label: Text(spec),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() {
+                            _selectedSpecialization = spec;
+                          });
+                        }
+                      },
+                      selectedColor: AppColors.primary,
+                      backgroundColor: Colors.grey.shade100,
+                      labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: isSelected ? AppColors.primary : Colors.grey.shade300,
+                        ),
+                      ),
+                      showCheckmark: false,
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            if (filteredNutritionists.isEmpty)
+              Center(
                 child: Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: Text('No nutritionists available at the moment.'),
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    children: [
+                      Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade400),
+                      const SizedBox(height: 12),
+                      Text(
+                        _selectedSpecialization == 'All'
+                            ? 'No nutritionists found'
+                            : 'No nutritionists for "$_selectedSpecialization"',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
             // Doctors List
-            ...nutritionists.asMap().entries.map((entry) {
+            ...filteredNutritionists.asMap().entries.map((entry) {
               final index = entry.key;
               final doc = entry.value;
               final bgColor = _getBgColor(index);
