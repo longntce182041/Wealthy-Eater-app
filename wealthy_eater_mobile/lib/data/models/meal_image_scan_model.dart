@@ -22,9 +22,16 @@ class MealImageScanResult {
 
   factory MealImageScanResult.fromJson(Map<String, dynamic> json) {
     final rawIngredients = (json['ingredients'] as List?) ?? const [];
+    final double rawConf = _toDouble(json['confidence']);
+    // Normalize percentage or raw float and clamp strictly to 2D visual max (max 0.80)
+    final double normalizedConf = rawConf > 1.0 ? (rawConf / 100.0) : rawConf;
+    final double clampedConf = (normalizedConf == 0.0)
+        ? 0.55
+        : normalizedConf.clamp(0.30, 0.80);
+
     return MealImageScanResult(
       mealName: (json['meal_name'] as String?) ?? 'Unknown Meal',
-      confidence: _toDouble(json['confidence']),
+      confidence: clampedConf,
       ingredients: rawIngredients
           .whereType<Map>()
           .map((e) =>
@@ -34,7 +41,7 @@ class MealImageScanResult {
         Map<String, dynamic>.from((json['totals'] as Map?) ?? const {}),
       ),
       note: (json['note'] as String?) ??
-          'Nutritional values are estimated from AI image analysis.',
+          '⚠️ Reference Warning: Nutritional values and portion amounts are estimated from 2D AI image analysis.',
       recipeId: json['recipe_id']?.toString() ?? json['recipeId']?.toString(),
       matchedInSystem: json['matched_in_system'] as bool? ?? false,
     );

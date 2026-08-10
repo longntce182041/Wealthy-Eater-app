@@ -97,19 +97,19 @@ class DietAuditService {
             customer_meal_log: lastLog._id,
             contract_id: activeContract._id,
             calculated_delta_calories: deltaCalories,
-            nutritionist_review: `Hệ thống tự động phát hiện hiệu số chênh lệch Calo vượt ngưỡng quy định: ${deltaCalories} Calo.`
+            nutritionist_review: `System auto-detected calorie deviation exceeding threshold: ${deltaCalories} kcal.`
           });
           await newFlag.save();
 
           await CustomerMealLog.findByIdAndUpdate(lastLog._id, { deviation_flag: true });
 
           // ── UC55: AUTOMATIC DEVIATION ALERT PACKAGING & DISPATCH ────────────────────
-          // Hệ thống đóng gói mã lệnh alert khẩn cấp tự động và bắn realtime ngay khi dán cờ
+          // System packages automatic emergency alert commands and dispatches in realtime upon flagging
           try {
-            const alertTitle = "🚨 CẢNH BÁO ĐỎ: Chỉ Số Dinh Dưỡng Lệch Pha Khẩn Cấp!";
-            const alertBody = `Nhật ký ăn uống hôm nay hiển thị lượng năng lượng thực tế đang bị lệch ${Math.abs(deltaCalories)} kcal so với thực đơn được duyệt. Vui lòng điều chỉnh khẩu phần ăn ngay lập tức!`;
+            const alertTitle = "🚨 RED ALERT: Critical Nutritional Deviation Detected!";
+            const alertBody = `Today's meal log shows an energy deviation of ${Math.abs(deltaCalories)} kcal from your approved meal plan. Please adjust your portions immediately!`;
 
-            // 1. Lưu bản ghi thông báo loại 'alert' vào Database
+            // 1. Save alert type notification record to Database
             const systemAlertNotification = new Notification({
               user_id: userId,
               title: alertTitle,
@@ -132,10 +132,10 @@ class DietAuditService {
                 message: "EMERGENCY_DEVIATION_ALERT_DISPATCHED",
                 data: systemAlertNotification
               });
-              console.log(`[UC55 Socket.io] Đã kích hoạt còi báo động đỏ khẩn cấp tự động đến phòng: ${targetAlertRoom}`);
+              console.log(`[UC55 Socket.io] Emergency deviation alert dispatched to room: ${targetAlertRoom}`);
             }
           } catch (socketError) {
-            console.error("[UC55 Error] Lỗi trong quá trình đóng gói và tự động phát lệnh alert Socket.io:", socketError);
+            console.error("[UC55 Error] Failed to package and dispatch Socket.io deviation alert:", socketError);
           }
           // ────────────────────────────────────────────────────────────────────────────
         }
@@ -184,8 +184,8 @@ class DietAuditService {
     }
 
     const targetUserId = contract.user_id;
-    const alertTitle = "🚨 CHUYÊN GIA CẢNH BÁO: Điều Chỉnh Thực Đơn Khẩn Cấp!";
-    const alertBody = customMessage || `Chuyên gia đã kiểm duyệt nhật ký ăn uống và phát hiện mức độ lệch pha nghiêm trọng: ${flag.calculated_delta_calories} kcal. Yêu cầu tuân thủ nghiêm ngặt!`;
+    const alertTitle = "🚨 NUTRITIONIST ALERT: Urgent Meal Plan Adjustment Required!";
+    const alertBody = customMessage || `Your nutritionist has reviewed your diet log and found a critical deviation: ${flag.calculated_delta_calories} kcal. Strict adherence is required immediately!`;
 
     // 1. Lưu bản ghi chỉ định của chuyên gia vào Database làm bằng chứng kiểm toán
     const manualNotification = new Notification({
@@ -210,7 +210,7 @@ class DietAuditService {
         message: "MANUAL_NUTRITIONIST_ALERT_DISPATCHED",
         data: manualNotification
       });
-      console.log(`[UC55 Socket.io] Chuyên gia phát lệnh cưỡng bức thông báo đỏ tới phòng: ${targetAlertRoom}`);
+      console.log(`[UC55 Socket.io] Nutritionist manually dispatched red alert to room: ${targetAlertRoom}`);
     }
 
     // 3. Cập nhật lại lời phê duyệt chính thức của chuyên gia vào bản ghi flag ban đầu

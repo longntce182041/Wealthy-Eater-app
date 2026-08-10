@@ -76,9 +76,11 @@ app.use(
 // ── Rate Limiting ──────────────────────────────────────────────────────────────
 
 // Strict limit for auth endpoints — prevents brute-force attacks
+const isDev = process.env.NODE_ENV === "development";
+
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15-minute window
-  max: 20, // max 20 auth requests per window per IP
+  max: isDev ? 500 : 20, // max 20 auth requests per window per IP in production, 500 in development
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -94,7 +96,7 @@ const authLimiter = rateLimit({
 // General API limiter
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1-minute window
-  max: 120, // 120 requests per minute per IP
+  max: isDev ? 1000 : 120, // 120 requests per minute per IP in production, 1000 in development
   standardHeaders: true,
   legacyHeaders: false,
   message: {

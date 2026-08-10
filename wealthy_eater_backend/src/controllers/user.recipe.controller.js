@@ -247,35 +247,58 @@ async function detail(req, res, next) {
     const ingredients = ingredientsRelations.map((relation) => mapIngredient(relation.ingredient_id, relation));
     const revStats = reviewStats[0] || { count: 0, avgRating: 0 };
 
+    // Tự động tính toán tổng dinh dưỡng & khối lượng từ danh sách nguyên liệu
+    let computedCal = 0, computedPro = 0, computedFat = 0, computedCarbs = 0, totalWeight = 0;
+    ingredientsRelations.forEach((ri) => {
+      const ing = ri.ingredient_id || {};
+      const qty = Number(ri.base_quantity) || 0;
+      totalWeight += qty;
+      computedCal += (Number(ing.calories_per_unit) || 0) * qty;
+      computedPro += (Number(ing.protein) || 0) * qty;
+      computedFat += (Number(ing.fat) || 0) * qty;
+      computedCarbs += (Number(ing.carbs) || 0) * qty;
+    });
+
+    const finalNutrition = (nutrition && nutrition.calories > 0) ? {
+      calories: nutrition.calories,
+      protein: nutrition.protein,
+      fat: nutrition.fat,
+      carbs: nutrition.carbs,
+    } : {
+      calories: Math.round(computedCal),
+      protein: Number(computedPro.toFixed(1)),
+      fat: Number(computedFat.toFixed(1)),
+      carbs: Number(computedCarbs.toFixed(1)),
+    };
+
     return res.json({
       success: true,
       message: 'Recipe loaded successfully',
-      data: mapRecipe(recipe, {
-        nutrition: nutrition ? {
-          calories: nutrition.calories,
-          protein: nutrition.protein,
-          fat: nutrition.fat,
-          carbs: nutrition.carbs,
-        } : null,
-        averageRating: revStats.count ? Number(revStats.avgRating.toFixed(1)) : 0,
-        reviewCount: revStats.count,
-        ingredientsCount: ingredients.length,
-        stepsCount: steps.length,
-        ingredients,
-        steps: steps.map((step) => ({
-          id: step._id,
-          stepNumber: step.step_number,
-          instruction: step.instruction,
-        })),
-        reviews: recentReviews.map((review) => ({
-          id: review._id,
-          rating: review.rating,
-          comment: review.comment || '',
-          reviewerName: (review.user_id && review.user_id.email)
-            ? review.user_id.email.split('@')[0]
-            : 'User',
-        })),
-      }),
+      data: {
+        recipe_id: recipe._id,
+        base_weight: totalWeight || 100,
+        ...mapRecipe(recipe, {
+          nutrition: finalNutrition,
+          averageRating: revStats.count ? Number(revStats.avgRating.toFixed(1)) : 0,
+          reviewCount: revStats.count,
+          ingredientsCount: ingredients.length,
+          stepsCount: steps.length,
+          ingredients,
+          steps: steps.map((step) => ({
+            id: step._id,
+            stepNumber: step.step_number,
+            instruction: step.instruction,
+          })),
+          reviews: recentReviews.map((review) => ({
+            id: review._id,
+            rating: review.rating,
+            comment: review.comment || '',
+            reviewerName: (review.user_id && review.user_id.email)
+              ? review.user_id.email.split('@')[0]
+              : 'User',
+          })),
+        }),
+      },
     });
   } catch (err) {
     return next(new AppError(err.message || 'Failed to load recipe', 500));

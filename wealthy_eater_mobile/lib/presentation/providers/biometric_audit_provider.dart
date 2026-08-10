@@ -24,6 +24,8 @@ class BiometricAuditProvider extends ChangeNotifier {
   List<WeightLogModel> _allLogs = [];
   List<WeightLogModel> _filteredLogs = [];
   BiometricTimeFilter _selectedFilter = BiometricTimeFilter.oneMonth;
+  Map<String, dynamic>? _userProfile;
+  Map<String, dynamic>? _userDietary;
 
   // ── Getters ────────────────────────────────────────────────────────────────
   bool get isLoading => _isLoading;
@@ -31,7 +33,9 @@ class BiometricAuditProvider extends ChangeNotifier {
   List<WeightLogModel> get allLogs => _allLogs;
   List<WeightLogModel> get filteredLogs => _filteredLogs;
   BiometricTimeFilter get selectedFilter => _selectedFilter;
-  bool get isEmpty => _allLogs.isEmpty;
+  bool get isEmpty => _allLogs.isEmpty && _userProfile == null;
+  Map<String, dynamic>? get userProfile => _userProfile;
+  Map<String, dynamic>? get userDietary => _userDietary;
 
   // ── Computed Metrics ───────────────────────────────────────────────────────
   double get baselineWeight {
@@ -60,8 +64,10 @@ class BiometricAuditProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final logs = await _service.getClientBiometricHistory(clientId);
-      _allLogs = logs;
+      final result = await _service.getClientBiometricHistory(clientId);
+      _allLogs = result.logs;
+      _userProfile = result.profile;
+      _userDietary = result.dietary;
       _applyFilter(); // Will update _filteredLogs based on _selectedFilter
     } catch (e) {
       _error = mapError(e).message;
@@ -120,6 +126,8 @@ class BiometricAuditProvider extends ChangeNotifier {
     _allLogs = [];
     _filteredLogs = [];
     _selectedFilter = BiometricTimeFilter.oneMonth;
+    _userProfile = null;
+    _userDietary = null;
     notifyListeners();
   }
 }

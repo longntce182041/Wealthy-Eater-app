@@ -4,7 +4,6 @@
 /// Used by [ChatService] (HTTP + Socket.IO) and consumed by [ChatProvider].
 library;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../core/config/env_config.dart';
 
 /// The type of a chat message, matching the backend enum.
@@ -90,14 +89,14 @@ class ChatMessageModel {
     String content = json['content']?.toString() ?? '';
 
     if (type == MessageType.image) {
-      if (content.startsWith('http://localhost') || content.startsWith('http://127.0.0.1')) {
+      if (content.startsWith('http://localhost') || content.startsWith('http://127.0.0.1') || content.startsWith('http://10.0.2.2')) {
         final uri = Uri.tryParse(content);
         if (uri != null) {
-          final baseUrl = kIsWeb ? 'http://localhost:5000' : EnvConfig.baseUrl;
+          final baseUrl = EnvConfig.baseUrl;
           content = '$baseUrl${uri.path}';
         }
       } else if (content.startsWith('/')) {
-        final baseUrl = kIsWeb ? 'http://localhost:5000' : EnvConfig.baseUrl;
+        final baseUrl = EnvConfig.baseUrl;
         content = '$baseUrl$content';
       }
     }

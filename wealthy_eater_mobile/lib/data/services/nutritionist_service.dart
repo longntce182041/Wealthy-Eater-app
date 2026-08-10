@@ -255,6 +255,18 @@ class NutritionistService {
     }
   }
 
+  /// DELETE /api/meal-plans/:planId
+  /// Deletes a meal plan created by the nutritionist.
+  Future<bool> deleteMealPlan(String planId) async {
+    try {
+      final response = await apiClient.delete('/api/meal-plans/$planId');
+
+      return response.statusCode == 200 && response.data['success'] == true;
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
   /// GET /api/user/recipes — used by the recipe picker inside "Adjust Meal" bottom sheet.
   ///
   /// Supports:

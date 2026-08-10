@@ -42,17 +42,24 @@ class NutritionistProvider extends ChangeNotifier {
   bool get isLoadingRequests => _isLoadingRequests;
   String? get requestsError => _requestsError;
 
-  Future<void> loadMealPlanRequests() async {
-    _isLoadingRequests = true;
-    _requestsError = null;
-    notifyListeners();
+  Future<void> loadMealPlanRequests({bool silent = false}) async {
+    if (!silent) {
+      _isLoadingRequests = true;
+      _requestsError = null;
+      notifyListeners();
+    }
 
     try {
       _mealPlanRequests = await _service.fetchMealPlanRequests();
+      _requestsError = null;
     } catch (e) {
-      _requestsError = e.toString().replaceFirst('Exception: ', '');
+      if (!silent) {
+        _requestsError = e.toString().replaceFirst('Exception: ', '');
+      }
     } finally {
-      _isLoadingRequests = false;
+      if (!silent) {
+        _isLoadingRequests = false;
+      }
       notifyListeners();
     }
   }
@@ -292,6 +299,21 @@ class NutritionistProvider extends ChangeNotifier {
       return success;
     } catch (e) {
       debugPrint('Failed to publish meal plan: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteMealPlan(String planId) async {
+    try {
+      final success = await _service.deleteMealPlan(planId);
+      if (success) {
+        // Remove from local list
+        _nutritionistPlans.removeWhere((p) => (p['mealPlanId'] ?? p['_id'] ?? p['id']) == planId);
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('Failed to delete meal plan: $e');
       return false;
     }
   }

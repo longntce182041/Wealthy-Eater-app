@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../models/meal_plan_generation_dto.dart';
+import '../../core/error/app_error.dart';
 
 class PlanRepository {
   final Dio _dioClient;
@@ -21,10 +22,9 @@ class PlanRepository {
       );
       return MealPlanGenerationResponse.fromJson(response.data);
     } on DioException catch (e) {
-      final runtimeMessage =
-          e.response?.data['error'] ??
-          'Execution connection breakdown exception event.';
-      throw Exception(runtimeMessage);
+      throw mapError(e);
+    } catch (e) {
+      throw mapError(e);
     }
   }
 }

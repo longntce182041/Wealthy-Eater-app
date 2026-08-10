@@ -588,58 +588,64 @@ class _MealPlanItemCardState extends State<_MealPlanItemCard> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   )
-                : Column(
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: _isSaving ? null : () async {
-                          final controller = TextEditingController(text: _currentGram.round().toString());
-                          final val = await showDialog<double>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Test UC-42 Deviation'),
-                              content: TextField(
-                                controller: controller,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: const InputDecoration(
-                                  labelText: 'Total Meal Weight (grams)',
-                                  hintText: 'Enter a huge value (e.g. 2000) to trigger UC-42',
+                : FilledButton.icon(
+                    onPressed: _isSaving
+                        ? null
+                        : () async {
+                            final controller = TextEditingController(text: _currentGram.round().toString());
+                            final val = await showDialog<double>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                title: const Text('Complete Meal', style: TextStyle(fontWeight: FontWeight.bold)),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Confirm the actual weight eaten for this meal to log your nutrition accurately.',
+                                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    TextField(
+                                      controller: controller,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Actual Eaten Weight (grams)',
+                                        border: OutlineInputBorder(),
+                                        suffixText: 'g',
+                                      ),
+                                    ),
+                                  ],
                                 ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  FilledButton(
+                                    style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                                    onPressed: () => Navigator.pop(context, double.tryParse(controller.text)),
+                                    child: const Text('Confirm & Log'),
+                                  ),
+                                ],
                               ),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(context, double.tryParse(controller.text)),
-                                  child: const Text('Log Fake Meal'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (val != null && mounted) {
-                            setState(() {
-                              _currentGram = val;
-                            });
-                            _logMeal();
-                          }
-                        },
-                        icon: const Icon(Icons.science_outlined, size: 18),
-                        label: Text('Simulate Deviation ($_currentGram g)'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(40),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      FilledButton.icon(
-                        onPressed: _isSaving ? null : _logMeal,
-                        icon: const Icon(Icons.check_circle_outline, size: 18),
-                        label: const Text('Complete Meal'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          minimumSize: const Size.fromHeight(40),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ],
+                            );
+
+                            if (val != null && mounted) {
+                              setState(() {
+                                _currentGram = val;
+                              });
+                              _logMeal();
+                            }
+                          },
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                    label: const Text('Complete Meal'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      minimumSize: const Size.fromHeight(44),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
           ),
         ],
@@ -872,17 +878,7 @@ class _WeeklyMealPlansViewState extends State<_WeeklyMealPlansView> {
                     ),
                 ],
               ),
-              const Spacer(),
-              if (provider.mealPlan?['created_by'] != null)
-                Expanded(
-                  child: Text(
-                    'By: ${provider.mealPlan!['created_by'].split('|')[0]}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontStyle: FontStyle.italic),
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+              
             ],
           ),
           const SizedBox(height: 16),

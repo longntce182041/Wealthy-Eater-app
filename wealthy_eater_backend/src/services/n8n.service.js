@@ -61,10 +61,27 @@ class N8nService {
 
     try {
       const response = await axios.post(url, formData, {
-        timeout: 20000, // 20s timeout
+        timeout: 2000, // 2s timeout waiting for n8n
       });
 
-      return response.data;
+      let dataObj = response.data;
+      if (Array.isArray(dataObj) && dataObj.length > 0) {
+        dataObj = dataObj[0];
+      }
+      if (dataObj && typeof dataObj === 'object' && dataObj.data) {
+        dataObj = dataObj.data;
+      }
+
+      // Post-process n8n response confidence if present (strictly cap 2D visual confidence at max 0.65)
+      if (dataObj && typeof dataObj === 'object') {
+        const rawConf = parseFloat(dataObj.confidence);
+        dataObj.confidence = Math.min(0.65, Math.max(0.30, isNaN(rawConf) ? 0.55 : rawConf));
+        if (!dataObj.note) {
+          dataObj.note = "⚠️ Reference Warning: AI analysis from 2D camera images estimates ingredient amounts and calories based strictly on visual appearance. Actual portion weight (g) may vary depending on thickness and density. Please manually check and adjust actual weights before logging.";
+        }
+      }
+
+      return dataObj;
     } catch (error) {
       console.warn("⚠️ [n8n Offline or Failed]:", error.message);
 
@@ -92,17 +109,21 @@ class N8nService {
   }
 
   async callGeminiVisionFallback(file, apiKey) {
-    const model = process.env.GEMINI_VISION_MODEL || "gemini-flash-latest";
+    // Model verified at ai.google.dev/gemini-api/docs/models
+    const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const prompt = [
       "You are an elite clinical research dietitian and expert culinary vision assistant.",
       "Analyze the meal image and return the estimated meal name, confidence score, ingredients list, and macro-nutritional totals.",
+      "CRITICAL - 2D ESTIMATION: Camera photos are 2D representations without depth or density measurements. Weight estimations carry inherent visual uncertainty. Score confidence strictly between 0.30 and 0.65 for 2D portion estimates. Never score above 0.65.",
+      "CRITICAL - NON-FOOD IMAGES: If the photo does NOT depict a food dish or meal plate (e.g. human face, person, document, animal, or non-food object), set 'is_valid_meal': false, 'meal_name': 'No Food Detected', 'confidence': 0, 'ingredients': [], and 'note': 'No valid meal detected in image. Please take a clear photo of your meal plate and try again.'",
       "You must output your response exclusively as a minified, valid JSON object that strictly adheres to the requested application schema. Do not append any conversational prefaces, explanation, or markdown fences (e.g. do not wrap with ```json).",
       "JSON schema:",
       "{",
+      '  "is_valid_meal": boolean,',
       '  "meal_name": "string (creative name of the dish)",',
-      '  "confidence": number (between 0.0 and 1.0),',
+      '  "confidence": number (strictly between 0.30 and 0.65 for valid meals, or 0 for non-food),',
       '  "ingredients": [',
       '    {',
       '      "name": "string (simple singular ingredient name, e.g. Chicken breast)",',
@@ -161,11 +182,19 @@ class N8nService {
 
     const parsed = JSON.parse(cleanText);
 
+    if (parsed.is_valid_meal === false || (parseFloat(parsed.confidence) === 0) || !parsed.ingredients || parsed.ingredients.length === 0) {
+      throw new Error("No valid meal detected in image. Please take a clear photo of your meal plate and try again.");
+    }
+
+    // Enforce strict confidence cap for 2D camera image analysis (max 0.65)
+    const rawConfidence = parseFloat(parsed.confidence);
+    const strictConfidence = Math.min(0.65, Math.max(0.30, isNaN(rawConfidence) ? 0.55 : rawConfidence));
+
     return {
-      meal_name: parsed.meal_name || "Món ăn từ hình ảnh",
-      confidence: parsed.confidence || 0.8,
+      meal_name: parsed.meal_name || "Scanned Meal",
+      confidence: strictConfidence,
       ingredients: (parsed.ingredients || []).map((item) => ({
-        name: item.name || "Thành phần",
+        name: item.name || "Ingredient",
         estimated_amount: item.estimated_amount || 0,
         estimated_unit: item.estimated_unit || "g",
         nutrition: {
@@ -181,23 +210,23 @@ class N8nService {
         carbs: parsed.totals?.carbs || 0,
         fats: parsed.totals?.fats || 0,
       },
-      note: "",
+      note: "⚠️ Reference Warning: AI analysis from 2D camera images estimates ingredient amounts based strictly on visual appearance. Actual portion weight (g) may vary depending on thickness and density. Please manually check and adjust actual weights before logging.",
     };
   }
 
   async triggerAutoAdjustCalories(payload) {
     const url =
       process.env.N8N_AUTO_ADJUST_CALORIES_WEBHOOK_URL ||
-      "http://localhost:5678/webhook-test/auto-adjust-calories";
+      "http://127.0.0.1:5678/webhook-test/auto-adjust-calories";
+
+    console.info(`⚡ [n8n Webhook]: Triggering UC-42 Auto-Adjust Calories at ${url}...`);
 
     try {
-      // Fire-and-forget for async processing by n8n
-      axios.post(url, payload, { timeout: 10000 }).catch(error => {
-        console.warn("⚠️ [n8n Auto-Adjust Calories Background Failed]:", error.message);
-      });
+      const res = await axios.post(url, payload, { timeout: 10000 });
+      console.info(`✅ [n8n Auto-Adjust Calories Success]: Webhook responded with status ${res.status}`);
       return { success: true, message: "Webhook triggered" };
     } catch (error) {
-      console.warn("⚠️ [n8n Auto-Adjust Calories Trigger Failed]:", error.message);
+      console.warn(`⚠️ [n8n Auto-Adjust Calories Failed]: ${error.message} ${error.response?.status ? `(HTTP ${error.response.status})` : ''}`);
       return null;
     }
   }

@@ -42,7 +42,7 @@ class MealImageScanService {
       }
 
       throw AppError(
-        response.data['error']?['message'] ?? 'Không thể phân tích hình ảnh bữa ăn.',
+        response.data['error']?['message'] ?? 'Unable to analyze the meal image.',
       );
     } catch (e) {
       throw mapError(e);

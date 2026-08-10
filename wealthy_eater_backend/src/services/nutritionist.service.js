@@ -215,6 +215,7 @@ class NutritionistService {
       const certificateUrl = data.certificateUrl || data.certification_url;
       const fullName = data.fullName || data.full_name;
       const specialization = data.specialization;
+      const about = data.about;
 
       if (!nutritionist) {
         // Create new profile (registration)
@@ -239,6 +240,7 @@ class NutritionistService {
           service_fee: serviceFee,
           full_name: fullName || "",
           specialization: specialization || "",
+          about: about || "",
           approval_status: "PENDING",
           average_rating: 5.0,
         });
@@ -251,6 +253,7 @@ class NutritionistService {
         }
         if (fullName !== undefined) nutritionist.full_name = fullName;
         if (specialization !== undefined) nutritionist.specialization = specialization;
+        if (about !== undefined) nutritionist.about = about;
 
         if (licenseNumber !== undefined && licenseNumber !== nutritionist.license_number) {
           if (!licenseNumber) throw new AppError("License number cannot be empty", 400);

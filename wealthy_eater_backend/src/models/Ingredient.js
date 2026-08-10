@@ -7,7 +7,8 @@ const IngredientSchema = new mongoose.Schema({
   },
   name: { 
     type: String, 
-    required: true },
+    required: true 
+  },
   image_url: { 
     type: String 
   },
@@ -28,7 +29,12 @@ const IngredientSchema = new mongoose.Schema({
     default: 0 
   }, 
   description: { type: String },
-  unit: { type: String, required: true },
+  unit: { 
+    type: String, 
+    required: true,
+    enum: ['gram', 'ml', 'piece', 'cup'],
+    default: 'gram'
+  },
 });
 
 module.exports = mongoose.model('Ingredient', IngredientSchema);

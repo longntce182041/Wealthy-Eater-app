@@ -492,7 +492,7 @@ class AuthProvider with ChangeNotifier {
         final errObj = res.data['error'];
         errorMessage = errObj != null && errObj['message'] != null
             ? errObj['message'].toString()
-            : (res.data['message']?.toString() ?? 'Đổi mật khẩu thất bại');
+            : (res.data['message']?.toString() ?? 'Password change failed.');
         notifyListeners();
         return false;
       }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 
 import 'core/config/env_config.dart';
@@ -28,7 +27,7 @@ class WealthyEaterApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final baseUrl = kIsWeb ? 'http://localhost:5000' : EnvConfig.baseUrl;
+    final baseUrl = EnvConfig.baseUrl;
     final api = ApiClient(baseUrl);
     final recipeRepository       = RecipeRepositoryImpl(apiClient: api);
     final shoppingListRepository = ShoppingListRepositoryImpl(apiClient: api);
@@ -119,7 +118,7 @@ class _AppRootState extends State<_AppRoot> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+            'Your session has expired. Please log in again.',
           ),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 4),

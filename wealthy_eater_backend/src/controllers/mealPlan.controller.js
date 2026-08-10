@@ -559,6 +559,8 @@ const generateRecipeBasedPlan = async (req, res, next) => {
       // Calculate nutrition via RecipeIngredient + Ingredient
       const nutrients = await mealPlanService.calculateRecipeNutrients(recipe._id);
 
+      console.log(`[OPTIMIZER CHECK] Recipe: "${recipe.name}" (ID: ${recipe._id}) => Cal: ${nutrients.calories}, P: ${nutrients.protein}, C: ${nutrients.carbs}, F: ${nutrients.fat}`);
+
       // Skip recipes with 0 calories (incomplete data)
       if (nutrients.calories <= 0) continue;
 
@@ -663,7 +665,7 @@ const scanMealImageEndpoint = async (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        error: "Missing image file. Use multipart/form-data with field 'image'.",
+        error: { message: "Missing image file. Please upload a clear photo of your meal plate." },
       });
     }
 
@@ -674,7 +676,15 @@ const scanMealImageEndpoint = async (req, res, next) => {
       data: result,
     });
   } catch (error) {
-    next(error);
+    console.error("⚠️ [Scan Meal Error]:", error.message);
+    const friendlyMsg = error.message && !error.message.includes("N8N_") && !error.message.includes("HTTP_")
+      ? error.message
+      : "No valid meal detected in image. Please take a clear photo of your meal plate and try again.";
+
+    return res.status(400).json({
+      success: false,
+      error: { message: friendlyMsg },
+    });
   }
 };
 
@@ -700,6 +710,25 @@ const logCustomRecipeEndpoint = async (req, res, next) => {
   }
 };
 
+const deleteMealPlanEndpoint = async (req, res, next) => {
+  try {
+    const planId = req.params.planId || req.params.id;
+    const nutritionistId = req.user?.id || req.user?._id;
+
+    const result = await mealPlanService.deleteMealPlan(planId, nutritionistId);
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error) {
+    console.error('Error deleting meal plan:', error);
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message || 'Failed to delete meal plan' },
+    });
+  }
+};
+
 module.exports = {
   matchTemplateEndpoint,
   getMyMealPlanEndpoint,
@@ -719,4 +748,5 @@ module.exports = {
   generateRecipeBasedPlan,
   scanMealImageEndpoint,
   logCustomRecipeEndpoint,
+  deleteMealPlanEndpoint,
 };

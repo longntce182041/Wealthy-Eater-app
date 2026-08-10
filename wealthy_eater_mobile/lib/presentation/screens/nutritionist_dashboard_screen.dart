@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -265,7 +266,9 @@ class _NutritionistClientsTabState extends State<_NutritionistClientsTab> {
               ? contract['user_id'] as Map<String, dynamic>
               : null;
           final email = userMap?['email']?.toString() ?? 'Client';
-          final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
+          final fullName = userMap?['fullName']?.toString();
+          final displayName = (fullName != null && fullName.isNotEmpty) ? fullName : email;
+          final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
           final unread =
               (contract['unread_count'] as num?)?.toInt() ?? 0;
 
@@ -276,7 +279,7 @@ class _NutritionistClientsTabState extends State<_NutritionistClientsTab> {
                 MaterialPageRoute(
                   builder: (_) => ChatScreen(
                     contractId: contractId,
-                    peerName: email,
+                    peerName: displayName,
                     peerInitials: initial,
                   ),
                 ),
@@ -344,10 +347,17 @@ class _NutritionistClientsTabState extends State<_NutritionistClientsTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(email,
+                        Text(displayName,
                             style: const TextStyle(
                                 fontWeight: FontWeight.w600, fontSize: 15),
                             overflow: TextOverflow.ellipsis),
+                        if (fullName != null && fullName.isNotEmpty)
+                          Text(
+                            email,
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey[500]),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         if (unread > 0)
                           Text(
                             '$unread unread message${unread > 1 ? 's' : ''}',
@@ -361,7 +371,7 @@ class _NutritionistClientsTabState extends State<_NutritionistClientsTab> {
                   // 📊 ĐÂY LÀ PHẦN TÍNH NĂNG CỦA NÍ (UC-54)
                   IconButton(
                     icon: Icon(Icons.analytics_outlined, color: Theme.of(context).colorScheme.primary, size: 24),
-                    tooltip: 'Đối chiếu dinh dưỡng',
+                    tooltip: 'Audit Client Diet Logs',
                     onPressed: () {
                       // Lấy ra chính xác ID của khách hàng để truyền cho API Backend đối chiếu
                       final actualClientId = userMap?['_id']?.toString() ?? '';
@@ -412,12 +422,27 @@ class _NutritionistRequestsTab extends StatefulWidget {
 }
 
 class _NutritionistRequestsTabState extends State<_NutritionistRequestsTab> {
+  Timer? _autoRefreshTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<NutritionistProvider>().loadMealPlanRequests();
     });
+
+    // Auto-refresh (hot reload) incoming customer requests silently every 5 seconds
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) {
+        context.read<NutritionistProvider>().loadMealPlanRequests(silent: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
   }
 
   String _formatDate(String? isoString) {

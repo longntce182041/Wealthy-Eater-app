@@ -174,14 +174,20 @@ class ConsultationProvider extends ChangeNotifier {
   bool get isRequestingMealPlan => _isRequestingMealPlan;
   String? get requestError => _requestError;
 
-  Future<void> loadMealPlanRequestStatus() async {
+  Future<void> loadMealPlanRequestStatus({bool silent = false}) async {
     try {
-      _mealPlanRequestStatus = await _service.fetchMealPlanRequestStatus();
+      final status = await _service.fetchMealPlanRequestStatus();
+      if (_mealPlanRequestStatus != status) {
+        _mealPlanRequestStatus = status;
+        notifyListeners();
+      }
     } catch (e) {
-      debugPrint('Failed to load meal plan request status: $e');
-      _mealPlanRequestStatus = 'NONE';
+      if (!silent) {
+        debugPrint('Failed to load meal plan request status: $e');
+        _mealPlanRequestStatus = 'NONE';
+        notifyListeners();
+      }
     }
-    notifyListeners();
   }
 
   Future<bool> submitMealPlanRequest() async {

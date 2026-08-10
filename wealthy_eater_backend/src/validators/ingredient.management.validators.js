@@ -1,13 +1,27 @@
+const ALLOWED_UNITS = ['gram', 'ml', 'piece', 'cup'];
+
+const normalizeUnit = (unit) => {
+    if (!unit) return 'gram';
+    const lower = String(unit).toLowerCase().trim();
+    if (ALLOWED_UNITS.includes(lower)) return lower;
+    if (lower === 'g') return 'gram';
+    if (lower === 'item' || lower === 'items' || lower === 'pcs') return 'piece';
+    return 'gram'; // Mặc định về gram nếu không thuộc danh sách
+};
+
 const validateIngredient = (data) => {
     const errors = {};
     const MAX_VALUE = 10000;
 
-    if (!data.name || data.name.trim() === "") {
-        errors.name = "Ingredient name is required";
+    // Tự động chuẩn hóa unit trước khi validate
+    if (data.unit) {
+        data.unit = normalizeUnit(data.unit);
     }
 
     if (!data.unit || data.unit.trim() === "") {
-        errors.unit = "Unit is required (e.g., gram, ml, piece)";
+        errors.unit = "Unit is required (e.g., gram, ml, piece, cup)";
+    } else if (!ALLOWED_UNITS.includes(data.unit)) {
+        errors.unit = `Unit must be one of: ${ALLOWED_UNITS.join(', ')}`;
     }
 
     const validateNumberField = (value, fieldName) => {
@@ -30,11 +44,9 @@ const validateIngredient = (data) => {
     const carbsError = validateNumberField(data.carbs, "Carbs");
     if (carbsError) errors.carbs = carbsError;
 
-    // ĐÃ ĐỒNG BỘ: Sửa đổi từ fats thành fat
     const fatError = validateNumberField(data.fat, "Fat");
     if (fatError) errors.fat = fatError;
 
-    // Validate micronutrients nếu có
     if (data.micronutrients !== undefined) {
         if (!Array.isArray(data.micronutrients)) {
             errors.micronutrients = "Micronutrients must be an array";
@@ -62,4 +74,4 @@ const validateIngredient = (data) => {
     };
 };
 
-module.exports = { validateIngredient };
+module.exports = { validateIngredient, normalizeUnit };

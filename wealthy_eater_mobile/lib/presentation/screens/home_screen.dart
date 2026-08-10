@@ -18,7 +18,6 @@ import 'customer_profile_tab.dart';
 import 'meal_plans_tab.dart';
 
 import 'package:socket_io_client/socket_io_client.dart' as socket_io;
-import 'package:flutter/foundation.dart';
 import '../../core/config/env_config.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -50,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final token = context.read<AuthProvider>().token;
     if (token == null) return;
     
-    final baseUrl = kIsWeb ? 'http://localhost:5000' : EnvConfig.baseUrl;
+    final baseUrl = EnvConfig.baseUrl;
     _socket = socket_io.io(
       baseUrl,
       socket_io.OptionBuilder()
