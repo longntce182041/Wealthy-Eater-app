@@ -23,12 +23,12 @@ const NutritionistSchema = new mongoose.Schema(
       alias: "userId",
     },
 
-    // Legacy/public profile fields used by existing consultation flows
     full_name: { type: String, trim: true, default: "" },
     specialization: { type: String, trim: true },
+    
+    // 2. BỔ SUNG TRƯỜNG ABOUT MÔ TẢ BẢN THÂN
     about: { type: String, trim: true, default: "" },
 
-    // UC-45 expert registration fields
     professional_title: {
       type: String,
       trim: true,
@@ -50,9 +50,10 @@ const NutritionistSchema = new mongoose.Schema(
       alias: "approvalStatus",
       index: true,
     },
+    // 3. ĐỔI DEFAULT THÀNH 0 ĐỂ HỖ TRỢ HIỂN THỊ "Chưa có đánh giá"
     average_rating: {
       type: Number,
-      default: 5.0,
+      default: 0,
       min: 0,
       max: 5,
       alias: "averageRating",
@@ -73,8 +74,6 @@ NutritionistSchema.index(
 );
 
 NutritionistSchema.index({ user_id: 1, approval_status: 1 });
-
-// Supports: Nutritionist.find({ approval_status: {$in:[...]} }).sort({ average_rating: -1 })
 NutritionistSchema.index({ approval_status: 1, average_rating: -1 });
 
 module.exports = mongoose.model("Nutritionist", NutritionistSchema);
