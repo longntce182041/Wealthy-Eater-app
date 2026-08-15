@@ -1,6 +1,20 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator
 
+
+class MedicalConstraintsDTO(BaseModel):
+    """
+    Optional nutrient constraints derived from a user's medical condition.
+    All fields are optional — only non-None values are enforced by the solver.
+    When null (no medical condition), the solver runs without additional constraints.
+    """
+    max_sugar_g_per_day:    Optional[float] = Field(None, ge=0, description="Max sugar grams per day")
+    max_glycemic_index_avg: Optional[float] = Field(None, ge=0, le=200, description="Max average glycemic index")
+    min_fiber_g_per_day:    Optional[float] = Field(None, ge=0, description="Min fiber grams per day")
+    carb_ratio_max:         Optional[float] = Field(None, ge=0, le=1, description="Max fraction of calories from carbs (0-1)")
+    max_sodium_mg_per_day:  Optional[float] = Field(None, ge=0, description="Max sodium mg per day")
+    max_purine:             Optional[bool]  = Field(None, description="Whether to enforce purine restriction")
+
 class RecipeDTO(BaseModel):
     """Represents a single recipe with its pre-computed total nutrition."""
     id: str = Field(..., examples=["recipe_abc123"])
@@ -28,6 +42,11 @@ class RecipePlanRequestDTO(BaseModel):
     portionScaleMin: float = Field(0.6, ge=0.1, description="Minimum portion scale multiplier (business rule: 0.6)")
     portionScaleMax: float = Field(1.8, le=3.0, description="Maximum portion scale multiplier (business rule: 1.8)")
     availableRecipes: List[RecipeDTO]
+    # Optional medical constraints — null means no medical condition (no extra solver constraints)
+    medical_constraints: Optional[MedicalConstraintsDTO] = Field(
+        None,
+        description="Nutrient constraints from user's medical condition. Null = no additional constraints."
+    )
 
     @field_validator('availableRecipes')
     def validate_recipes_not_empty(cls, v):
@@ -60,3 +79,6 @@ class RecipePlanResponseDTO(BaseModel):
     status: str
     assignments: List[RecipeAssignment]
     dailySummaries: List[dict]
+    # Which medical constraints were relaxed to achieve Optimal status.
+    # Empty list = all constraints satisfied (or no medical constraints applied).
+    constraints_relaxed: List[str] = Field(default_factory=list)

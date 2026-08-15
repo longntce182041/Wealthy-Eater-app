@@ -286,6 +286,12 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
     final cookingTime = dietary?['available_cooking_time'];
     final preferences = (dietary?['diet_preferences'] as List?)?.map((e) => e.toString()).toList() ?? [];
 
+    final medicalCond = dietary?['medical_condition'];
+    final conditionName = medicalCond?['name']?.toString();
+    final conditionCategory = medicalCond?['category']?.toString();
+    final conditionDesc = medicalCond?['description']?.toString();
+    final conditionGuideline = medicalCond?['dietary_guideline']?.toString();
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -455,6 +461,79 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
                 }).toList(),
               ),
             ],
+            // ── Medical Condition Box ─────────────────────────────────────────
+            if (medicalCond != null && conditionName != null && conditionName.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1), // Amber 50
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFFD54F)), // Amber 300
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.health_and_safety_outlined, size: 20, color: Color(0xFFE65100)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Medical Condition: $conditionName',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFFE65100),
+                            ),
+                          ),
+                        ),
+                        if (conditionCategory != null && conditionCategory.isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFFFE082)),
+                            ),
+                            child: Text(
+                              conditionCategory,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFFE65100),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (conditionGuideline != null && conditionGuideline.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        conditionGuideline,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFF5D4037),
+                          height: 1.3,
+                        ),
+                      ),
+                    ] else if (conditionDesc != null && conditionDesc.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        conditionDesc,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFF5D4037),
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ],
         ],
       ),
@@ -554,26 +633,26 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
   LineChartData _createChartData(List<WeightLogModel> logs) {
     if (logs.isEmpty) return LineChartData();
 
-    // Map logs to FlSpot (x: timestamp in days, y: weight)
-    final startTime = logs.first.date.millisecondsSinceEpoch;
-    
-    // Find min and max for scaling
+    // Map each tracked log to an index-based FlSpot (x: 0, 1, 2, ..., y: weight)
+    // This ensures only actually tracked dates are rendered on the X-axis without crowding.
     double minWeight = double.infinity;
     double maxWeight = double.negativeInfinity;
-    
-    final spots = logs.map((log) {
+
+    final spots = <FlSpot>[];
+    for (int i = 0; i < logs.length; i++) {
+      final log = logs[i];
       if (log.weight < minWeight) minWeight = log.weight;
       if (log.weight > maxWeight) maxWeight = log.weight;
-      
-      // X-axis: days since first log
-      final diffDays = (log.date.millisecondsSinceEpoch - startTime) / (1000 * 60 * 60 * 24);
-      return FlSpot(diffDays, log.weight);
-    }).toList();
+      spots.add(FlSpot(i.toDouble(), log.weight));
+    }
 
-    // Add some padding to Y axis
-    final yInterval = (maxWeight - minWeight) == 0 ? 5.0 : ((maxWeight - minWeight) / 4);
-    final minY = (minWeight - yInterval).floorToDouble();
-    final maxY = (maxWeight + yInterval).ceilToDouble();
+    // Add padding to Y axis
+    final yInterval = (maxWeight - minWeight) == 0 ? 2.0 : ((maxWeight - minWeight) / 4);
+    final minY = (minWeight - (yInterval == 0 ? 2.0 : yInterval)).floorToDouble();
+    final maxY = (maxWeight + (yInterval == 0 ? 2.0 : yInterval)).ceilToDouble();
+
+    // Calculate step for X labels to prevent crowding if there are many logs
+    final int xStep = _calculateXIndexStep(logs.length);
 
     return LineChartData(
       gridData: FlGridData(
@@ -590,27 +669,33 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
       ),
       titlesData: FlTitlesData(
         show: true,
-        rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 30,
-            interval: _calculateXInterval(spots.length),
+            interval: 1.0,
             getTitlesWidget: (value, meta) {
-              // Convert value (days) back to date
-              if (value < 0 || spots.isEmpty) return const SizedBox();
-              
-              final date = DateTime.fromMillisecondsSinceEpoch(
-                  startTime + (value * 24 * 60 * 60 * 1000).toInt());
-              
+              final index = value.toInt();
+              if (index < 0 || index >= logs.length || value != index.toDouble()) {
+                return const SizedBox.shrink();
+              }
+
+              // Show label if it matches step, or is the very last point
+              if (index % xStep != 0 && index != logs.length - 1) {
+                return const SizedBox.shrink();
+              }
+
+              final log = logs[index];
               return Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: Text(
-                  '${date.day}/${date.month}',
+                  '${log.date.day}/${log.date.month}',
                   style: GoogleFonts.inter(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
                   ),
                 ),
               );
@@ -634,14 +719,14 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
         ),
       ),
       borderData: FlBorderData(show: false),
-      minX: spots.first.x,
-      maxX: spots.last.x,
+      minX: spots.length == 1 ? -0.5 : 0.0,
+      maxX: spots.length == 1 ? 0.5 : (spots.length - 1).toDouble(),
       minY: minY,
       maxY: maxY,
       lineBarsData: [
         LineChartBarData(
           spots: spots,
-          isCurved: true,
+          isCurved: spots.length > 2,
           color: const Color(0xFF00BFA5), // Mint Green
           barWidth: 3,
           isStrokeCapRound: true,
@@ -649,9 +734,9 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
             show: true,
             getDotPainter: (spot, percent, barData, index) {
               return FlDotCirclePainter(
-                radius: 4,
+                radius: 5,
                 color: Colors.white,
-                strokeWidth: 2,
+                strokeWidth: 2.5,
                 strokeColor: const Color(0xFF00BFA5),
               );
             },
@@ -674,10 +759,12 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
           getTooltipColor: (touchedSpot) => const Color(0xFF1F2937), // Dark grey tooltip
           getTooltipItems: (touchedSpots) {
             return touchedSpots.map((LineBarSpot touchedSpot) {
-              final date = DateTime.fromMillisecondsSinceEpoch(
-                  startTime + (touchedSpot.x * 24 * 60 * 60 * 1000).toInt());
-              final dateStr = '${date.day}/${date.month}/${date.year}';
-              
+              final index = touchedSpot.x.toInt();
+              final log = (index >= 0 && index < logs.length) ? logs[index] : null;
+              final dateStr = log != null
+                  ? '${log.date.day}/${log.date.month}/${log.date.year}'
+                  : '';
+
               return LineTooltipItem(
                 '${touchedSpot.y.toStringAsFixed(1)} kg\n',
                 GoogleFonts.inter(
@@ -704,11 +791,11 @@ class _ClientBiometricsScreenState extends State<ClientBiometricsScreen> {
     );
   }
 
-  double _calculateXInterval(int spotCount) {
-    if (spotCount <= 5) return 1.0;
-    if (spotCount <= 14) return 2.0;
-    if (spotCount <= 30) return 5.0;
-    return 10.0;
+  int _calculateXIndexStep(int totalLogs) {
+    if (totalLogs <= 7) return 1;
+    if (totalLogs <= 14) return 2;
+    if (totalLogs <= 25) return 3;
+    return (totalLogs / 6).ceil();
   }
 
   Widget _buildTelemetryGrid(BiometricAuditProvider provider) {

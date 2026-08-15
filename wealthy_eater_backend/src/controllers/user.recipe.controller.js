@@ -81,6 +81,10 @@ function mapIngredient(ingredient, relation) {
     fat: source.fat ?? 0,
     carbs: source.carbs ?? 0,
     description: source.description || '',
+    health_tags: source.health_tags || [],
+    healthTags: source.health_tags || [],
+    glycemic_index: source.glycemic_index ?? 0,
+    glycemicIndex: source.glycemic_index ?? 0,
   };
 }
 

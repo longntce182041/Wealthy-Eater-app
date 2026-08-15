@@ -407,4 +407,82 @@ class NutritionistProvider extends ChangeNotifier {
     _recipeSearchPage = 1;
     notifyListeners();
   }
+
+  // ── UC-Regenerate: AI Meal Regeneration State ─────────────────────────────
+
+  bool _isRegenerating = false;
+  String? _regenerateError;
+
+  /// Preview result returned by the server after regeneration.
+  /// Contains { previewId, preview: { dish_name, description, macro, steps, warning, ... } }
+  /// null = no pending preview.
+  Map<String, dynamic>? _previewResult;
+
+  bool get isRegenerating => _isRegenerating;
+  String? get regenerateError => _regenerateError;
+  Map<String, dynamic>? get previewResult => _previewResult;
+
+  /// Calls POST /:planId/items/:itemId/regenerate-ai.
+  /// On success, stores the full preview (with previewId) in [previewResult].
+  /// Does NOT write to DB — call [applyPreview] to commit.
+  Future<void> regenerateItem(
+    String planId,
+    String itemId, {
+    List<String>? ingredientIds,
+  }) async {
+    _isRegenerating = true;
+    _regenerateError = null;
+    _previewResult = null;
+    notifyListeners();
+
+    try {
+      final result = await _service.regenerateItemAI(
+        planId,
+        itemId,
+        ingredientIds: ingredientIds,
+      );
+      _previewResult = result;
+    } catch (e) {
+      _regenerateError = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      _isRegenerating = false;
+      notifyListeners();
+    }
+  }
+
+  /// Calls PATCH /:planId/items/:itemId/apply-ai-suggestion.
+  /// Sends only [previewId] to the server (server re-validates from Redis).
+  /// On success, clears [previewResult] and returns the updated item map.
+  ///
+  /// Returns null on failure (error stored in [regenerateError]).
+  Future<Map<String, dynamic>?> applyPreview(
+    String planId,
+    String itemId,
+    String previewId,
+  ) async {
+    _isRegenerating = true;
+    _regenerateError = null;
+    notifyListeners();
+
+    try {
+      final result = await _service.applyAISuggestion(planId, itemId, previewId);
+      _previewResult = null; // Clear on success
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _regenerateError = e.toString().replaceFirst('Exception: ', '');
+      notifyListeners();
+      return null;
+    } finally {
+      _isRegenerating = false;
+      notifyListeners();
+    }
+  }
+
+  /// Discards the current preview without applying it.
+  void discardPreview() {
+    _previewResult = null;
+    _regenerateError = null;
+    notifyListeners();
+  }
 }

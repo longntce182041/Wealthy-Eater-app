@@ -1,5 +1,6 @@
 /**
  * server.js — Application entry point.
+ * Biometrics medical condition & chart index support active.
  *
  * Responsibilities:
  *  1. Connect to MongoDB

@@ -5,7 +5,57 @@ const MealPlan = require("../models/MealPlan");
 const MealPlanItem = require("../models/MealPlanItem");
 const n8nService = require("./n8n.service");
 const User = require("../models/User");
-const firebaseConfig = require("../config/firebase");
+/**
+ * Checks if a meal plan item violates medical condition constraints.
+ * 
+ * An item is in violation if:
+ * 1. Any ingredient in the recipe/item contains health_tags matching medicalCondition.excluded_ingredient_tags (e.g. HIGH_SODIUM, CURED_MEAT, PROCESSED_MEAT, HIGH_SUGAR).
+ * 2. Or if customized nutrients violate nutrient_constraints (e.g. carb_ratio_max).
+ */
+function checkItemViolation({ medicalCondition, recipeIngredients = [], customIngredients = [], customizedNutrients = {} }) {
+  if (!medicalCondition) return false;
+
+  const excludedTags = new Set(medicalCondition.excluded_ingredient_tags || []);
+
+  // 1. Check if any recipe ingredient contains excluded health tags
+  if (excludedTags.size > 0) {
+    if (Array.isArray(recipeIngredients)) {
+      for (const ri of recipeIngredients) {
+        const ing = ri.ingredient_id || ri.ingredient || ri;
+        const tags = ing?.health_tags || [];
+        if (Array.isArray(tags) && tags.some(tag => excludedTags.has(tag))) {
+          return true;
+        }
+      }
+    }
+
+    if (Array.isArray(customIngredients)) {
+      for (const ci of customIngredients) {
+        const ing = ci.ingredient_id || ci.ingredient || ci;
+        const tags = ing?.health_tags || [];
+        if (Array.isArray(tags) && tags.some(tag => excludedTags.has(tag))) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // 2. Check nutrient constraints (macros)
+  if (medicalCondition.nutrient_constraints) {
+    const nc = medicalCondition.nutrient_constraints;
+    const cals = customizedNutrients.calories || 0;
+    const carbs = customizedNutrients.carbs || 0;
+
+    if (nc.carb_ratio_max != null && cals > 0) {
+      const actualCarbRatio = (carbs * 4) / cals;
+      if (actualCarbRatio > nc.carb_ratio_max + 0.05) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 class MealPlanService {
   async runTemplateMatchPipeline(clientId, nutritionistId) {
@@ -345,9 +395,36 @@ class MealPlanService {
   async getMealPlanById(planId) {
     const MealPlan = require("../models/MealPlan");
     const MealPlanItem = require("../models/MealPlanItem");
+    const UserDietary = require("../models/UserDietary");
+    const MedicalCondition = require("../models/MedicalCondition");
+    const Ingredient = require("../models/Ingredient");
+    const { getUserMedicalCondition } = require("../utils/medicalCondition.helper");
 
     const mealPlan = await MealPlan.findById(planId).lean();
     if (!mealPlan) return null;
+
+    // Load medical condition & coverage warning for the client
+    let medicalCondition = null;
+    let dataCoverageWarning = false;
+    const targetUserId = mealPlan.user_id;
+
+    if (targetUserId) {
+      const dietary = await UserDietary.findOne({ user_id: targetUserId }).lean();
+      const medCondId = getUserMedicalCondition(dietary);
+      if (medCondId) {
+        medicalCondition = await MedicalCondition.findById(medCondId).lean();
+      }
+    }
+
+    if (medicalCondition && Array.isArray(medicalCondition.excluded_ingredient_tags) && medicalCondition.excluded_ingredient_tags.length > 0) {
+      const bannedTags = medicalCondition.excluded_ingredient_tags;
+      const anyIngWithTag = await Ingredient.exists({
+        health_tags: { $in: bannedTags }
+      });
+      if (!anyIngWithTag) {
+        dataCoverageWarning = true;
+      }
+    }
 
     const items = await MealPlanItem.find({ meal_plan_id: mealPlan._id })
       .populate({
@@ -357,7 +434,7 @@ class MealPlanService {
       .populate({
         path: "custom_ingredients.ingredient_id",
         model: "Ingredient",
-        select: "_id name calories_per_unit protein carbs fat",
+        select: "_id name calories_per_unit protein carbs fat health_tags",
       })
       .lean();
 
@@ -410,6 +487,7 @@ class MealPlanService {
       };
 
       let customIngredientsData = null;
+      let recipeIngredientsData = null;
 
       // Priority: if item has a real recipe_id (not AI_GENERATED), treat as recipe-based
       const hasRealRecipe = recipe && recipe._id;
@@ -430,12 +508,44 @@ class MealPlanService {
       } else if (hasRealRecipe) {
         // Recipe-based meal: compute nutrients from the recipe
         nutrients = await this.calculateRecipeNutrients(recipe._id);
+        const RecipeIngredient = require("../models/RecipeIngredient");
+        const rIngs = await RecipeIngredient.find({ recipe_id: recipe._id })
+          .populate({ path: "ingredient_id", model: "Ingredient" })
+          .lean();
+        recipeIngredientsData = rIngs.map(ri => ({
+          _id: ri.ingredient_id?._id,
+          name: ri.ingredient_id?.name || "Ingredient",
+          quantity: ri.base_quantity || 0,
+          amount_gram: ri.base_quantity || 0,
+          unit: ri.unit || "g",
+          calories_per_unit: ri.ingredient_id?.calories_per_unit,
+          protein: ri.ingredient_id?.protein,
+          fat: ri.ingredient_id?.fat,
+          carbs: ri.ingredient_id?.carbs,
+          health_tags: ri.ingredient_id?.health_tags || [],
+          glycemic_index: ri.ingredient_id?.glycemic_index,
+        }));
       }
 
       const customizedGram =
         item.customized_servings_gram || nutrients.base_weight;
 
       const scale = customizedGram / (nutrients.base_weight || 1);
+
+      const customizedNutrients = {
+        calories: Math.round(nutrients.calories * scale),
+        protein: parseFloat((nutrients.protein * scale).toFixed(1)),
+        fat: parseFloat((nutrients.fat * scale).toFixed(1)),
+        carbs: parseFloat((nutrients.carbs * scale).toFixed(1)),
+      };
+
+      // Check macro_violation for this item
+      const macroViolation = checkItemViolation({
+        medicalCondition,
+        recipeIngredients: recipeIngredientsData,
+        customIngredients: item.custom_ingredients,
+        customizedNutrients,
+      });
 
       enrichedItems.push({
         _id: item._id,
@@ -449,24 +559,23 @@ class MealPlanService {
             description: recipe.description,
             image_url: recipe.image_url,
             cooking_time: recipe.cooking_time,
+            ingredients: recipeIngredientsData,
           }
           : null,
+        ingredients: recipeIngredientsData,
         custom_ingredients: customIngredientsData,
         base_weight: nutrients.base_weight,
         customized_servings_gram: customizedGram,
         target_calories: item.target_calories || null,
+        target_snapshot: item.target_snapshot || null,
+        macro_violation: macroViolation,
         base_nutrients: {
           calories: nutrients.calories,
           protein: nutrients.protein,
           fat: nutrients.fat,
           carbs: nutrients.carbs,
         },
-        customized_nutrients: {
-          calories: Math.round(nutrients.calories * scale),
-          protein: parseFloat((nutrients.protein * scale).toFixed(1)),
-          fat: parseFloat((nutrients.fat * scale).toFixed(1)),
-          carbs: parseFloat((nutrients.carbs * scale).toFixed(1)),
-        },
+        customized_nutrients: customizedNutrients,
       });
     }
 
@@ -476,6 +585,16 @@ class MealPlanService {
       status: mealPlan.status,
       created_by: mealPlan.created_by,
       active_day: activeDay,
+      data_coverage_warning: dataCoverageWarning,
+      medical_condition: medicalCondition
+        ? {
+          _id: medicalCondition._id,
+          name: medicalCondition.name,
+          category: medicalCondition.category,
+          excluded_ingredient_tags: medicalCondition.excluded_ingredient_tags || [],
+          nutrient_constraints: medicalCondition.nutrient_constraints || {},
+        }
+        : null,
       items: enrichedItems,
     };
   }
@@ -491,12 +610,20 @@ class MealPlanService {
       .sort({ date: -1 })
       .lean();
 
-    return plans.map((p) => ({
-      mealPlanId: p._id,
-      clientEmail: p.user_id ? p.user_id.email : 'Unknown Client',
-      status: p.status,
-      date: p.date,
-      created_by: p.created_by,
+    return plans.map((plan) => ({
+      _id: plan._id,
+      mealPlanId: plan._id,
+      date: plan.date,
+      status: plan.status,
+      created_by: plan.created_by,
+      clientEmail: plan.user_id ? plan.user_id.email : 'Unknown Client',
+      client: plan.user_id
+        ? {
+          _id: plan.user_id._id,
+          name: plan.user_id.name,
+          email: plan.user_id.email,
+        }
+        : null,
     }));
   }
 
@@ -578,12 +705,56 @@ class MealPlanService {
     const recipeId = item.recipe_id;
     const recipe = (recipeId && recipeId !== 'AI_GENERATED') ? await Recipe.findById(recipeId).lean() : null;
 
+    const customizedNutrients = {
+      calories: Math.round(nutrients.calories * scale),
+      protein: parseFloat((nutrients.protein * scale).toFixed(1)),
+      fat: parseFloat((nutrients.fat * scale).toFixed(1)),
+      carbs: parseFloat((nutrients.carbs * scale).toFixed(1)),
+    };
+
+    let macroViolation = false;
+    let recipeIngredientsData = null;
+    if (recipe && recipe._id) {
+      const RecipeIngredient = require("../models/RecipeIngredient");
+      const rIngs = await RecipeIngredient.find({ recipe_id: recipe._id })
+        .populate({ path: "ingredient_id", model: "Ingredient" })
+        .lean();
+      recipeIngredientsData = rIngs.map(ri => ({
+        _id: ri.ingredient_id?._id,
+        name: ri.ingredient_id?.name || "Ingredient",
+        quantity: ri.base_quantity || 0,
+        amount_gram: ri.base_quantity || 0,
+        unit: ri.unit || "g",
+        health_tags: ri.ingredient_id?.health_tags || [],
+      }));
+    }
+
+    const UserDietary = require("../models/UserDietary");
+    const MedicalCondition = require("../models/MedicalCondition");
+    const { getUserMedicalCondition } = require("../utils/medicalCondition.helper");
+
+    const parentPlan = await MealPlan.findById(item.meal_plan_id).lean();
+    if (parentPlan && parentPlan.user_id) {
+      const dietary = await UserDietary.findOne({ user_id: parentPlan.user_id }).lean();
+      const medCondId = getUserMedicalCondition(dietary);
+      if (medCondId) {
+        const medicalCondition = await MedicalCondition.findById(medCondId).lean();
+        macroViolation = checkItemViolation({
+          medicalCondition,
+          recipeIngredients: recipeIngredientsData,
+          customIngredients: item.custom_ingredients,
+          customizedNutrients,
+        });
+      }
+    }
+
     return {
       _id: item._id,
       meal_plan_id: item.meal_plan_id,
       meal_type: item.meal_type,
       day_of_week: item.day_of_week,
       is_completed: item.is_completed ?? false,
+      macro_violation: macroViolation,
       recipe: recipe
         ? {
           _id: recipe._id,
@@ -602,12 +773,7 @@ class MealPlanService {
         fat: nutrients.fat,
         carbs: nutrients.carbs,
       },
-      customized_nutrients: {
-        calories: Math.round(nutrients.calories * scale),
-        protein: parseFloat((nutrients.protein * scale).toFixed(1)),
-        fat: parseFloat((nutrients.fat * scale).toFixed(1)),
-        carbs: parseFloat((nutrients.carbs * scale).toFixed(1)),
-      },
+      customized_nutrients: customizedNutrients,
     };
   }
 

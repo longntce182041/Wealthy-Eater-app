@@ -312,4 +312,78 @@ class NutritionistService {
       throw mapError(e);
     }
   }
+
+  /// POST /api/meal-plans/:planId/items/:itemId/regenerate-ai
+  ///
+  /// Asks the server to regenerate a meal slot using AI (LP solver + Gemini),
+  /// respecting the client's medical condition and dietary restrictions.
+  ///
+  /// Returns a preview object with [previewId] for the subsequent apply call,
+  /// along with the full [preview] object for display (no DB write yet).
+  ///
+  /// [ingredientIds]: optional list of specific ingredient IDs to use as pool.
+  ///   If omitted, server selects from all eligible ingredients.
+  Future<Map<String, dynamic>> regenerateItemAI(
+    String planId,
+    String itemId, {
+    List<String>? ingredientIds,
+  }) async {
+    try {
+      final Map<String, dynamic> body = {};
+      if (ingredientIds != null && ingredientIds.isNotEmpty) {
+        body['ingredientIds'] = ingredientIds;
+      }
+
+      final response = await apiClient.post(
+        '/api/meal-plans/$planId/items/$itemId/regenerate-ai',
+        data: body,
+      );
+
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+
+      throw AppError(
+        response.data['error']?['message'] ?? 'Failed to regenerate meal with AI.',
+      );
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
+
+  /// PATCH /api/meal-plans/:planId/items/:itemId/apply-ai-suggestion
+  ///
+  /// Applies a previously generated AI preview to the MealPlanItem.
+  /// Server re-validates the preview from Redis before writing to DB.
+  ///
+  /// [previewId]: the ID returned by [regenerateItemAI] (expires in 15 min).
+  ///
+  /// Returns the updated item with [macro_violation] flag.
+  Future<Map<String, dynamic>> applyAISuggestion(
+    String planId,
+    String itemId,
+    String previewId,
+  ) async {
+    try {
+      final response = await apiClient.patch(
+        '/api/meal-plans/$planId/items/$itemId/apply-ai-suggestion',
+        data: {'previewId': previewId},
+      );
+
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+
+      // 410 Gone = preview expired
+      if (response.statusCode == 410) {
+        throw AppError('The AI preview has expired. Please regenerate.');
+      }
+
+      throw AppError(
+        response.data['error']?['message'] ?? 'Failed to apply AI suggestion.',
+      );
+    } catch (e) {
+      throw mapError(e);
+    }
+  }
 }
