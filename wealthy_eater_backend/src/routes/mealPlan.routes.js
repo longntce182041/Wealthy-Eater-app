@@ -28,6 +28,28 @@ router.post(
   mealPlanController.generateRecipeBasedPlan,
 );
 
+// UC-Regenerate: Regenerate a single meal slot with AI (returns preview + previewId)
+router.post(
+  "/:planId/items/:itemId/regenerate-ai",
+  verifyToken,
+  nutritionistOnly,
+  mealPlanController.regenerateItemWithAI,
+);
+router.get(
+  "/:planId/items/:itemId/regenerate-ai",
+  verifyToken,
+  nutritionistOnly,
+  mealPlanController.regenerateItemWithAI,
+);
+
+// UC-Regenerate: Apply AI preview to a MealPlanItem (server re-validates before writing)
+router.patch(
+  "/:planId/items/:itemId/apply-ai-suggestion",
+  verifyToken,
+  nutritionistOnly,
+  mealPlanController.applyAISuggestion,
+);
+
 // UC-39: Receive AI-generated meal plan from n8n (internal, no JWT — secured by X-INTERNAL-SECRET)
 router.post("/from-ai", mealPlanController.receiveAIPlanEndpoint);
 

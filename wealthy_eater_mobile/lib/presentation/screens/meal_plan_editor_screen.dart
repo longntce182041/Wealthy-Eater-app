@@ -96,15 +96,67 @@ class _MealPlanEditorScreenState extends State<MealPlanEditorScreen> {
         ),
         child: _EditItemBottomSheet(
           item: item,
+          medicalCondition: _localDraft?['medical_condition'],
           onSave: (updatedItem) {
             setState(() {
-              (_localDraft!['items'] as List)[index] = updatedItem;
+              final isViolated = updatedItem['macro_violation'] == true || _checkItemViolation(updatedItem);
+              updatedItem['macro_violation'] = isViolated;
+              (_localDraft!['items'] as List)[index] = Map<String, dynamic>.from(updatedItem);
               _recalculateTotals();
             });
           },
         ),
       ),
     );
+  }
+
+  bool _checkItemViolation(Map<String, dynamic> item) {
+    final medCond = _localDraft?['medical_condition'];
+    if (medCond == null) return false;
+    final rawExcluded = medCond['excluded_ingredient_tags'];
+    final List<String> excludedTags = (rawExcluded is List)
+        ? rawExcluded.map((e) => e.toString().toUpperCase().trim()).toList()
+        : [];
+
+    if (excludedTags.isNotEmpty) {
+      final ingList = item['ingredients'] as List? ?? item['recipe']?['ingredients'] as List? ?? [];
+      for (var ing in ingList) {
+        final rawTags = ing['health_tags'] ?? ing['healthTags'] ?? ing['ingredient']?['health_tags'] ?? ing['ingredient']?['healthTags'] ?? ing['ingredient_id']?['health_tags'] ?? [];
+        final List<String> tags = (rawTags is List)
+            ? rawTags.map((e) => e.toString().toUpperCase().trim()).toList()
+            : [];
+        if (tags.any((t) => excludedTags.contains(t))) {
+          return true;
+        }
+      }
+
+      final customIngs = item['custom_ingredients'] as List? ?? [];
+      for (var ci in customIngs) {
+        final rawTags = ci['health_tags'] ?? ci['healthTags'] ?? ci['ingredient']?['health_tags'] ?? ci['ingredient']?['healthTags'] ?? ci['ingredient_id']?['health_tags'] ?? [];
+        final List<String> tags = (rawTags is List)
+            ? rawTags.map((e) => e.toString().toUpperCase().trim()).toList()
+            : [];
+        if (tags.any((t) => excludedTags.contains(t))) {
+          return true;
+        }
+      }
+    }
+
+    final nc = medCond['nutrient_constraints'];
+    if (nc != null && nc is Map && nc['carb_ratio_max'] != null) {
+      final macros = item['customized_nutrients'] ?? item['base_nutrients'] ?? {};
+      final num cals = macros['calories'] ?? 0;
+      final num carbs = macros['carbs'] ?? 0;
+      if (cals > 0) {
+        final actualRatio = (carbs * 4) / cals;
+        final maxRatio = (nc['carb_ratio_max'] as num).toDouble();
+        if (actualRatio > maxRatio + 0.05) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   void _recalculateTotals() {
@@ -147,65 +199,92 @@ class _MealPlanEditorScreenState extends State<MealPlanEditorScreen> {
 
   Widget _buildEditorGrid() {
     final items = _localDraft!['items'] as List;
+    final dataCoverageWarning = _localDraft!['data_coverage_warning'] == true;
 
     // Check if this is a weekly plan (items have day_of_week)
     final hasWeeklyDays = items.any((item) => item['day_of_week'] != null);
 
+    Widget listContent;
     if (!hasWeeklyDays) {
-      // Fallback: old flat list for AI-generated single-day plans
-      return _buildFlatItemList(items);
-    }
+      listContent = _buildFlatItemList(items);
+    } else {
+      final Map<int, List<Map<String, dynamic>>> groupedByDay = {};
+      for (int i = 0; i < items.length; i++) {
+        final item = items[i] as Map<String, dynamic>;
+        final day = (item['day_of_week'] as num?)?.toInt() ?? 1;
+        groupedByDay.putIfAbsent(day, () => []);
+        groupedByDay[day]!.add({...item, '_originalIndex': i});
+      }
 
-    // Group items by day_of_week
-    final Map<int, List<Map<String, dynamic>>> groupedByDay = {};
-    for (int i = 0; i < items.length; i++) {
-      final item = items[i] as Map<String, dynamic>;
-      final day = (item['day_of_week'] as num?)?.toInt() ?? 1;
-      groupedByDay.putIfAbsent(day, () => []);
-      groupedByDay[day]!.add({...item, '_originalIndex': i});
-    }
+      final sortedDays = groupedByDay.keys.toList()..sort();
+      final dayLabels = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-    final sortedDays = groupedByDay.keys.toList()..sort();
-    final dayLabels = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      listContent = ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: sortedDays.length,
+        itemBuilder: (context, dayIndex) {
+          final day = sortedDays[dayIndex];
+          final dayItems = groupedByDay[day]!;
+          final dayLabel = day <= 7 ? dayLabels[day] : 'Day $day';
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: sortedDays.length,
-      itemBuilder: (context, dayIndex) {
-        final day = sortedDays[dayIndex];
-        final dayItems = groupedByDay[day]!;
-        final dayLabel = day <= 7 ? dayLabels[day] : 'Day $day';
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (dayIndex > 0) const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.blue[700],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '📅 Day $day — $dayLabel',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (dayIndex > 0) const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blue[700],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Day $day — $dayLabel',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
                 ),
               ),
+              const SizedBox(height: 8),
+              ...dayItems.map((item) {
+                final originalIndex = item['_originalIndex'] as int;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _buildItemCard(item, originalIndex),
+                );
+              }),
+            ],
+          );
+        },
+      );
+    }
+
+    // Wrap with data_coverage_warning banner if needed
+    if (!dataCoverageWarning) return listContent;
+
+    return Column(
+      children: [
+        Material(
+          color: Colors.amber[700],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: const [
+                Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Nutritional tag data for medical conditions is incomplete. Please check manually.',
+                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            ...dayItems.map((item) {
-              final originalIndex = item['_originalIndex'] as int;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _buildItemCard(item, originalIndex),
-              );
-            }),
-          ],
-        );
-      },
+          ),
+        ),
+        Expanded(child: listContent),
+      ],
     );
   }
 
@@ -226,6 +305,7 @@ class _MealPlanEditorScreenState extends State<MealPlanEditorScreen> {
     final name = isAI ? "AI Customized Meal" : item['recipe']['name'];
     final macros = item['customized_nutrients'] ?? item['base_nutrients'] ?? {};
     final mealType = item['meal_type'] ?? 'LUNCH';
+    final hasMacroViolation = item['macro_violation'] == true || _checkItemViolation(item);
 
     // Meal type color coding
     Color mealColor;
@@ -246,52 +326,345 @@ class _MealPlanEditorScreenState extends State<MealPlanEditorScreen> {
 
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: hasMacroViolation ? BorderSide(color: Colors.amber.shade600, width: 1.5) : BorderSide.none,
+      ),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(mealIcon, size: 16, color: mealColor),
-                          const SizedBox(width: 4),
-                          Text(mealType, style: TextStyle(fontWeight: FontWeight.bold, color: mealColor, fontSize: 12)),
+                          Row(
+                            children: [
+                              Icon(mealIcon, size: 16, color: mealColor),
+                              const SizedBox(width: 4),
+                              Text(mealType, style: TextStyle(fontWeight: FontWeight.bold, color: mealColor, fontSize: 12)),
+                              if (hasMacroViolation) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade50,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.amber.shade600, width: 1),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber[900]),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        'Violation',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.amber[900],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
+                    ),
+                    // Action menu: edit recipe OR generate with AI
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _openEditBottomSheet(item, index);
+                        } else if (value == 'ai_regen') {
+                          _triggerAIRegen(item, index);
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(children: [
+                            Icon(Icons.swap_horiz, size: 18),
+                            SizedBox(width: 8),
+                            Text('Change Recipe'),
+                          ]),
+                        ),
+                        PopupMenuItem(
+                          value: 'ai_regen',
+                          child: Row(children: [
+                            Icon(Icons.auto_fix_high, size: 18, color: Colors.deepPurple[400]),
+                            const SizedBox(width: 8),
+                            Text('Generate with AI', style: TextStyle(color: Colors.deepPurple[400])),
+                          ]),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.blue),
-                  onPressed: () => _openEditBottomSheet(item, index),
-                ),
+                const Divider(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _macroWidget('Cal', '${macros['calories'] ?? 0} kcal', Colors.orange),
+                    _macroWidget('Pro', '${macros['protein'] ?? 0}g', Colors.red),
+                    _macroWidget('Carb', '${macros['carbs'] ?? 0}g', Colors.green),
+                    _macroWidget('Fat', '${macros['fat'] ?? 0}g', Colors.purple),
+                  ],
+                )
               ],
             ),
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _macroWidget('Cal', '${macros['calories'] ?? 0} kcal', Colors.orange),
-                _macroWidget('Pro', '${macros['protein'] ?? 0}g', Colors.red),
-                _macroWidget('Carb', '${macros['carbs'] ?? 0}g', Colors.green),
-                _macroWidget('Fat', '${macros['fat'] ?? 0}g', Colors.purple),
+          ),
+          // Amber warning badge overlay (top-right corner) for macro violations
+          if (hasMacroViolation)
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.amber[700],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('⚠️ Violation', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Triggers AI regeneration for a meal item.
+  Future<void> _triggerAIRegen(Map<String, dynamic> item, int index) async {
+    final planId = widget.planId;
+    final itemId = item['_id']?.toString() ?? '';
+    if (itemId.isEmpty) return;
+
+    final provider = context.read<NutritionistProvider>();
+
+    // Show loading snackbar
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(children: [
+            SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+            SizedBox(width: 12),
+            Text('AI is generating meal suggestions...'),
+          ]),
+          duration: Duration(seconds: 60),
+        ),
+      );
+    }
+
+    await provider.regenerateItem(planId, itemId);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    if (provider.regenerateError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${provider.regenerateError}'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final previewResult = provider.previewResult;
+    if (previewResult == null) return;
+
+    // Show preview dialog
+    await _showAIPreviewDialog(planId, itemId, index, previewResult);
+  }
+
+  /// Shows the AI meal preview bottom sheet.
+  Future<void> _showAIPreviewDialog(
+    String planId,
+    String itemId,
+    int index,
+    Map<String, dynamic> previewResult,
+  ) async {
+    final previewId = previewResult['previewId'] as String? ?? '';
+    final preview = previewResult['preview'] as Map<String, dynamic>? ?? {};
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.75,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+
+              // Header
+              Row(children: [
+                Icon(Icons.auto_fix_high, color: Colors.deepPurple[400]),
+                const SizedBox(width: 8),
+                const Text('AI Meal Suggestion', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ]),
+              const SizedBox(height: 16),
+
+              // Dish name
+              Text(
+                preview['dish_name'] ?? 'Optimized Meal',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+
+              // Description
+              if (preview['description'] != null)
+                Text(preview['description'], style: TextStyle(color: Colors.grey[600])),
+              const SizedBox(height: 12),
+
+              // Warning banner (medical condition conflict)
+              if ((preview['warning'] as String?)?.isNotEmpty == true)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    border: Border.all(color: Colors.orange),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.health_and_safety, color: Colors.orange[700], size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(preview['warning'], style: TextStyle(color: Colors.orange[800], fontSize: 13))),
+                  ]),
+                ),
+
+              // Macro summary
+              if (preview['macro'] != null) ...[
+                const Text('Nutritional Information:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _macroWidget('Cal', '${preview['macro']['calories'] ?? 0} kcal', Colors.orange),
+                    _macroWidget('Pro', '${preview['macro']['protein'] ?? 0}g', Colors.red),
+                    _macroWidget('Carb', '${preview['macro']['carbs'] ?? 0}g', Colors.green),
+                    _macroWidget('Fat', '${preview['macro']['fat'] ?? 0}g', Colors.purple),
+                  ],
+                ),
+                const SizedBox(height: 16),
               ],
-            )
-          ],
+
+              // Cooking details
+              Row(children: [
+                const Icon(Icons.timer_outlined, size: 16, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text('${preview['cooking_time_minutes'] ?? "?"} mins  •  Difficulty: ${preview['difficulty'] ?? "?"}',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+              ]),
+              const SizedBox(height: 16),
+
+              // Cooking steps
+              if (preview['steps'] != null) ...[
+                const Text('Cooking Steps:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                ...((preview['steps'] as List).asMap().entries.map((e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text('${e.key + 1}. ${e.value}', style: const TextStyle(fontSize: 14)),
+                ))),
+                const SizedBox(height: 24),
+              ],
+
+              // Action buttons
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      context.read<NutritionistProvider>().discardPreview();
+                      Navigator.of(ctx).pop();
+                    },
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
+                    icon: const Icon(Icons.check, color: Colors.white),
+                    label: const Text('Apply', style: TextStyle(color: Colors.white)),
+                    onPressed: previewId.isEmpty ? null : () async {
+                      Navigator.of(ctx).pop();
+                      await _applyAISuggestion(planId, itemId, index, previewId);
+                    },
+                  ),
+                ),
+              ]),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  /// Applies the AI suggestion and refreshes the item on screen.
+  Future<void> _applyAISuggestion(
+    String planId,
+    String itemId,
+    int index,
+    String previewId,
+  ) async {
+    final provider = context.read<NutritionistProvider>();
+    final result = await provider.applyPreview(planId, itemId, previewId);
+
+    if (!mounted) return;
+
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${provider.regenerateError}'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    // Update the local draft item in-place
+    final data = result['data'] as Map<String, dynamic>? ?? {};
+    setState(() {
+      final items = _localDraft!['items'] as List;
+      items[index] = {
+        ...items[index] as Map<String, dynamic>,
+        'recipe': null,
+        'recipe_id': 'AI_GENERATED',
+        'macro_violation': result['macro_violation'] ?? false,
+        'customized_nutrients': data['macro'],
+        'target_snapshot': data['target_snapshot'],
+      };
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Applied successfully! Meal has been updated.'), backgroundColor: Colors.green),
+    );
+  }
+
 
   Widget _macroWidget(String label, String val, MaterialColor color) {
     return Column(
@@ -309,9 +682,14 @@ class _MealPlanEditorScreenState extends State<MealPlanEditorScreen> {
 // ════════════════════════════════════════════════════════════════════════════
 class _EditItemBottomSheet extends StatefulWidget {
   final Map<String, dynamic> item;
+  final Map<String, dynamic>? medicalCondition;
   final Function(Map<String, dynamic>) onSave;
 
-  const _EditItemBottomSheet({required this.item, required this.onSave});
+  const _EditItemBottomSheet({
+    required this.item,
+    this.medicalCondition,
+    required this.onSave,
+  });
 
   @override
   State<_EditItemBottomSheet> createState() => _EditItemBottomSheetState();
@@ -344,15 +722,42 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
     // Pre-populate selected recipe from existing item data (recipe object from API)
     final existingRecipe = _editingItem['recipe'];
     if (existingRecipe != null && existingRecipe is Map<String, dynamic>) {
+      final recipeId = existingRecipe['_id'] ?? existingRecipe['id'] ?? _editingItem['recipe_id'] ?? '';
+      final rawIngredients = existingRecipe['ingredients'] ?? _editingItem['ingredients'] ?? [];
+      final List ingList = (rawIngredients is List) ? List.from(rawIngredients) : [];
+
       _selectedRecipe = {
-        'id': existingRecipe['_id'] ?? existingRecipe['id'] ?? '',
+        'id': recipeId,
         'name': existingRecipe['name'] ?? '',
         'imageUrl': existingRecipe['image_url'] ?? existingRecipe['imageUrl'] ?? '',
         'baseServings': existingRecipe['base_servings'] ?? existingRecipe['baseServings'] ?? 1,
         'cookingTime': existingRecipe['cooking_time'] ?? existingRecipe['cookingTime'] ?? 0,
         'nutrition': _editingItem['base_nutrients'] ?? _editingItem['customized_nutrients'],
+        'ingredients': ingList,
       };
       _baseNutrition = _editingItem['base_nutrients'] ?? _editingItem['customized_nutrients'];
+      _editingItem['ingredients'] = ingList;
+
+      // If ingredients list is empty, fetch full recipe ingredients immediately in background
+      if (ingList.isEmpty && recipeId.toString().isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          try {
+            final apiClient = context.read<ApiClient>();
+            final response = await apiClient.get('/api/user/recipes/$recipeId');
+            if (response.statusCode == 200 && response.data['success'] == true) {
+              final data = response.data['data'] as Map<String, dynamic>?;
+              final fetchedIngs = data?['ingredients'] as List? ?? [];
+              if (mounted && _selectedRecipe?['id'] == recipeId && fetchedIngs.isNotEmpty) {
+                setState(() {
+                  _editingItem['ingredients'] = fetchedIngs;
+                  _selectedRecipe!['ingredients'] = fetchedIngs;
+                });
+              }
+            }
+          } catch (_) {}
+        });
+      }
     }
   }
 
@@ -402,15 +807,33 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
           final data = response.data['data'] as Map<String, dynamic>?;
           final ingList = data?['ingredients'] as List? ?? [];
           if (mounted && _editingItem['recipe_id'] == recipeId) {
+            double totalWeight = 0;
+            for (var ing in ingList) {
+              final num qty = ing['quantity'] ?? ing['amount_gram'] ?? ing['base_quantity'] ?? 0;
+              totalWeight += qty;
+            }
+
             setState(() {
               _editingItem['ingredients'] = ingList;
               if (_selectedRecipe != null) {
                 _selectedRecipe!['ingredients'] = ingList;
               }
+              if (_editingItem['recipe'] != null && _editingItem['recipe'] is Map) {
+                _editingItem['recipe']['ingredients'] = ingList;
+              }
+              if (totalWeight > 0) {
+                _editingItem['base_weight'] = totalWeight;
+                _editingItem['customized_servings_gram'] = totalWeight;
+                _servingsController.text = totalWeight.round().toString();
+              }
+              _editingItem['macro_violation'] = _checkClientViolation();
             });
+            _recalculateMacrosFromRecipe();
           }
         }
       } catch (_) {}
+    } else {
+      _recalculatePortionFromRecipeIngredients();
     }
   }
 
@@ -484,6 +907,7 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
         'carbs':   double.parse(((_baseNutrition!['carbs'] as num? ?? 0) * safeRatio).toStringAsFixed(1)),
         'fat':     double.parse(((_baseNutrition!['fat'] as num? ?? 0) * safeRatio).toStringAsFixed(1)),
       };
+      _editingItem['macro_violation'] = _checkClientViolation();
     });
   }
 
@@ -519,7 +943,60 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
         'carbs': num.parse(totalCarb.toStringAsFixed(1)),
         'fat': num.parse(totalFat.toStringAsFixed(1)),
       };
+      _editingItem['macro_violation'] = _checkClientViolation();
     });
+  }
+
+  /// Real-time client-side check for medical condition violations.
+  bool _checkClientViolation() {
+    final medCond = widget.medicalCondition;
+    if (medCond == null) return false;
+    final rawExcluded = medCond['excluded_ingredient_tags'];
+    final List<String> excludedTags = (rawExcluded is List)
+        ? rawExcluded.map((e) => e.toString().toUpperCase().trim()).toList()
+        : [];
+
+    // 1. Check ingredients in selected recipe
+    if (excludedTags.isNotEmpty) {
+      final ingList = _editingItem['ingredients'] as List? ?? [];
+      for (var ing in ingList) {
+        final rawTags = ing['health_tags'] ?? ing['ingredient']?['health_tags'] ?? [];
+        final List<String> tags = (rawTags is List)
+            ? rawTags.map((e) => e.toString().toUpperCase().trim()).toList()
+            : [];
+        if (tags.any((t) => excludedTags.contains(t))) {
+          return true;
+        }
+      }
+
+      // Check custom ingredients (AI mode)
+      final customIngs = _editingItem['custom_ingredients'] as List? ?? [];
+      for (var ci in customIngs) {
+        final rawTags = ci['health_tags'] ?? ci['ingredient']?['health_tags'] ?? ci['ingredient_id']?['health_tags'] ?? [];
+        final List<String> tags = (rawTags is List)
+            ? rawTags.map((e) => e.toString().toUpperCase().trim()).toList()
+            : [];
+        if (tags.any((t) => excludedTags.contains(t))) {
+          return true;
+        }
+      }
+    }
+
+    // 2. Check nutrient constraints (macros)
+    final nc = medCond['nutrient_constraints'];
+    if (nc != null && nc is Map && nc['carb_ratio_max'] != null) {
+      final num cals = _editingItem['customized_nutrients']?['calories'] ?? 0;
+      final num carbs = _editingItem['customized_nutrients']?['carbs'] ?? 0;
+      if (cals > 0) {
+        final actualRatio = (carbs * 4) / cals;
+        final maxRatio = (nc['carb_ratio_max'] as num).toDouble();
+        if (actualRatio > maxRatio + 0.05) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   // ── Confirm button availability ───────────────────────────────────────────
@@ -534,6 +1011,7 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
     final isAI = _editingItem['recipe'] == null && _selectedRecipe == null;
     final macros = _editingItem['customized_nutrients'] ?? _editingItem['base_nutrients'];
     final currentMealType = (_editingItem['meal_type'] ?? 'LUNCH').toString();
+    final isViolated = _editingItem['macro_violation'] == true || _checkClientViolation();
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -568,6 +1046,29 @@ class _EditItemBottomSheetState extends State<_EditItemBottomSheet> {
               ],
             ),
           ),
+          if (isViolated) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade400),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber[900]),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Warning: This meal violates the client\'s medical condition constraints.',
+                      style: TextStyle(fontSize: 12, color: Colors.amber[950], fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
 
           // ── Meal Type Dropdown ─────────────────────────────────────────────
@@ -1016,7 +1517,7 @@ class _RecipeSearchSheetState extends State<_RecipeSearchSheet> {
     '':          'All',
     'BREAKFAST' : 'BREAKFAST',
     'LUNCH': 'LUNCH'   ,
-    'DINNER': 'LUNCH'  ,
+    'DINNER': 'DINNER'  ,
     'SNACK': 'SNACK'  ,
   };
 

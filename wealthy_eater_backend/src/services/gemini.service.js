@@ -283,6 +283,179 @@ Output ONLY the JSON array. No extra text, no markdown.`;
     console.error(detail);
     throw new Error(detail);
   }
+  /**
+   * UC-Regenerate — Generate a meal with full medical condition context.
+   *
+   * Called by the regenerate-ai endpoint when a nutritionist wants to replace
+   * a specific meal slot with an AI-generated suggestion that respects the
+   * client's medical condition constraints.
+   *
+   * Unlike generateMealPlan(), this method:
+   * - Accepts a full medicalCondition object (not just dietType)
+   * - Includes nutrient_constraints in the prompt so Gemini can tailor advice
+   * - Returns a `warning` field when ingredients conflict with the condition
+   * - Uses HARD guardrail: MUST NOT suggest removing/replacing ingredients
+   *   (ingredient list is set by LP solver, Gemini only generates cooking steps)
+   *
+   * @param {Object} params
+   * @param {string} params.ingredientSummary        — e.g. "150g Chicken Breast, 200g Brown Rice"
+   * @param {number} params.targetCalories
+   * @param {number} params.targetProtein
+   * @param {number} params.targetCarbs
+   * @param {number} params.targetFat
+   * @param {Object|null} params.medicalCondition    — { name, category, dietary_guideline, nutrient_constraints }
+   * @returns {Promise<Object>} { dish_name, description, difficulty, cooking_time_minutes, steps[], warning }
+   */
+  async generateMealWithMedicalContext({
+    ingredientSummary,
+    targetCalories,
+    targetProtein,
+    targetCarbs,
+    targetFat,
+    medicalCondition = null,
+  }) {
+    // ── Build medical condition section of prompt ──────────────────────────
+    let medicalSection = '';
+    let constraintSection = '';
+
+    if (medicalCondition) {
+      medicalSection = `
+TÌNH TRẠNG SỨC KHỎE CỦA KHÁCH HÀNG (bắt buộc tuân thủ):
+- ${medicalCondition.name}${medicalCondition.category ? ` (${medicalCondition.category})` : ''}
+- Hướng dẫn dinh dưỡng: "${medicalCondition.dietary_guideline || 'Không có hướng dẫn cụ thể.'}"`;
+
+      const nc = medicalCondition.nutrient_constraints;
+      if (nc && typeof nc === 'object') {
+        const constraintLines = [];
+        if (nc.max_sugar_g_per_day != null)   constraintLines.push(`- Giới hạn đường: tối đa ${nc.max_sugar_g_per_day}g/ngày`);
+        if (nc.min_fiber_g_per_day != null)   constraintLines.push(`- Chất xơ tối thiểu: ${nc.min_fiber_g_per_day}g/ngày`);
+        if (nc.carb_ratio_max != null)         constraintLines.push(`- Tỉ lệ calo từ carb: tối đa ${Math.round(nc.carb_ratio_max * 100)}%`);
+        if (nc.max_sodium_mg_per_day != null)  constraintLines.push(`- Natri: tối đa ${nc.max_sodium_mg_per_day}mg/ngày`);
+        if (nc.max_purine === true)            constraintLines.push(`- Hạn chế thực phẩm có hàm lượng purine cao`);
+
+        if (constraintLines.length > 0) {
+          constraintSection = `
+RÀNG BUỘC ĐỊNH LƯỢNG (đã được tính bởi LP Solver \u2014 KHÔNG tự ý thay đổi):
+${constraintLines.join('\n')}`;
+        }
+      }
+    }
+
+    const prompt = `Bạn là chuyên gia dinh dưỡng lâm sàng, hỗ trợ tạo món ăn từ nguyên liệu có sẵn.
+
+NGUYÊN LIỆU ĐẦU VÀO (định lượng đã tính bởi LP Solver \u2014 KHÔNG thêm bớt nguyên liệu):
+${ingredientSummary}
+
+TARGET MACRO CHO BỮA NÀY:
+- Calories: ${targetCalories} kcal
+- Protein: ${targetProtein}g | Carbs: ${targetCarbs}g | Fat: ${targetFat}g
+${medicalSection}
+${constraintSection}
+
+YÊU CẦU:
+1. Đề xuất TÊN món sáng tạo, MÔ TẢ ngắn (2-3 câu), ĐỘ KHÓ (EASY/MEDIUM/HARD), THỜI GIAN NẤU (phút).
+2. Viết CÁC BƯỚC chế biến đúng theo định lượng nguyên liệu đã cho.
+3. Nếu có ràng buộc sức khỏe, cách chế biến PHẢI phù hợp (VD: bệnh tiểu đường \u2192 không chiên xào nhiều dầu; cao huyết áp \u2192 không dùng nước mắm/muối nhiều).
+4. NGHIÊM CẤM tự ý thêm hoặc đổi nguyên liệu. Dùng đúng danh sách nguyên liệu đã cung cấp.
+5. Nếu bất kỳ nguyên liệu nào trong danh sách xung đột với tình trạng sức khỏe và KHÔNG thể tránh, trả field "warning" giải thích ngắn gọn \u2014 KHÔNG tự ý bỏ nguyên liệu đó.
+
+Trả lời CHỈ bằng JSON hợp lệ theo schema sau, KHÔNG có markdown code fence:
+{
+  "dish_name": "string",
+  "description": "string",
+  "difficulty": "EASY" | "MEDIUM" | "HARD",
+  "cooking_time_minutes": number,
+  "steps": ["string", "string", ...],
+  "warning": "string hoặc null"
+}`;
+
+    const requestBody = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 1500,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'OBJECT',
+          properties: {
+            dish_name:             { type: 'STRING' },
+            description:           { type: 'STRING' },
+            difficulty:            { type: 'STRING' },
+            cooking_time_minutes:  { type: 'INTEGER' },
+            steps:                 { type: 'ARRAY', items: { type: 'STRING' } },
+            warning:               { type: 'STRING' },
+          },
+          required: ['dish_name', 'description', 'difficulty', 'cooking_time_minutes', 'steps'],
+        },
+      },
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+      ],
+    };
+
+    let lastError = null;
+    const MAX_RETRIES = 3;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const apiKey = _getGeminiKey();
+        if (!apiKey) throw new Error('GOOGLE_API_KEY not configured.');
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
+        let response;
+        try {
+          response = await fetch(`${GEMINI_PRO_URL}?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Gemini API error ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        const parsed = JSON.parse(rawText);
+
+        // Normalize: ensure warning field is null (not missing) if not present
+        if (parsed.warning === undefined) parsed.warning = null;
+
+        return parsed;
+      } catch (err) {
+        lastError = err;
+        console.warn(`[Gemini generateMealWithMedicalContext] Attempt ${attempt} failed: ${err.message}`);
+        if (attempt < MAX_RETRIES) {
+          await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        }
+      }
+    }
+
+    console.warn('[Gemini generateMealWithMedicalContext] All retries exhausted. Using fallback.');
+    // Fallback: safe response that does not suggest any changes
+    const conditionName = medicalCondition?.name || 'Unknown';
+    return {
+      dish_name: `Bữa ăn được tối ưu hóa dinh dưỡng`,
+      description: `Bữa ăn được tính toán cho ${ingredientSummary}. Phù hợp với mục tiêu ${targetCalories} kcal.`,
+      difficulty: 'MEDIUM',
+      cooking_time_minutes: 30,
+      steps: [
+        `Chuẩn bị nguyên liệu: ${ingredientSummary}.`,
+        'Chế biến theo phương pháp lành mạnh (hấp, luộc, hoặc áp chảo ít dầu).',
+        'Nêm gia vị vừa phải và phục vụ ngay.',
+      ],
+      warning: `Không thể tạo công thức chi tiết lúc này. Vui lòng kiểm tra thủ công để đảm bảo phù hợp với ${conditionName}.`,
+    };
+  }
 }
 
 module.exports = new GeminiService();

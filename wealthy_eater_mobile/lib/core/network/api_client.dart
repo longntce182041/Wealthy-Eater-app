@@ -13,10 +13,10 @@ import 'session_expired_notifier.dart';
 class ApiClient {
   final Dio dio;
 
-  ApiClient(String baseUrl, {FlutterSecureStorage? storage})
+  ApiClient([String? baseUrl, FlutterSecureStorage? storage])
       : dio = Dio(
           BaseOptions(
-            baseUrl: baseUrl,
+            baseUrl: baseUrl ?? EnvConfig.baseUrl,
             connectTimeout: Duration(milliseconds: EnvConfig.connectTimeout),
             receiveTimeout: Duration(milliseconds: EnvConfig.receiveTimeout),
             headers: {'Content-Type': 'application/json'},

@@ -1,6 +1,10 @@
 const AppError = require('../utils/AppError');
 const mealPlanService = require('../services/mealPlan.service');
 const geminiService = require('../services/gemini.service');
+const { getUserMedicalCondition } = require('../utils/medicalCondition.helper');
+const { filterEligibleRecipes } = require('../utils/recipeFilter.helper');
+const redisHelper = require('../utils/redisClient');
+const { randomUUID: uuidv4 } = require('crypto');
 
 // ── UC-38: Nutritionist template match (legacy) ──────────────────────────────
 const matchTemplateEndpoint = async (req, res) => {
@@ -500,27 +504,46 @@ const generateRecipeBasedPlan = async (req, res, next) => {
     // ── Business Rule §2: Compute target_calories from TDEE × health_goal multiplier ──
     const healthGoal = profile.health_goal || 'MAINTAIN_WEIGHT';
     const calorieMultiplier = GOAL_CALORIE_MULTIPLIERS[healthGoal] ?? 1.0;
-    const targetCalories = Math.round(profile.tdee * calorieMultiplier);
+    let targetCalories = Math.round(profile.tdee * calorieMultiplier);
 
     // ── Business Rule §3: Derive macros from weight_kg + health_goal ──
     const weightKg = profile.weight || 70;
     const isHighProteinGoal = ['LOSE_WEIGHT', 'FAT_LOSS', 'GAIN_WEIGHT', 'MUSCLE_GAIN'].includes(healthGoal);
-    const targetProtein = Math.round(weightKg * (isHighProteinGoal ? 2.0 : 1.6));
-    const targetFat     = Math.round(weightKg * 0.8);
-    const targetCarbs   = Math.max(50, Math.round((targetCalories - targetProtein * 4 - targetFat * 9) / 4));
+    let targetProtein = Math.round(weightKg * (isHighProteinGoal ? 2.0 : 1.6));
+    let targetFat     = Math.round(weightKg * 0.8);
+    let targetCarbs   = Math.max(50, Math.round((targetCalories - targetProtein * 4 - targetFat * 9) / 4));
 
-    // ── Business Rule §4 & §5: Build banned ingredient + skill sets ──
+    // ── Medical Condition: load and apply nutrient_constraints ────────────────
+    let medicalCondition = null;
+    const medCondId = getUserMedicalCondition(dietary);
+    if (medCondId) {
+      const MedicalCondition = require('../models/MedicalCondition');
+      medicalCondition = await MedicalCondition.findById(medCondId).lean();
+      if (medicalCondition?.nutrient_constraints?.carb_ratio_max != null) {
+        const carbConstraintG = Math.round(
+          (medicalCondition.nutrient_constraints.carb_ratio_max * targetCalories) / 4
+        );
+        if (carbConstraintG < targetCarbs) {
+          console.log(
+            `[MedicalConstraint] carb_ratio_max override for "${medicalCondition.name}": ` +
+            `${targetCarbs}g → ${carbConstraintG}g (ratio: ${medicalCondition.nutrient_constraints.carb_ratio_max})`
+          );
+          targetCarbs = carbConstraintG;
+        }
+      }
+    }
+
+    // ── Business Rule §4 & §5: Build exclusion sets from dietary + medical condition ──
     const bannedIngredientIds = new Set([
       ...(dietary?.allergies || []),
       ...(dietary?.dislike_ingredients || []),
     ]);
+    const bannedTags = new Set(medicalCondition?.excluded_ingredient_tags || []);
     const availableCookingTimeMin = dietary?.available_cooking_time ?? 9999;
     const userSkillLevel = SKILL_LEVEL_ORDER[dietary?.cooking_skill_level?.toLowerCase()] || 3;
 
     // 3. Load all published recipes from DB
     const allRecipes = await Recipe.find({ status: { $in: ['published', 'PUBLISHED'] } }).lean();
-
-    // Also include recipes with no status set (backwards compat)
     const allRecipesWithFallback = allRecipes.length > 0
       ? allRecipes
       : await Recipe.find({}).lean();
@@ -532,30 +555,56 @@ const generateRecipeBasedPlan = async (req, res, next) => {
       });
     }
 
-    // 4. For each recipe, calculate total nutrition and apply filters
-    const availableRecipes = [];
+    // 4. Pre-fetch RecipeIngredient + Ingredient for filter
+    // Build recipeIngredientMap: recipeId → [{ingredientId, health_tags}]
+    const allRecipeIds = allRecipesWithFallback.map(r => r._id);
+    const allRecipeIngredients = await RecipeIngredient.find({ recipe_id: { $in: allRecipeIds } })
+      .populate({ path: 'ingredient_id', model: 'Ingredient', select: '_id health_tags' })
+      .lean();
 
+    const recipeIngredientMap = new Map();
+    for (const ri of allRecipeIngredients) {
+      const recId = ri.recipe_id?.toString();
+      if (!recipeIngredientMap.has(recId)) recipeIngredientMap.set(recId, []);
+      const ing = ri.ingredient_id;
+      if (ing) {
+        recipeIngredientMap.get(recId).push({
+          ingredientId: ing._id?.toString(),
+          health_tags: ing.health_tags || [],
+        });
+      }
+    }
+
+    // Apply cooking_time and cooking_skill_level filters first (existing logic)
+    const timeAndSkillFiltered = [];
     for (const recipe of allRecipesWithFallback) {
-      // ── Filter: cooking_time ──
-      if (recipe.cooking_time && recipe.cooking_time > availableCookingTimeMin) {
-        continue;
-      }
-
-      // ── Filter: cooking_skill_level ──
+      if (recipe.cooking_time && recipe.cooking_time > availableCookingTimeMin) continue;
       const recipeSkill = SKILL_LEVEL_ORDER[recipe.level_cooking?.toLowerCase()] || 1;
-      if (recipeSkill > userSkillLevel) {
-        continue;
-      }
+      if (recipeSkill > userSkillLevel) continue;
+      timeAndSkillFiltered.push(recipe);
+    }
 
-      // ── Filter: allergies + dislike_ingredients ──
-      if (bannedIngredientIds.size > 0) {
-        const recipeIngredients = await RecipeIngredient.find({ recipe_id: recipe._id }).lean();
-        const hasBannedIngredient = recipeIngredients.some(ri =>
-          bannedIngredientIds.has(ri.ingredient_id?.toString())
-        );
-        if (hasBannedIngredient) continue;
-      }
+    // Apply medical + allergy/dislike filter using pure function
+    const { eligibleRecipes: afterMedicalFilter, dataCoverageWarning } = filterEligibleRecipes({
+      recipes: timeAndSkillFiltered,
+      bannedIngredientIds,
+      bannedTags,
+      recipeIngredientMap,
+    });
 
+    if (dataCoverageWarning) {
+      console.warn(
+        `[MedicalFilter] data_coverage_warning: User has medical condition "${
+          medicalCondition?.name
+        }" with excluded_ingredient_tags [${
+          [...bannedTags].join(', ')
+        }], but NO ingredient in the system has matching health_tags. Filter has no data.`
+      );
+    }
+
+    // 5. For each eligible recipe, calculate total nutrition
+    const availableRecipes = [];
+    for (const recipe of afterMedicalFilter) {
       // Calculate nutrition via RecipeIngredient + Ingredient
       const nutrients = await mealPlanService.calculateRecipeNutrients(recipe._id);
 
@@ -579,12 +628,12 @@ const generateRecipeBasedPlan = async (req, res, next) => {
       return res.status(422).json({
         success: false,
         error: {
-          message: `Need at least ${mealsPerDay} valid recipes after applying filters (allergies, cooking time, skill level), found ${availableRecipes.length}.`
+          message: `Need at least ${mealsPerDay} valid recipes after applying filters (allergies, medical condition, cooking time, skill level), found ${availableRecipes.length}.`
         },
       });
     }
 
-    // 5. Call FastAPI MILP solver
+    // 6. Call FastAPI MILP solver
     const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
     const internalSecret = process.env.N8N_INTERNAL_SECRET || '9a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a';
 
@@ -607,6 +656,8 @@ const generateRecipeBasedPlan = async (req, res, next) => {
         portionScaleMin: 0.6,
         portionScaleMax: 1.8,
         availableRecipes,
+        // Include medical constraints for solver (null = no medical condition)
+        medical_constraints: medicalCondition?.nutrient_constraints || null,
       }),
     });
 
@@ -630,18 +681,25 @@ const generateRecipeBasedPlan = async (req, res, next) => {
       });
     }
 
-    // 6. Save the recipe-based plan to MongoDB
+    // 7. Save the recipe-based plan to MongoDB (with target_snapshot per item)
     const result = await mealPlanService.saveRecipeBasedPlan({
       clientId,
       nutritionistId,
       assignments,
       dailySummaries,
+      // Pass daily targets so saveRecipeBasedPlan can set target_snapshot per item
+      dailyTargets: { targetCalories, targetProtein, targetCarbs, targetFat },
+      mealCalorieSplit: [0.25, 0.40, 0.35],
     });
 
     return res.status(201).json({
       success: true,
       status: 'SUCCESS_RECIPE_PLAN_GENERATED',
       message: 'Recipe-based weekly meal plan generated and saved successfully.',
+      // data_coverage_warning: surfaces when medical filter has no ingredient tag data
+      data_coverage_warning: dataCoverageWarning || false,
+      // constraints_relaxed: which medical constraints were dropped to achieve Optimal
+      constraints_relaxed: solverResult.constraints_relaxed || [],
       meta: {
         ...result,
         targetSummary: {
@@ -651,7 +709,311 @@ const generateRecipeBasedPlan = async (req, res, next) => {
           targetProtein,
           targetCarbs,
           targetFat,
+          medicalCondition: medicalCondition ? {
+            id: medicalCondition._id,
+            name: medicalCondition.name,
+          } : null,
         },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── Meal type calorie split defaults ──────────────────────────────────────────
+const DEFAULT_MEAL_CALORIE_SPLIT = { BREAKFAST: 0.25, LUNCH: 0.40, DINNER: 0.35 };
+
+/**
+ * Compute per-meal macro targets from a target_snapshot or fallback to ratio.
+ */
+function _getMealTarget(item, dailyTarget) {
+  const snap = item?.target_snapshot;
+  if (snap && snap.calories != null) {
+    return {
+      calories: snap.calories,
+      protein: snap.protein,
+      carbs: snap.carbs,
+      fat: snap.fat,
+    };
+  }
+  // Fallback: use meal_type ratio × daily target
+  const mealType = (item?.meal_type || 'LUNCH').toUpperCase();
+  const ratio = DEFAULT_MEAL_CALORIE_SPLIT[mealType] ?? 0.40;
+  return {
+    calories: Math.round((dailyTarget.targetCalories || 2000) * ratio),
+    protein: Math.round((dailyTarget.targetProtein || 140) * ratio),
+    carbs: Math.round((dailyTarget.targetCarbs || 200) * ratio),
+    fat: Math.round((dailyTarget.targetFat || 65) * ratio),
+  };
+}
+
+// ── UC-Regenerate: Regenerate 1 meal slot using AI ────────────────────────────
+const regenerateItemWithAI = async (req, res, next) => {
+  try {
+    const { planId, itemId } = req.params;
+    const rawIds = req.body?.ingredientIds || req.query?.ingredientIds;
+    const ingredientIds = Array.isArray(rawIds)
+      ? rawIds
+      : (typeof rawIds === 'string' ? rawIds.split(',').map(s => s.trim()).filter(Boolean) : null);
+
+    // 1. Load item + verify it belongs to planId
+    const MealPlanItem = require('../models/MealPlanItem');
+    const MealPlan = require('../models/MealPlan');
+    const item = await MealPlanItem.findOne({ _id: itemId, meal_plan_id: planId }).lean();
+    if (!item) {
+      return res.status(404).json({ success: false, error: 'Meal plan item not found or does not belong to this plan.' });
+    }
+
+    // 2. Load plan to get client's user_id
+    const plan = await MealPlan.findById(planId).lean();
+    if (!plan) {
+      return res.status(404).json({ success: false, error: 'Meal plan not found.' });
+    }
+    if (plan.status !== 'DRAFT') {
+      return res.status(400).json({ success: false, error: 'Only DRAFT plans can be regenerated.' });
+    }
+    const clientId = plan.user_id;
+
+    // 3. Load dietary + medical condition
+    const UserDietary = require('../models/UserDietary');
+    const dietary = await UserDietary.findOne({ user_id: clientId }).lean();
+    let medicalCondition = null;
+    const medCondId = getUserMedicalCondition(dietary);
+    if (medCondId) {
+      const MedicalCondition = require('../models/MedicalCondition');
+      medicalCondition = await MedicalCondition.findById(medCondId).lean();
+    }
+
+    // 4. Determine per-meal macro target
+    // Use target_snapshot if available (saved during plan generation);
+    // fallback to default ratio × plan's daily target (stored in plan metadata or estimated)
+    const dailyTarget = {
+      targetCalories: plan.target_calories || 2000,
+      targetProtein: plan.target_protein || 140,
+      targetCarbs: plan.target_carbs || 200,
+      targetFat: plan.target_fat || 65,
+    };
+    const mealTarget = _getMealTarget(item, dailyTarget);
+
+    // 5. Build ingredient pool (exclude allergens + medical tags)
+    const bannedIngredientIds = new Set([
+      ...(dietary?.allergies || []),
+      ...(dietary?.dislike_ingredients || []),
+    ]);
+    const bannedTags = new Set(medicalCondition?.excluded_ingredient_tags || []);
+
+    const Ingredient = require('../models/Ingredient');
+    let poolIngredients;
+    if (ingredientIds && Array.isArray(ingredientIds) && ingredientIds.length > 0) {
+      // Nutritionist specified a pool explicitly
+      poolIngredients = await Ingredient.find({ _id: { $in: ingredientIds }, calories_per_unit: { $gt: 0 } }).lean();
+    } else {
+      poolIngredients = await Ingredient.find({ calories_per_unit: { $gt: 0 } }).lean();
+    }
+
+    const { filterEligibleIngredients } = require('../utils/recipeFilter.helper');
+    const { eligibleIngredients } = filterEligibleIngredients({
+      ingredients: poolIngredients,
+      bannedIngredientIds,
+      bannedTags,
+    });
+
+    if (eligibleIngredients.length === 0) {
+      return res.status(422).json({ success: false, error: 'No eligible ingredients found after applying filters.' });
+    }
+
+    const availableIngredients = eligibleIngredients.map(ing => ({
+      id: ing._id.toString(),
+      name: ing.name,
+      calories: ing.calories_per_unit,
+      protein: ing.protein ?? 0,
+      carbs: ing.carbs ?? 0,
+      fat: ing.fat ?? 0,
+      allergenTags: [],
+      minLimitGram: 0,
+      maxLimitGram: 350,
+    }));
+
+    // 6. Call FastAPI LP solver for this single meal's portion
+    const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
+    const internalSecret = process.env.N8N_INTERNAL_SECRET || '9a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a';
+
+    const lpResponse = await fetch(`${fastApiUrl}/api/v1/ai/compute-diet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-INTERNAL-SECRET': internalSecret },
+      body: JSON.stringify({
+        targetCalories: mealTarget.calories,
+        targetProtein: mealTarget.protein,
+        targetCarbs: mealTarget.carbs,
+        targetFat: mealTarget.fat,
+        allergiesExclusions: [],
+        dietType: dietary?.diet_preferences?.[0] || 'BALANCED',
+        minVarietyItems: 0,
+        maxVarietyItems: null,
+        activationGramThreshold: 1.0,
+        availableIngredients,
+      }),
+    });
+
+    if (!lpResponse.ok) {
+      const errText = await lpResponse.text();
+      return res.status(502).json({ success: false, error: `LP solver error: ${lpResponse.status} — ${errText}` });
+    }
+
+    const lpResult = await lpResponse.json();
+    const allocation = lpResult.allocation || [];
+    const totals = lpResult.totals || {};
+
+    if (allocation.length === 0) {
+      return res.status(422).json({ success: false, error: 'LP solver returned empty allocation.' });
+    }
+
+    // 7. Call Gemini to generate meal name + steps with medical context
+    const ingredientSummary = allocation
+      .map(a => `${Math.round(a.allocatedGrams)}g ${a.ingredientName}`)
+      .join(', ');
+
+    const aiMealData = await geminiService.generateMealWithMedicalContext({
+      ingredientSummary,
+      targetCalories: Math.round(totals.calculatedCalories || mealTarget.calories),
+      targetProtein: Math.round(totals.calculatedProtein || mealTarget.protein),
+      targetCarbs: Math.round(totals.calculatedCarbs || mealTarget.carbs),
+      targetFat: Math.round(totals.calculatedFat || mealTarget.fat),
+      medicalCondition,
+    });
+
+    // 8. Build preview object
+    const previewData = {
+      dish_name: aiMealData.dish_name,
+      description: aiMealData.description,
+      difficulty: aiMealData.difficulty,
+      cooking_time_minutes: aiMealData.cooking_time_minutes,
+      steps: aiMealData.steps,
+      warning: aiMealData.warning || null,
+      macro: {
+        calories: Math.round(totals.calculatedCalories || mealTarget.calories),
+        protein: parseFloat((totals.calculatedProtein || mealTarget.protein).toFixed(1)),
+        carbs: parseFloat((totals.calculatedCarbs || mealTarget.carbs).toFixed(1)),
+        fat: parseFloat((totals.calculatedFat || mealTarget.fat).toFixed(1)),
+      },
+      allocation, // raw allocation for storing as custom_ingredients
+      constraints_relaxed: [], // LP solver for single meal doesn't have relaxation
+    };
+
+    // 9. Cache preview in Redis (TTL 15 minutes)
+    const previewId = uuidv4();
+    const cacheKey = `ai_preview:${previewId}`;
+    const cached = await redisHelper.setWithTTL(cacheKey, 900, JSON.stringify(previewData));
+    if (!cached) {
+      console.warn('[regenerateItemWithAI] Redis unavailable — preview not cached. Client must retry if needed.');
+    }
+
+    return res.status(200).json({
+      success: true,
+      previewId,
+      preview: previewData,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── UC-Regenerate: Apply AI Preview to MealPlanItem ───────────────────────────
+const applyAISuggestion = async (req, res, next) => {
+  try {
+    const { planId, itemId } = req.params;
+    const { previewId } = req.body;
+
+    if (!previewId) {
+      return res.status(400).json({ success: false, error: 'previewId is required.' });
+    }
+
+    // 1. Fetch preview from Redis
+    const cacheKey = `ai_preview:${previewId}`;
+    const cached = await redisHelper.get(cacheKey);
+    if (!cached) {
+      return res.status(410).json({
+        success: false,
+        error: 'Preview has expired or does not exist. Please regenerate.',
+        code: 'PREVIEW_EXPIRED',
+      });
+    }
+    const previewData = JSON.parse(cached);
+
+    // 2. Load item and plan (validate ownership + DRAFT status)
+    const MealPlanItem = require('../models/MealPlanItem');
+    const MealPlan = require('../models/MealPlan');
+    const item = await MealPlanItem.findOne({ _id: itemId, meal_plan_id: planId });
+    if (!item) {
+      return res.status(404).json({ success: false, error: 'Meal plan item not found.' });
+    }
+    const plan = await MealPlan.findById(planId).lean();
+    if (!plan || plan.status !== 'DRAFT') {
+      return res.status(400).json({ success: false, error: 'Can only apply suggestions to DRAFT plans.' });
+    }
+    const clientId = plan.user_id;
+
+    // 3. Server-side re-validate: check preview macro vs medical constraints
+    // We do NOT trust client-side data — we re-read constraints from DB.
+    const UserDietary = require('../models/UserDietary');
+    const dietary = await UserDietary.findOne({ user_id: clientId }).lean();
+    let medicalCondition = null;
+    const medCondId = getUserMedicalCondition(dietary);
+    if (medCondId) {
+      const MedicalCondition = require('../models/MedicalCondition');
+      medicalCondition = await MedicalCondition.findById(medCondId).lean();
+    }
+
+    // Evaluate macro_violation: check per-meal macro against constraint thresholds
+    let macroViolation = false;
+    const nc = medicalCondition?.nutrient_constraints;
+    if (nc && previewData.macro) {
+      const pm = previewData.macro;
+      // Evaluate based on per-meal carb ratio
+      if (nc.carb_ratio_max != null && pm.calories > 0) {
+        const actualCarbRatio = (pm.carbs * 4) / pm.calories;
+        if (actualCarbRatio > nc.carb_ratio_max + 0.05) { // 5% tolerance
+          macroViolation = true;
+        }
+      }
+    }
+
+    // 4. Apply preview to MealPlanItem
+    const allocation = previewData.allocation || [];
+    item.recipe_id = 'AI_GENERATED';
+    item.custom_ingredients = allocation.map(a => ({
+      ingredient_id: a.ingredientId,
+      amount_gram: a.allocatedGrams,
+    }));
+    item.target_calories = previewData.macro?.calories || 0;
+    item.customized_servings_gram = allocation.reduce((s, a) => s + a.allocatedGrams, 0);
+    // Update target_snapshot from the validated preview macro
+    item.target_snapshot = {
+      calories: previewData.macro?.calories || null,
+      protein: previewData.macro?.protein || null,
+      carbs: previewData.macro?.carbs || null,
+      fat: previewData.macro?.fat || null,
+    };
+    await item.save();
+
+    // 5. Delete Redis cache after successful apply
+    await redisHelper.del(cacheKey);
+
+    // 6. Return updated item with macro_violation flag
+    return res.status(200).json({
+      success: true,
+      message: 'AI suggestion applied successfully.',
+      macro_violation: macroViolation,
+      data: {
+        _id: item._id,
+        meal_plan_id: item.meal_plan_id,
+        meal_type: item.meal_type,
+        day_of_week: item.day_of_week,
+        target_snapshot: item.target_snapshot,
+        macro: previewData.macro,
+        dish_name: previewData.dish_name,
+        macro_violation: macroViolation,
       },
     });
   } catch (error) {
@@ -749,4 +1111,6 @@ module.exports = {
   scanMealImageEndpoint,
   logCustomRecipeEndpoint,
   deleteMealPlanEndpoint,
+  regenerateItemWithAI,
+  applyAISuggestion,
 };

@@ -86,8 +86,8 @@ class _NutritionistMealPlansTabState extends State<NutritionistMealPlansTab> {
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final plan = plans[index];
-              final planId = plan['mealPlanId']?.toString() ?? '';
-              final email = plan['clientEmail']?.toString() ?? 'Unknown Client';
+              final planId = plan['mealPlanId']?.toString() ?? plan['_id']?.toString() ?? plan['id']?.toString() ?? '';
+              final email = plan['clientEmail']?.toString() ?? plan['client']?['email']?.toString() ?? 'Unknown Client';
               final initial = email.isNotEmpty ? email[0].toUpperCase() : '?';
               final dateStr = _formatDate(plan['date']?.toString());
               final status = plan['status']?.toString() ?? 'DRAFT';
