@@ -23,6 +23,9 @@ const UserAiRecipeSchema = new mongoose.Schema({
   difficulty: { 
     type: String 
   },
+  healthNote: {
+    type: String
+  },
   cookingSteps: { 
     type: [String],
     default: []

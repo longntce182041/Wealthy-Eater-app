@@ -1,21 +1,23 @@
 /// chatbot_screen.dart — AI Nutrition Chatbot UI (NutriBot).
 ///
-/// Features:
-///  - Chat bubble layout (user right / AI left)
-///  - NutriBot avatar with gradient icon
-///  - Animated typing indicator while AI is processing
-///  - Pull-to-reset session action via AppBar menu
-///  - Empty state with suggestion chips for first-time users
+/// UX Improvements:
+///  - Markdown rendering for AI responses (bold, lists, code)
+///  - Timestamps shown beneath each bubble
+///  - Error messages shown via SnackBar (not polluting chat history)
+///  - Long-press to copy any message content
+///  - Bilingual suggestion chips (VN + EN)
 ///  - Keyboard-aware scroll behaviour
+///  - Pull-to-refresh loads history
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/chatbot_message_model.dart';
 import '../providers/chatbot_provider.dart';
 import '../../core/theme/app_colors.dart';
-
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -27,16 +29,18 @@ class ChatbotScreen extends StatefulWidget {
 class _ChatbotScreenState extends State<ChatbotScreen>
     with TickerProviderStateMixin {
   final TextEditingController _textController = TextEditingController();
-  final ScrollController       _scrollController = ScrollController();
-  late AnimationController     _dotAnimController;
+  final ScrollController _scrollController = ScrollController();
+  final FocusNode _inputFocusNode = FocusNode();
+  late AnimationController _dotAnimController;
 
-  // Quick-suggestion prompts shown on empty state
+  // Quick-suggestion prompts — all English (default app language)
   static const List<String> _suggestions = [
-    'What should I eat today?',
+    'What should I eat today? 🍱',
     'Calculate my daily protein needs',
     'Suggest a low-calorie breakfast',
-    'Give me a 7-day meal plan',
-    'I am allergic to milk, what can I substitute?',
+    'Create a 7-day meal plan for me',
+    'How many calories should I eat?',
+    'Foods I should avoid for my condition',
   ];
 
   @override
@@ -60,6 +64,7 @@ class _ChatbotScreenState extends State<ChatbotScreen>
     _textController.dispose();
     _scrollController.dispose();
     _dotAnimController.dispose();
+    _inputFocusNode.dispose();
     super.dispose();
   }
 
@@ -79,9 +84,33 @@ class _ChatbotScreenState extends State<ChatbotScreen>
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty) return;
     _textController.clear();
+    _inputFocusNode.unfocus();
     final provider = context.read<ChatbotProvider>();
     await provider.sendMessage(text);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom(animate: true));
+
+    // Show error via SnackBar — keep chat history clean
+    if (mounted && provider.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage!),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          action: SnackBarAction(
+            label: 'Dismiss',
+            textColor: Colors.white,
+            onPressed: () {
+              provider.clearError();
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
+        ),
+      );
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _scrollToBottom(animate: true),
+    );
   }
 
   Future<void> _confirmResetSession() async {
@@ -89,24 +118,30 @@ class _ChatbotScreenState extends State<ChatbotScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'Start a new conversation?',
-          style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.bold),
         ),
         content: const Text(
-          'The current conversation history will be deleted. Do you want to continue?',
+          'The current conversation history will be deleted. Continue?',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textTertiary)),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textTertiary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text(
-              'Reset session',
-              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+              'Reset',
+              style: TextStyle(
+                  color: AppColors.primary, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -116,6 +151,19 @@ class _ChatbotScreenState extends State<ChatbotScreen>
     if (confirmed == true && mounted) {
       await context.read<ChatbotProvider>().resetSession();
     }
+  }
+
+  void _copyMessage(String content) {
+    Clipboard.setData(ClipboardData(text: content));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Message copied to clipboard'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: AppColors.textSecondary,
+      ),
+    );
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -141,7 +189,8 @@ class _ChatbotScreenState extends State<ChatbotScreen>
       backgroundColor: AppColors.surface,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
+        icon: const Icon(Icons.arrow_back_ios_new_rounded,
+            color: AppColors.textPrimary),
         onPressed: () => Navigator.of(context).pop(),
       ),
       title: Row(
@@ -160,8 +209,9 @@ class _ChatbotScreenState extends State<ChatbotScreen>
                 ),
               ),
               Text(
-                'AI Nutrition Assistant',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                'AI Nutrition Assistant • Multilingual',
+                style:
+                    TextStyle(color: AppColors.textSecondary, fontSize: 10.5),
               ),
             ],
           ),
@@ -170,8 +220,9 @@ class _ChatbotScreenState extends State<ChatbotScreen>
       actions: [
         Consumer<ChatbotProvider>(
           builder: (_, provider, __) => IconButton(
-            tooltip: 'Start a new conversation',
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary),
+            tooltip: 'New conversation',
+            icon: const Icon(Icons.add_comment_outlined,
+                color: AppColors.textSecondary),
             onPressed: provider.isResetting ? null : _confirmResetSession,
           ),
         ),
@@ -220,21 +271,25 @@ class _ChatbotScreenState extends State<ChatbotScreen>
           return _buildEmptyState();
         }
 
-        // Build message items + optional typing indicator
         final allItems = [
           ...provider.messages,
-          if (provider.isSending) null, // null = typing indicator placeholder
+          if (provider.isSending) null, // null = typing indicator
         ];
 
-        return ListView.builder(
-          controller: _scrollController,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          itemCount: allItems.length,
-          itemBuilder: (_, i) {
-            final item = allItems[i];
-            if (item == null) return _buildTypingIndicator();
-            return _buildMessageBubble(item);
-          },
+        return RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () => provider.loadHistory(),
+          child: ListView.builder(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            itemCount: allItems.length,
+            itemBuilder: (_, i) {
+              final item = allItems[i];
+              if (item == null) return _buildTypingIndicator();
+              return _buildMessageBubble(item);
+            },
+          ),
         );
       },
     );
@@ -284,7 +339,7 @@ class _ChatbotScreenState extends State<ChatbotScreen>
             ),
             const SizedBox(height: 8),
             const Text(
-              'Your personal AI nutrition assistant.\nAsk me anything about diet and nutrition!',
+              'Your personal AI nutrition assistant.\nAsk me anything — in any language!',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.textSecondary,
@@ -297,9 +352,7 @@ class _ChatbotScreenState extends State<ChatbotScreen>
               spacing: 10,
               runSpacing: 10,
               alignment: WrapAlignment.center,
-              children: _suggestions
-                  .map((s) => _buildSuggestionChip(s))
-                  .toList(),
+              children: _suggestions.map((s) => _buildSuggestionChip(s)).toList(),
             ),
           ],
         ),
@@ -333,57 +386,137 @@ class _ChatbotScreenState extends State<ChatbotScreen>
 
   Widget _buildMessageBubble(ChatbotMessageModel message) {
     final isUser = message.isUser;
+    // Strip error prefix from display (errors now go via SnackBar, but keep
+    // legacy ⚠️ messages styled differently just in case)
+    final isError = message.content.startsWith('⚠️');
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!isUser) ...[
-            _buildNutriBotAvatar(radius: 15),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.75,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: isUser
-                    ? AppColors.primary
-                    : AppColors.surface,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(18),
-                  topRight: const Radius.circular(18),
-                  bottomLeft: Radius.circular(isUser ? 18 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 18),
-                ),
-                border: isUser ? null : Border.all(color: AppColors.border),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
+    return GestureDetector(
+      onLongPress: () => _copyMessage(message.content),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Column(
+          crossAxisAlignment:
+              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment:
+                  isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!isUser) ...[
+                  _buildNutriBotAvatar(radius: 15),
+                  const SizedBox(width: 8),
                 ],
-              ),
-              child: Text(
-                message.content,
-                style: TextStyle(
-                  color: isUser ? AppColors.textOnPrimary : AppColors.textPrimary,
-                  fontSize: 14.5,
-                  height: 1.5,
+                Flexible(
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.78,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isError
+                          ? AppColors.error.withValues(alpha: 0.08)
+                          : isUser
+                              ? AppColors.primary
+                              : AppColors.surface,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(18),
+                        topRight: const Radius.circular(18),
+                        bottomLeft: Radius.circular(isUser ? 18 : 4),
+                        bottomRight: Radius.circular(isUser ? 4 : 18),
+                      ),
+                      border: isUser
+                          ? null
+                          : Border.all(
+                              color: isError
+                                  ? AppColors.error.withValues(alpha: 0.3)
+                                  : AppColors.border,
+                            ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    // AI messages use Markdown; user messages use plain text
+                    child: isUser
+                        ? Text(
+                            message.content,
+                            style: const TextStyle(
+                              color: AppColors.textOnPrimary,
+                              fontSize: 14.5,
+                              height: 1.5,
+                            ),
+                          )
+                        : MarkdownBody(
+                            data: message.content,
+                            styleSheet: MarkdownStyleSheet(
+                              p: TextStyle(
+                                color: isError
+                                    ? AppColors.error
+                                    : AppColors.textPrimary,
+                                fontSize: 14.5,
+                                height: 1.55,
+                              ),
+                              strong: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              em: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              listBullet: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 14.5,
+                              ),
+                              h3: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              code: const TextStyle(
+                                fontFamily: 'monospace',
+                                backgroundColor: Color(0xFFEDF2EE),
+                                fontSize: 13,
+                              ),
+                            ),
+                            shrinkWrap: true,
+                          ),
+                  ),
+                ),
+                if (isUser) const SizedBox(width: 8),
+              ],
+            ),
+            // Timestamp
+            if (message.createdAt != null)
+              Padding(
+                padding: EdgeInsets.only(
+                  top: 4,
+                  left: isUser ? 0 : 46,
+                  right: isUser ? 8 : 0,
+                ),
+                child: Text(
+                  _formatTime(message.createdAt!),
+                  style: const TextStyle(
+                    color: AppColors.textTertiary,
+                    fontSize: 10.5,
+                  ),
                 ),
               ),
-            ),
-          ),
-          if (isUser) const SizedBox(width: 8),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  String _formatTime(DateTime dt) {
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 
   // ── Typing Indicator ──────────────────────────────────────────────────────
@@ -397,7 +530,8 @@ class _ChatbotScreenState extends State<ChatbotScreen>
           _buildNutriBotAvatar(radius: 15),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
             decoration: BoxDecoration(
               color: AppColors.surface,
               border: Border.all(color: AppColors.border),
@@ -416,17 +550,18 @@ class _ChatbotScreenState extends State<ChatbotScreen>
                   builder: (_, __) {
                     final offset =
                         ((_dotAnimController.value + i / 3) % 1.0);
-                    final y = offset < 0.5
-                        ? offset * 2
-                        : (1.0 - offset) * 2;
+                    final y =
+                        offset < 0.5 ? offset * 2 : (1.0 - offset) * 2;
                     return Transform.translate(
                       offset: Offset(0, -4 * y),
                       child: Container(
                         width: 7,
                         height: 7,
-                        margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                        margin:
+                            const EdgeInsets.symmetric(horizontal: 2.5),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.8),
+                          color:
+                              AppColors.primary.withValues(alpha: 0.8),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -465,13 +600,15 @@ class _ChatbotScreenState extends State<ChatbotScreen>
                   constraints: const BoxConstraints(maxHeight: 140),
                   child: TextField(
                     controller: _textController,
+                    focusNode: _inputFocusNode,
                     enabled: !provider.isSending,
                     maxLines: null,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (val) => _sendMessage(val),
-                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 14.5),
+                    style: const TextStyle(
+                        color: AppColors.textPrimary, fontSize: 14.5),
                     decoration: InputDecoration(
-                      hintText: 'Ask NutriBot about nutrition...',
+                      hintText: 'Ask NutriBot in any language...',
                       hintStyle: const TextStyle(
                         color: AppColors.textTertiary,
                         fontSize: 14,
@@ -484,11 +621,13 @@ class _ChatbotScreenState extends State<ChatbotScreen>
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: const BorderSide(color: AppColors.border),
+                        borderSide:
+                            const BorderSide(color: AppColors.border),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: const BorderSide(color: AppColors.border),
+                        borderSide:
+                            const BorderSide(color: AppColors.border),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
