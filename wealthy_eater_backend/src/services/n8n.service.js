@@ -85,35 +85,21 @@ class N8nService {
       return dataObj;
     } catch (error) {
       console.warn("⚠️ [n8n Offline or Failed]:", error.message);
-
-      const apiKey = process.env.GOOGLE_API_KEY;
-      if (apiKey) {
-        console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis...");
-        try {
-          return await this.callGeminiVisionFallback(file, apiKey);
-        } catch (geminiError) {
-          console.error("❌ [Gemini Fallback Failed]:", geminiError.message);
-          throw new Error("N8N_AND_GEMINI_FALLBACK_FAILURE");
-        }
+      console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis...");
+      try {
+        // executeWithResilience handles key selection & Circuit Breaker internally
+        return await this.callGeminiVisionFallback(file);
+      } catch (geminiError) {
+        console.error("❌ [Gemini Fallback Failed]:", geminiError.message);
+        throw new Error("N8N_AND_GEMINI_FALLBACK_FAILURE");
       }
-
-      if (error.response) {
-        throw new Error(
-          `N8N_HTTP_${error.response.status}: ${typeof error.response.data === "object"
-            ? JSON.stringify(error.response.data)
-            : error.response.data
-          }`,
-        );
-      }
-      throw new Error("N8N_TIMEOUT_OR_FAILURE");
     }
   }
 
-  async callGeminiVisionFallback(file, apiKey) {
+  async callGeminiVisionFallback(file) {
     const models = [
       process.env.GEMINI_VISION_MODEL || 'gemini-3.6-flash',
       'gemini-3.5-flash',
-      'gemini-flash-latest',
     ];
 
     const prompt = [
@@ -146,8 +132,8 @@ class N8nService {
           parts: [
             { text: prompt },
             {
-              inline_data: {
-                mime_type: file.mimetype || "image/jpeg",
+              inlineData: {
+                mimeType: file.mimetype || "image/jpeg",
                 data: file.buffer.toString("base64"),
               },
             },
@@ -160,7 +146,10 @@ class N8nService {
       },
     };
 
-    const data = await geminiService.executeWithResilience(models, payload, { timeoutMs: 45000, maxRetriesPerModel: 3 });
+    const data = await geminiService.executeWithResilience(models, payload, { 
+      timeoutMs: 40000,  // 40s — meal JSON is complex (per-ingredient nutrition + totals)
+      maxRetriesPerModel: 3 
+    });
     
     let text =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||

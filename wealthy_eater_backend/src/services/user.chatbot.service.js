@@ -17,24 +17,24 @@
  *  - SESSION_NOT_FOUND      — internal; resolved by auto-creating a new one
  */
 
-const ChatbotSession       = require('../models/ChatbotSession');
-const UserProfile          = require('../models/UserProfile');
-const UserDietary          = require('../models/UserDietary');
-const CustomerMealLog      = require('../models/CustomerMealLog');
+const ChatbotSession = require('../models/ChatbotSession');
+const UserProfile = require('../models/UserProfile');
+const UserDietary = require('../models/UserDietary');
+const CustomerMealLog = require('../models/CustomerMealLog');
 const ConsultationContract = require('../models/ConsultationContract');
-const WeightLog            = require('../models/WeightLog');
-const MealPlan             = require('../models/MealPlan');
-const MealPlanItem         = require('../models/MealPlanItem');
-const NutritionAssessment  = require('../models/NutritionAssessment');
-const AppError             = require('../utils/AppError');
+const WeightLog = require('../models/WeightLog');
+const MealPlan = require('../models/MealPlan');
+const MealPlanItem = require('../models/MealPlanItem');
+const NutritionAssessment = require('../models/NutritionAssessment');
+const AppError = require('../utils/AppError');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // Constants related to Gemini Cascade have been moved to gemini.service.js
-const MAX_CONTEXT_TURNS  = 20;   // last 20 messages sent to Gemini (10 pairs)
+const MAX_CONTEXT_TURNS = 20;   // last 20 messages sent to Gemini (10 pairs)
 const MAX_MESSAGES_PER_MINUTE = 10; // soft rate-limit per user
-const MEAL_LOG_DAYS      = 3;    // how many recent days of logs to include
-const WEIGHT_LOG_LIMIT   = 7;    // last N weight logs to show trend
+const MEAL_LOG_DAYS = 3;    // how many recent days of logs to include
+const WEIGHT_LOG_LIMIT = 7;    // last N weight logs to show trend
 
 // Centralized Gemini Service is now responsible for API Keys and Circuit Breaker
 const geminiService = require('./gemini.service');
@@ -249,8 +249,8 @@ class UserChatbotService {
       // Today's meal plan items (if active plan exists)
       activeMealPlan
         ? MealPlanItem.find({ meal_plan_id: activeMealPlan._id })
-            .populate({ path: 'recipe_id', select: 'name' })
-            .lean()
+          .populate({ path: 'recipe_id', select: 'name' })
+          .lean()
         : Promise.resolve([]),
 
       // Latest nutritionist assessment for this user
@@ -331,10 +331,10 @@ class UserChatbotService {
     let weightTrendBlock = 'WEIGHT HISTORY: No data.';
     if (recentWeightLogs?.length >= 2) {
       // logs are sorted newest-first
-      const latest  = recentWeightLogs[0];
-      const oldest  = recentWeightLogs[recentWeightLogs.length - 1];
-      const delta   = (latest.weight - oldest.weight).toFixed(1);
-      const trend   = delta > 0 ? `▲ +${delta} kg` : delta < 0 ? `▼ ${delta} kg` : '→ Unchanged';
+      const latest = recentWeightLogs[0];
+      const oldest = recentWeightLogs[recentWeightLogs.length - 1];
+      const delta = (latest.weight - oldest.weight).toFixed(1);
+      const trend = delta > 0 ? `▲ +${delta} kg` : delta < 0 ? `▼ ${delta} kg` : '→ Unchanged';
       const entries = recentWeightLogs
         .map((w) => `  • ${new Date(w.date).toLocaleDateString('en-US')}: ${w.weight} kg`)
         .join('\n');
@@ -382,16 +382,16 @@ ${entries}`;
           (log) =>
             `  • ${log.custom_name || 'Meal'} — ${log.actual_calories} kcal` +
             (log.actual_protein ? `, protein ${log.actual_protein}g` : '') +
-            (log.actual_carbs   ? `, carbs ${log.actual_carbs}g` : '') +
-            (log.actual_fat     ? `, fat ${log.actual_fat}g` : '') +
+            (log.actual_carbs ? `, carbs ${log.actual_carbs}g` : '') +
+            (log.actual_fat ? `, fat ${log.actual_fat}g` : '') +
             (log.deviation_flag ? ' ⚠️ [off-plan]' : '')
         )
         .join('\n');
 
       const totalCalories = recentLogs.reduce((sum, l) => sum + (l.actual_calories || 0), 0);
-      const totalProtein  = recentLogs.reduce((sum, l) => sum + (l.actual_protein  || 0), 0);
-      const totalCarbs    = recentLogs.reduce((sum, l) => sum + (l.actual_carbs    || 0), 0);
-      const totalFat      = recentLogs.reduce((sum, l) => sum + (l.actual_fat      || 0), 0);
+      const totalProtein = recentLogs.reduce((sum, l) => sum + (l.actual_protein || 0), 0);
+      const totalCarbs = recentLogs.reduce((sum, l) => sum + (l.actual_carbs || 0), 0);
+      const totalFat = recentLogs.reduce((sum, l) => sum + (l.actual_fat || 0), 0);
 
       mealLogBlock = `MEAL LOGS PAST ${MEAL_LOG_DAYS} DAYS (${recentLogs.length} meals — Total: ${totalCalories} kcal | Protein: ${totalProtein.toFixed(0)}g | Carbs: ${totalCarbs.toFixed(0)}g | Fat: ${totalFat.toFixed(0)}g):
 ${logSummary}`;
@@ -507,31 +507,13 @@ Always rely on the data above to personalize your responses. If data is insuffic
    * @returns {Promise<string>}
    */
   async _callGemini(systemPrompt, conversationTurns) {
-    // ── Build Gemini contents (shared across all model attempts) ───────────────
-    const hasHistory = conversationTurns.some((t) => t.role === 'model');
-
-    let contents;
-    if (!hasHistory && conversationTurns.length === 1) {
-      // First message — prepend system bootstrap as user/model handshake
-      contents = [
-        { role: 'user', parts: [{ text: systemPrompt }] },
-        {
-          role: 'model',
-          parts: [{ text: 'Understood! I\'m NutriBot, your personal AI nutrition assistant. I\'ve reviewed your health profile and I\'m ready to provide personalized nutrition advice. How can I help you today?' }],
-        },
-        ...conversationTurns,
-      ];
-    } else {
-      contents = conversationTurns;
-    }
-
     const requestBody = {
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents,
-      generationConfig: { temperature: 0.7, maxOutputTokens: 4096, topP: 0.9 },
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: conversationTurns, // systemInstruction handles context — no redundant prepend needed
+      generationConfig: { temperature: 0.7, maxOutputTokens: 2048, topP: 0.9 },
       safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
       ],
@@ -539,9 +521,9 @@ Always rely on the data above to personalize your responses. If data is insuffic
 
     try {
       // Chatbot cascade favors fast reasoning (flash)
-      const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
-      const data = await geminiService.executeWithResilience(models, requestBody, { timeoutMs: 45000, maxRetriesPerModel: 3 });
-      
+      const models = ['gemini-3.6-flash', 'gemini-3.5-flash'];
+      const data = await geminiService.executeWithResilience(models, requestBody, { timeoutMs: 60000, maxRetriesPerModel: 3 });
+
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
       if (!text) {
         throw new Error(`Empty response from Gemini.`);
