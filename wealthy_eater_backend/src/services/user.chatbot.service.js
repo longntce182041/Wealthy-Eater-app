@@ -38,13 +38,13 @@ const AppError             = require('../utils/AppError');
 //   GET https://generativelanguage.googleapis.com/v1beta/models?key=YOUR_KEY
 //
 // Thứ tự cascade:
-//   Tầng 1 — gemini-3.6-flash : Stable, mới nhất, nhanh nhất, ít nghẽn nhất
-//   Tầng 2 — gemini-3.5-flash : Stable, production-grade, hiệu suất rất tốt
-//   Tầng 3 — gemini-3.5-flash-lite : Stable, siêu nhẹ, cực hiếm bị từ chối
+//   Tầng 1 — gemini-flash-latest : Stable, tự động cập nhật bản Flash mới nhất
+//   Tầng 2 — gemini-flash-lite-latest : Stable, siêu nhẹ, cực hiếm bị từ chối/nghẽn
+//   Tầng 3 — gemini-2.5-flash : Stable dự phòng đa tầng
 const GEMINI_MODEL_CASCADE = [
-  'gemini-3.6-flash',       // Tầng 1: Ưu tiên — Stable (2026)
-  'gemini-3.5-flash',       // Tầng 2: Fallback — Stable (2026)
-  'gemini-3.5-flash-lite',  // Tầng 3: Dự phòng — Stable, ultra-lightweight
+  'gemini-flash-latest',       // Tầng 1: Ưu tiên — Verified 200 OK
+  'gemini-flash-lite-latest',  // Tầng 2: Fallback — Verified 200 OK
+  'gemini-2.5-flash',          // Tầng 3: Dự phòng — Verified 200 OK
 ];
 
 const GEMINI_BASE_URL    = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -629,7 +629,7 @@ Always rely on the data above to personalize your responses. If data is insuffic
     const requestBody = {
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents,
-      generationConfig: { temperature: 0.7, maxOutputTokens: 2048, topP: 0.9 },
+      generationConfig: { temperature: 0.7, maxOutputTokens: 4096, topP: 0.9 },
       safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },

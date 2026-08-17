@@ -101,9 +101,11 @@ class PantryService {
       if (apiKey) {
         console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis for Pantry Scan...");
         try {
-          // Model verified at ai.google.dev/gemini-api/docs/models (updated 2026-08)
-          const model = process.env.GEMINI_VISION_MODEL || 'gemini-3.5-flash'; // gemini-flash-latest has been deprecated
-          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const models = [
+            process.env.GEMINI_VISION_MODEL || 'gemini-flash-latest',
+            'gemini-flash-lite-latest',
+            'gemini-2.5-flash',
+          ];
 
           const prompt = [
             "You are an expert culinary AI assistant.",
@@ -135,8 +137,27 @@ class PantryService {
             },
           };
 
-          const geminiResponse = await axios.post(geminiUrl, geminiPayload, { timeout: 60000 });
-          const rawText = geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+          let rawText = null;
+          let lastGeminiError = null;
+
+          for (const model of models) {
+            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            try {
+              console.info(`⚡ [Pantry Gemini Fallback]: Trying model ${model}...`);
+              const geminiResponse = await axios.post(geminiUrl, geminiPayload, { timeout: 45000 });
+              rawText = geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (rawText) {
+                console.info(`✔ [Pantry Gemini Fallback]: Success with model ${model}`);
+                break;
+              }
+            } catch (err) {
+              lastGeminiError = err;
+              console.warn(`⚠️ [Pantry Gemini Fallback]: Model ${model} failed with status ${err.response?.status || err.message}, trying next fallback...`);
+            }
+          }
+
+          if (!rawText) throw lastGeminiError || new Error("All fallback models exhausted");
+
           const cleanJsonStr = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
           rawIngredients = JSON.parse(cleanJsonStr);
         } catch (geminiError) {
