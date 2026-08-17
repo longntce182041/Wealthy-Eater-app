@@ -89,7 +89,7 @@ class PantryService {
 
       const response = await axios.post(url, payload, {
         headers: { "Content-Type": "application/json" },
-        timeout: 60000 // 60s timeout
+        timeout: 5000 // 5s — fast-fail so Gemini fallback activates quickly if n8n is offline
       });
 
       const data = response.data;
@@ -102,7 +102,6 @@ class PantryService {
         const models = [
           process.env.GEMINI_VISION_MODEL || 'gemini-3.6-flash',
           'gemini-3.5-flash',
-          'gemini-flash-latest',
         ];
 
         const prompt = [
@@ -112,7 +111,7 @@ class PantryService {
           '- "name": string (simple, clean ingredient name, e.g., "Egg", "Milk", "Tomato")',
           '- "quantity": number (estimated realistic amount based on visual size)',
           '- "unit": string. MUST be exactly one of: "g", "kg", "ml", "l", "pieces", "bunch". Use "pieces" for countable solid items (e.g. eggs, tomatoes) instead of generic terms.'
-        ].join("\\n");
+        ].join("\n");
 
         const requestBody = {
           contents: [
@@ -121,8 +120,8 @@ class PantryService {
               parts: [
                 { text: prompt },
                 {
-                  inline_data: {
-                    mime_type: file.mimetype || "image/jpeg",
+                  inlineData: {
+                    mimeType: file.mimetype || "image/jpeg",
                     data: file.buffer.toString("base64"),
                   },
                 },
@@ -135,7 +134,7 @@ class PantryService {
           },
         };
 
-        const data = await geminiService.executeWithResilience(models, requestBody, { timeoutMs: 60000, maxRetriesPerModel: 3 });
+        const data = await geminiService.executeWithResilience(models, requestBody, { timeoutMs: 25000, maxRetriesPerModel: 3 });
         
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!rawText) throw new Error("Empty response from Gemini.");

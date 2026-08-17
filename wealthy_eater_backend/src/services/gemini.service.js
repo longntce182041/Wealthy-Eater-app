@@ -7,6 +7,8 @@
  * Now features Centralized Resilience (Circuit Breaker, Exponential Backoff, Cascade).
  */
 
+// Key management — designed for 1 paid Tier 1 key (or multiple keys if GOOGLE_API_KEYS is comma-separated).
+// Paid Tier 1 has very high RPM/TPM — 429 is rare. Cooldowns are kept short to avoid app downtime.
 const rawGeminiKeys = (process.env.GOOGLE_API_KEYS || process.env.GOOGLE_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
 
 if (rawGeminiKeys.length === 0) {
@@ -14,12 +16,51 @@ if (rawGeminiKeys.length === 0) {
 }
 
 const GEMINI_MODELS = [
-  'gemini-pro-latest',
   'gemini-3.6-flash',
   'gemini-3.5-flash',
 ];
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const delay = ms => new Promise(res => setTimeout(res, ms));
+
+// ── In-Memory Response Cache (demo stability + latency reduction) ────────────────
+// Caches successful Gemini text responses for 20 minutes.
+// Vision requests (inlineData) are never cached — each image is unique.
+// On a cache hit, the response is returned instantly without hitting the API.
+const _responseCache = new Map();
+const CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutes
+const CACHE_MAX_SIZE = 100;
+
+function _isVisionRequest(requestBody) {
+  // Vision requests contain base64 image payloads — not suitable for caching
+  return JSON.stringify(requestBody).includes('"inlineData"');
+}
+
+function _hashRequest(requestBody) {
+  const json = JSON.stringify(requestBody);
+  let h = 0;
+  for (let i = 0; i < json.length; i++) {
+    h = Math.imul(31, h) + json.charCodeAt(i) | 0;
+  }
+  return String(h >>> 0); // unsigned 32-bit
+}
+
+function _getCached(key) {
+  const entry = _responseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) {
+    _responseCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function _setCache(key, data) {
+  if (_responseCache.size >= CACHE_MAX_SIZE) {
+    // LRU eviction: remove the oldest inserted key
+    _responseCache.delete(_responseCache.keys().next().value);
+  }
+  _responseCache.set(key, { data, ts: Date.now() });
+}
 
 // ── Smart Key Management with Circuit Breaker ─────────────────────────────────
 const keyStats = {};
@@ -32,7 +73,7 @@ function _getHealthyKey() {
   const now = Date.now();
   const availableKeys = rawGeminiKeys.filter((k) => {
     if (keyStats[k].nextAvailableTime > now) return false;
-    return keyStats[k].failCount < 3;
+    return keyStats[k].failCount < 5; // threshold matches _markKeyFailed
   });
 
   if (availableKeys.length === 0) {
@@ -53,10 +94,13 @@ function _markKeyFailed(key, reason) {
   keyStats[key].failCount += 1;
   
   if (reason === 429) {
-    keyStats[key].nextAvailableTime = now + 60 * 1000; // 1 min cooldown
+    // Paid Tier 1: 429 is transient — use short 10s cooldown instead of 60s
+    // to avoid locking the only key for a long time.
+    keyStats[key].nextAvailableTime = now + 10 * 1000;
   } else if (reason === 503 || reason === 'timeout') {
-    if (keyStats[key].failCount >= 3) {
-      keyStats[key].nextAvailableTime = now + 30 * 1000;
+    // Lock after 5 consecutive failures (was 3) to tolerate short network blips
+    if (keyStats[key].failCount >= 5) {
+      keyStats[key].nextAvailableTime = now + 15 * 1000;
     }
   }
 }
@@ -78,6 +122,16 @@ class GeminiService {
     const { timeoutMs = 60000, maxRetriesPerModel = 3 } = options;
     let lastError = null;
 
+    // ── Cache check (text requests only) ─────────────────────────────────────────────
+    const isVision = _isVisionRequest(requestBody);
+    const cacheKey = isVision ? null : _hashRequest(requestBody);
+    if (cacheKey) {
+      const cached = _getCached(cacheKey);
+      if (cached) {
+        console.info('[GeminiService] ⚡ Cache HIT — returning instant response.');
+        return cached;
+      }
+    }
     for (const model of models) {
       const apiUrl = `${GEMINI_BASE}/${model}:generateContent`;
 
@@ -108,6 +162,7 @@ class GeminiService {
             const errorMsg = `Gemini HTTP ${response.status} (${model}): ${errorText}`;
 
             if (response.status === 429) {
+              // 429: server-side rate limit — wait then retry same model (key-specific issue)
               _markKeyFailed(apiKey, 429);
               lastError = new Error(errorMsg);
               console.warn(`[GeminiService] ${errorMsg} — Rate limited. Waiting ${attempt * 2}s...`);
@@ -116,6 +171,7 @@ class GeminiService {
             }
 
             if (response.status === 503 || response.status === 500) {
+              // 503/500: server overload — short wait then retry (transient infrastructure issue)
               _markKeyFailed(apiKey, response.status);
               lastError = new Error(errorMsg);
               console.warn(`[GeminiService] ${errorMsg} — Overloaded. Waiting ${attempt * 2}s...`);
@@ -123,12 +179,17 @@ class GeminiService {
               continue;
             }
 
-            throw new Error(errorMsg);
+            // 400/404/other: model doesn't support this request → cascade immediately
+            lastError = new Error(errorMsg);
+            console.warn(`[GeminiService] ${errorMsg} — Cascading to next model.`);
+            break;
           }
 
           const data = await response.json();
           _markKeyHealthy(apiKey);
           console.info(`[GeminiService] Success with model=${model}`);
+          // Store in cache for text requests (skip vision)
+          if (cacheKey) _setCache(cacheKey, data);
           return data;
 
         } catch (err) {
@@ -136,13 +197,16 @@ class GeminiService {
           lastError = err;
 
           if (err.name === 'AbortError') {
-            console.warn(`[GeminiService] Model=${model} timed out after ${timeoutMs/1000}s.`);
+            // TIMEOUT: do NOT retry the same slow model — cascade immediately to next model.
+            // Retrying a timed-out model wastes seconds; the next model is a better bet.
+            console.warn(`[GeminiService] Model=${model} timed out after ${timeoutMs/1000}s. Cascading to next model...`);
             _markKeyFailed(apiKey, 'timeout');
-            await delay(attempt * 2000);
-            continue;
+            break; // ← KEY CHANGE: was `continue` (retry same model), now cascades immediately
           }
 
-          break; // Fatal error
+          // Network/fatal error — cascade immediately
+          console.warn(`[GeminiService] Model=${model} fatal error: ${err.message}. Cascading...`);
+          break;
         } finally {
           clearTimeout(timeoutId);
         }
@@ -221,7 +285,7 @@ Required JSON schema:
     };
 
     try {
-      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 45000, maxRetriesPerModel: 3 });
+      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 20000, maxRetriesPerModel: 3 });
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       return JSON.parse(rawText);
     } catch (err) {
@@ -337,7 +401,7 @@ Output ONLY the JSON array. No extra text, no markdown fences.`;
     };
 
     try {
-      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 45000, maxRetriesPerModel: 2 });
+      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 20000, maxRetriesPerModel: 2 });
       
       const finishReason = data?.candidates?.[0]?.finishReason;
       if (finishReason && finishReason === 'MAX_TOKENS') {
@@ -458,7 +522,7 @@ Respond ONLY with a valid JSON object matching the schema below. No markdown fen
     };
 
     try {
-      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 45000, maxRetriesPerModel: 3 });
+      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 20000, maxRetriesPerModel: 3 });
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       const parsed = JSON.parse(rawText);
       if (parsed.warning === undefined) parsed.warning = null;
