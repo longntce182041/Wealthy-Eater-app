@@ -1,9 +1,10 @@
-const Pantry = require('../models/Pantry');
-const Ingredient = require('../models/Ingredient');
-const UserDietary = require('../models/UserDietary');
-const geminiService = require('./gemini.service');
-const axios = require('axios');
-const FormData = require('form-data');
+const Pantry         = require('../models/Pantry');
+const Ingredient     = require('../models/Ingredient');
+const UserDietary    = require('../models/UserDietary');
+const UserProfile    = require('../models/UserProfile');
+const geminiService  = require('./gemini.service');
+const axios          = require('axios');
+const FormData       = require('form-data');
 
 /**
  * Escapes special regex characters to prevent ReDoS attacks.
@@ -176,36 +177,82 @@ class PantryService {
   }
 
   /**
-   * UC: Suggest meals based on pantry ingredients and user dietary profile.
-   * @param {string} userId 
+   * UC: Suggest meals based on pantry ingredients and FULL user health profile.
+   *
+   * Health checks performed:
+   *  ✅ Allergies       — allergic ingredients REMOVED from pantry list + AI told to avoid
+   *  ✅ Dislikes        — AI told to avoid
+   *  ✅ Medical Condition — dietary_guideline + nutrient_constraints passed to AI
+   *  ✅ Diet Preferences — Vegetarian/Vegan/Keto etc. passed to AI
+   *  ✅ Cooking Skill   — AI asked to match difficulty
+   *  ✅ Cooking Time    — AI asked to respect max available time
+   *  ✅ Health Goal     — TDEE + goal passed so AI can estimate calorie target per meal
+   *
+   * @param {string} userId
    */
   async suggestRecipesFromPantry(userId) {
-    const pantry = await Pantry.findOne({ user_id: userId });
-    const ingredients = pantry && pantry.pantry_ingredients ? pantry.pantry_ingredients : [];
-    const ingredientNames = ingredients.map(i => i.name).filter(Boolean);
+    // Load all health data in parallel for efficiency
+    const [pantry, userDietary, userProfile] = await Promise.all([
+      Pantry.findOne({ user_id: userId }),
+      UserDietary.findOne({ user_id: userId })
+        .populate({ path: 'medical_condition_id', select: 'name dietary_guideline nutrient_constraints' })
+        .populate({ path: 'allergies',            select: 'name' })
+        .populate({ path: 'dislike_ingredients',  select: 'name' }),
+      UserProfile.findOne({ user_id: userId }).lean(),
+    ]);
 
-    // Guard: do not call Gemini if pantry is empty — saves tokens and returns meaningful error
-    if (ingredientNames.length === 0) {
+    const ingredients = pantry?.pantry_ingredients ?? [];
+
+    // Guard: do not call Gemini if pantry is empty — saves tokens
+    if (ingredients.length === 0) {
       const AppError = require('../utils/AppError');
       throw new AppError('Your pantry is empty. Add some ingredients first.', 400, 'PANTRY_EMPTY');
     }
 
-    // Fetch user dietary preferences (allergies & dislikes) in parallel with above for efficiency
-    const userDietary = await UserDietary.findOne({ user_id: userId })
-      .populate('allergies', 'name')
-      .populate('dislike_ingredients', 'name');
+    // ── Resolve health constraints ─────────────────────────────────────────
+    const allergies = userDietary?.allergies?.map((a) => a.name).filter(Boolean) ?? [];
+    const dislikes  = userDietary?.dislike_ingredients?.map((d) => d.name).filter(Boolean) ?? [];
+    const dietPreferences = userDietary?.diet_preferences ?? [];
+    const medicalCondition = userDietary?.medical_condition_id ?? null; // populated object or null
 
-    const allergies = userDietary && userDietary.allergies
-      ? userDietary.allergies.map(a => a.name).filter(Boolean)
-      : [];
-    const dislikes = userDietary && userDietary.dislike_ingredients
-      ? userDietary.dislike_ingredients.map(d => d.name).filter(Boolean)
-      : [];
+    // ── SAFETY: Filter allergic ingredients OUT of pantry before sending to AI
+    // Prevents AI from suggesting a recipe that uses an ingredient the user is allergic to,
+    // even if that ingredient is physically in their fridge.
+    const allergySet = new Set(allergies.map((a) => a.toLowerCase()));
+    const safeIngredients = ingredients
+      .map((i) => i.name)
+      .filter(Boolean)
+      .filter((name) => !allergySet.has(name.toLowerCase()));
+
+    if (safeIngredients.length === 0) {
+      const AppError = require('../utils/AppError');
+      throw new AppError(
+        'All pantry ingredients conflict with your allergy list. Please update your pantry.',
+        400,
+        'PANTRY_ALL_ALLERGIC'
+      );
+    }
+
+    // ── Build cooking constraints from profile ─────────────────────────────
+    const cookingConstraints = {
+      skillLevel:     userDietary?.cooking_skill_level ?? null,
+      maxTimeMinutes: userDietary?.available_cooking_time ?? null,
+    };
+
+    // ── Build calorie guidance from TDEE ───────────────────────────────────
+    // Rough split: breakfast 25%, lunch 35%, dinner 30%, snack 10%
+    const tdee = userProfile?.tdee ?? null;
+    const healthGoal = userProfile?.health_goal ?? null;
 
     return await geminiService.suggestRecipesFromIngredients({
-      ingredients: ingredientNames,
+      ingredients:        safeIngredients,
       allergies,
-      dislikes
+      dislikes,
+      medicalCondition,
+      dietPreferences,
+      cookingConstraints,
+      tdee,
+      healthGoal,
     });
   }
 }

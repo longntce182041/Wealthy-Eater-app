@@ -5,7 +5,7 @@
  * when calling from external automation tools (e.g., n8n).
  */
 
-// Đọc toàn bộ danh sách key (phân cách bằng dấu phẩy), không chỉ key đầu tiên.
+// Read all API keys from comma-separated list (supports key rotation for rate-limit relief).
 const rawGeminiKeys = (process.env.GOOGLE_API_KEYS || process.env.GOOGLE_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
 let _geminiKeyIndex = 0;
 function _getGeminiKey() {
@@ -15,9 +15,9 @@ function _getGeminiKey() {
   return key;
 }
 
-// Models được xác minh tại ai.google.dev/gemini-api/docs/models (cập nhật 2026-08)
-const GEMINI_PRO_MODEL   = 'gemini-3.6-flash';    // Stable — thay thế gemini-pro-latest (đã tắt)
-const GEMINI_FLASH_MODEL = 'gemini-3.5-flash';    // Stable — thay thế gemini-flash-latest (đã tắt)
+// Models verified at ai.google.dev/gemini-api/docs/models (updated 2026-08)
+const GEMINI_PRO_MODEL   = 'gemini-3.6-flash';    // Stable — replaces gemini-pro-latest (deprecated)
+const GEMINI_FLASH_MODEL = 'gemini-3.5-flash';    // Stable — replaces gemini-flash-latest (deprecated)
 const GEMINI_BASE       = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GEMINI_PRO_URL    = `${GEMINI_BASE}/${GEMINI_PRO_MODEL}:generateContent`;
 const GEMINI_FLASH_URL  = `${GEMINI_BASE}/${GEMINI_FLASH_MODEL}:generateContent`;
@@ -169,33 +169,102 @@ Required JSON schema:
   }
 
   /**
-   * Suggest recipes based on available pantry ingredients while avoiding user allergies & dislikes.
+   * Suggest recipes based on available pantry ingredients while respecting
+   * the user's FULL health profile.
    *
-   * @param {Object} params
-   * @param {string[]} params.ingredients
-   * @param {string[]} params.allergies
-   * @param {string[]} params.dislikes
-   * @returns {Promise<Array<Object>>} List of suggested recipes
+   * @param {Object}      params
+   * @param {string[]}    params.ingredients         — safe pantry items (allergics already filtered out)
+   * @param {string[]}    params.allergies           — list of allergy names (for AI instruction)
+   * @param {string[]}    params.dislikes            — list of disliked ingredient names
+   * @param {Object|null} params.medicalCondition    — populated { name, dietary_guideline, nutrient_constraints }
+   * @param {string[]}    params.dietPreferences     — e.g. ['Vegetarian', 'Keto']
+   * @param {Object}      params.cookingConstraints  — { skillLevel, maxTimeMinutes }
+   * @param {number|null} params.tdee               — user's total daily energy expenditure
+   * @param {string|null} params.healthGoal         — e.g. 'Lose weight', 'Build muscle'
+   * @returns {Promise<Array<Object>>}
    */
-  async suggestRecipesFromIngredients({ ingredients = [], allergies = [], dislikes = [] }) {
-    const ingredientsStr = ingredients.length > 0 ? ingredients.slice(0, 20).join(', ') : 'any available basic ingredients';
-    const allergiesStr = allergies.length > 0 ? allergies.join(', ') : 'None';
-    const dislikesStr = dislikes.length > 0 ? dislikes.join(', ') : 'None';
+  async suggestRecipesFromIngredients({
+    ingredients     = [],
+    allergies       = [],
+    dislikes        = [],
+    medicalCondition = null,
+    dietPreferences  = [],
+    cookingConstraints = {},
+    tdee            = null,
+    healthGoal      = null,
+  }) {
+    const ingredientsStr    = ingredients.length > 0 ? ingredients.slice(0, 20).join(', ') : 'any available basic ingredients';
+    const allergiesStr      = allergies.length > 0 ? allergies.join(', ') : 'None';
+    const dislikesStr       = dislikes.length > 0 ? dislikes.join(', ') : 'None';
+    const preferencesStr    = dietPreferences.length > 0 ? dietPreferences.join(', ') : 'None';
 
-    const prompt = `You are a professional chef. Generate exactly 1 recipe suggestion using the provided pantry ingredients.
+    // ── Medical condition section ────────────────────────────────────────────
+    let medicalSection = 'None';
+    if (medicalCondition) {
+      medicalSection = `${medicalCondition.name}`;
+      if (medicalCondition.dietary_guideline) {
+        medicalSection += ` — Guideline: "${medicalCondition.dietary_guideline}"`;
+      }
+      const nc = medicalCondition.nutrient_constraints;
+      if (nc && typeof nc === 'object') {
+        const lines = [];
+        if (nc.max_sugar_g_per_day  != null) lines.push(`max sugar ${nc.max_sugar_g_per_day}g/day`);
+        if (nc.min_fiber_g_per_day  != null) lines.push(`min fiber ${nc.min_fiber_g_per_day}g/day`);
+        if (nc.carb_ratio_max       != null) lines.push(`carb ratio max ${Math.round(nc.carb_ratio_max * 100)}%`);
+        if (nc.max_sodium_mg_per_day!= null) lines.push(`max sodium ${nc.max_sodium_mg_per_day}mg/day`);
+        if (nc.max_purine === true)           lines.push('avoid high-purine foods');
+        if (lines.length > 0) medicalSection += ` [Constraints: ${lines.join(', ')}]`;
+      }
+    }
 
-Pantry: ${ingredientsStr}
-Allergies (strictly avoid): ${allergiesStr}
-Dislikes (avoid if possible): ${dislikesStr}
+    // ── Cooking constraints section ─────────────────────────────────────────
+    const { skillLevel = null, maxTimeMinutes = null } = cookingConstraints;
+    const difficultyHint  = skillLevel
+      ? `Match difficulty to user's skill level: ${skillLevel}.`
+      : '';
+    const timeHint        = maxTimeMinutes
+      ? `Total cooking time MUST NOT exceed ${maxTimeMinutes} minutes.`
+      : '';
 
-Respond ONLY with a JSON array containing exactly 1 object. The object must have these exact keys:
-- "mealName": short recipe name (string)
-- "description": 1 sentence (string)
+    // ── Calorie target guidance ─────────────────────────────────────────────
+    let calorieHint = '';
+    if (tdee) {
+      // Approximate single-meal target as ~33% of TDEE
+      const perMealTarget = Math.round(tdee * 0.33);
+      calorieHint = `Target approximately ${perMealTarget} kcal per meal (based on TDEE ${Math.round(tdee)} kcal/day${healthGoal ? `, goal: ${healthGoal}` : ''}).`;
+    }
+
+    const prompt = `You are a clinical dietitian and professional chef. Suggest exactly 1 recipe using the provided pantry ingredients that respects all health constraints below.
+
+PANTRY INGREDIENTS (use these — do not add others unless essential for cooking method):
+${ingredientsStr}
+
+HEALTH CONSTRAINTS (STRICTLY ENFORCE):
+- Allergies (MUST NEVER use): ${allergiesStr}
+- Dislikes (avoid if possible): ${dislikesStr}
+- Diet Preferences: ${preferencesStr}
+- Medical Condition: ${medicalSection}
+
+COOKING CONSTRAINTS:
+- ${difficultyHint || 'Any difficulty level.'}
+- ${timeHint || 'No time limit.'}
+- ${calorieHint || 'No specific calorie target.'}
+
+RULES:
+1. NEVER include any ingredient from the Allergies list — even as a minor ingredient.
+2. Respect the Medical Condition dietary guidelines when choosing cooking method and portion size.
+3. If the user has diet preferences (e.g., Vegetarian), the recipe MUST comply.
+4. Keep cooking steps concise (max 20 words each).
+
+Respond ONLY with a JSON array containing exactly 1 recipe object with these keys:
+- "mealName": string
+- "description": 1 sentence string
 - "cookingTimeMinutes": integer
-- "difficulty": one of "Easy", "Medium", or "Hard"
-- "cookingSteps": array of 3-5 short strings (each step max 20 words)
+- "difficulty": "Easy" | "Medium" | "Hard"
+- "cookingSteps": array of 3–5 short strings
+- "healthNote": string (brief note on why this recipe suits the user's health profile, or null)
 
-Output ONLY the JSON array. No extra text, no markdown.`;
+Output ONLY the JSON array. No extra text, no markdown fences.`;
 
     let lastError = null;
     const MAX_RETRIES = 3;
@@ -205,7 +274,7 @@ Output ONLY the JSON array. No extra text, no markdown.`;
         const apiKey = _getGeminiKey();
         if (!apiKey) throw new Error('GOOGLE_API_KEY not configured.');
         const controller2 = new AbortController();
-        const timeoutId2 = setTimeout(() => controller2.abort(), 20000);
+        const timeoutId2 = setTimeout(() => controller2.abort(), 30000); // 30s — longer for richer output
         let response;
         try {
           response = await fetch(`${GEMINI_FLASH_URL}?key=${apiKey}`, {
@@ -214,28 +283,30 @@ Output ONLY the JSON array. No extra text, no markdown.`;
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
               safetySettings: [
-                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
+                { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
+                { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
               ],
               generationConfig: {
                 temperature: 0.7,
+                maxOutputTokens: 4096,
                 responseMimeType: 'application/json',
                 responseSchema: {
-                  type: "ARRAY",
+                  type: 'ARRAY',
                   items: {
-                    type: "OBJECT",
+                    type: 'OBJECT',
                     properties: {
-                      mealName: { type: "STRING" },
-                      description: { type: "STRING" },
-                      cookingTimeMinutes: { type: "INTEGER" },
-                      difficulty: { type: "STRING" },
-                      cookingSteps: { type: "ARRAY", items: { type: "STRING" } }
+                      mealName:           { type: 'STRING' },
+                      description:        { type: 'STRING' },
+                      cookingTimeMinutes: { type: 'INTEGER' },
+                      difficulty:         { type: 'STRING' },
+                      cookingSteps:       { type: 'ARRAY', items: { type: 'STRING' } },
+                      healthNote:         { type: 'STRING' },
                     },
-                    required: ["mealName", "description", "cookingTimeMinutes", "difficulty", "cookingSteps"]
-                  }
-                }
+                    required: ['mealName', 'description', 'cookingTimeMinutes', 'difficulty', 'cookingSteps'],
+                  },
+                },
               },
             }),
             signal: controller2.signal,
@@ -252,7 +323,13 @@ Output ONLY the JSON array. No extra text, no markdown.`;
         const resData = await response.json();
 
         const finishReason = resData?.candidates?.[0]?.finishReason;
+        // MAX_TOKENS: response was cut mid-way — retrying with same config won't help.
+        // Fall through to the fallback below instead of wasting 2 more retries.
         if (finishReason && finishReason !== 'STOP') {
+          if (finishReason === 'MAX_TOKENS') {
+            console.warn('[Gemini suggestRecipes] MAX_TOKENS hit — skipping retries, using fallback.');
+            break; // exit retry loop → use fallback
+          }
           throw new Error(`Gemini output truncated (finishReason: ${finishReason}). Will retry.`);
         }
 
@@ -279,10 +356,25 @@ Output ONLY the JSON array. No extra text, no markdown.`;
       }
     }
 
-    const detail = `[Gemini suggestRecipes] All retries exhausted: ${lastError?.message}`;
-    console.error(detail);
-    throw new Error(detail);
+    // Fallback: return a minimal valid recipe so the endpoint does not 500.
+    // This covers MAX_TOKENS (prompt too long for model context) and transient API failures.
+    console.warn('[Gemini suggestRecipes] Using fallback recipe. Last error:', lastError?.message);
+    const safeIngredientStr = ingredients.slice(0, 5).join(', ') || 'available ingredients';
+    return [{
+      mealName: 'Simple Pantry Bowl',
+      description: `A quick, healthy bowl made with ${safeIngredientStr}. Adjust seasoning to taste.`,
+      cookingTimeMinutes: 20,
+      difficulty: 'Easy',
+      cookingSteps: [
+        `Prepare and wash all ingredients: ${safeIngredientStr}.`,
+        'Cook using your preferred method (steam, boil, or light stir-fry).',
+        'Combine in a bowl and season lightly with salt and pepper.',
+        'Serve immediately while warm.',
+      ],
+      healthNote: 'AI suggestion temporarily unavailable. This is a basic fallback recipe — please consult NutriBot for personalized advice.',
+    }];
   }
+
   /**
    * UC-Regenerate — Generate a meal with full medical condition context.
    *
@@ -320,53 +412,53 @@ Output ONLY the JSON array. No extra text, no markdown.`;
 
     if (medicalCondition) {
       medicalSection = `
-TÌNH TRẠNG SỨC KHỎE CỦA KHÁCH HÀNG (bắt buộc tuân thủ):
+CLIENT MEDICAL CONDITION (must be strictly followed):
 - ${medicalCondition.name}${medicalCondition.category ? ` (${medicalCondition.category})` : ''}
-- Hướng dẫn dinh dưỡng: "${medicalCondition.dietary_guideline || 'Không có hướng dẫn cụ thể.'}"`;
+- Dietary guideline: "${medicalCondition.dietary_guideline || 'No specific guideline provided.'}"`;
 
       const nc = medicalCondition.nutrient_constraints;
       if (nc && typeof nc === 'object') {
         const constraintLines = [];
-        if (nc.max_sugar_g_per_day != null)   constraintLines.push(`- Giới hạn đường: tối đa ${nc.max_sugar_g_per_day}g/ngày`);
-        if (nc.min_fiber_g_per_day != null)   constraintLines.push(`- Chất xơ tối thiểu: ${nc.min_fiber_g_per_day}g/ngày`);
-        if (nc.carb_ratio_max != null)         constraintLines.push(`- Tỉ lệ calo từ carb: tối đa ${Math.round(nc.carb_ratio_max * 100)}%`);
-        if (nc.max_sodium_mg_per_day != null)  constraintLines.push(`- Natri: tối đa ${nc.max_sodium_mg_per_day}mg/ngày`);
-        if (nc.max_purine === true)            constraintLines.push(`- Hạn chế thực phẩm có hàm lượng purine cao`);
+        if (nc.max_sugar_g_per_day != null)   constraintLines.push(`- Max sugar: ${nc.max_sugar_g_per_day}g/day`);
+        if (nc.min_fiber_g_per_day != null)   constraintLines.push(`- Min fiber: ${nc.min_fiber_g_per_day}g/day`);
+        if (nc.carb_ratio_max != null)         constraintLines.push(`- Max carb ratio: ${Math.round(nc.carb_ratio_max * 100)}% of calories`);
+        if (nc.max_sodium_mg_per_day != null)  constraintLines.push(`- Max sodium: ${nc.max_sodium_mg_per_day}mg/day`);
+        if (nc.max_purine === true)            constraintLines.push(`- Avoid high-purine foods`);
 
         if (constraintLines.length > 0) {
           constraintSection = `
-RÀNG BUỘC ĐỊNH LƯỢNG (đã được tính bởi LP Solver \u2014 KHÔNG tự ý thay đổi):
+NUTRIENT CONSTRAINTS (pre-calculated by LP Solver — DO NOT modify):
 ${constraintLines.join('\n')}`;
         }
       }
     }
 
-    const prompt = `Bạn là chuyên gia dinh dưỡng lâm sàng, hỗ trợ tạo món ăn từ nguyên liệu có sẵn.
+    const prompt = `You are a clinical dietitian and professional chef. Your task is to create a recipe from the provided ingredients.
 
-NGUYÊN LIỆU ĐẦU VÀO (định lượng đã tính bởi LP Solver \u2014 KHÔNG thêm bớt nguyên liệu):
+INGREDIENTS (quantities pre-calculated by LP Solver — DO NOT add or replace any ingredient):
 ${ingredientSummary}
 
-TARGET MACRO CHO BỮA NÀY:
+TARGET MACROS FOR THIS MEAL:
 - Calories: ${targetCalories} kcal
 - Protein: ${targetProtein}g | Carbs: ${targetCarbs}g | Fat: ${targetFat}g
 ${medicalSection}
 ${constraintSection}
 
-YÊU CẦU:
-1. Đề xuất TÊN món sáng tạo, MÔ TẢ ngắn (2-3 câu), ĐỘ KHÓ (EASY/MEDIUM/HARD), THỜI GIAN NẤU (phút).
-2. Viết CÁC BƯỚC chế biến đúng theo định lượng nguyên liệu đã cho.
-3. Nếu có ràng buộc sức khỏe, cách chế biến PHẢI phù hợp (VD: bệnh tiểu đường \u2192 không chiên xào nhiều dầu; cao huyết áp \u2192 không dùng nước mắm/muối nhiều).
-4. NGHIÊM CẤM tự ý thêm hoặc đổi nguyên liệu. Dùng đúng danh sách nguyên liệu đã cung cấp.
-5. Nếu bất kỳ nguyên liệu nào trong danh sách xung đột với tình trạng sức khỏe và KHÔNG thể tránh, trả field "warning" giải thích ngắn gọn \u2014 KHÔNG tự ý bỏ nguyên liệu đó.
+REQUIREMENTS:
+1. Propose a creative DISH NAME, a short DESCRIPTION (2–3 sentences), DIFFICULTY (EASY/MEDIUM/HARD), and COOKING TIME in minutes.
+2. Write detailed COOKING STEPS using the exact ingredient quantities provided.
+3. If health constraints exist, the cooking method MUST comply (e.g., diabetes → avoid deep-frying; hypertension → minimize salt/soy sauce).
+4. STRICTLY FORBIDDEN to add, swap, or remove any ingredient from the list above.
+5. If any ingredient conflicts with the medical condition and cannot be avoided, set the "warning" field with a brief explanation — do NOT silently remove the ingredient.
 
-Trả lời CHỈ bằng JSON hợp lệ theo schema sau, KHÔNG có markdown code fence:
+Respond ONLY with a valid JSON object matching the schema below. No markdown fences:
 {
   "dish_name": "string",
   "description": "string",
   "difficulty": "EASY" | "MEDIUM" | "HARD",
   "cooking_time_minutes": number,
   "steps": ["string", "string", ...],
-  "warning": "string hoặc null"
+  "warning": "string or null"
 }`;
 
     const requestBody = {
@@ -444,16 +536,16 @@ Trả lời CHỈ bằng JSON hợp lệ theo schema sau, KHÔNG có markdown co
     // Fallback: safe response that does not suggest any changes
     const conditionName = medicalCondition?.name || 'Unknown';
     return {
-      dish_name: `Bữa ăn được tối ưu hóa dinh dưỡng`,
-      description: `Bữa ăn được tính toán cho ${ingredientSummary}. Phù hợp với mục tiêu ${targetCalories} kcal.`,
+      dish_name: 'Nutritionally Optimized Meal',
+      description: `A meal calculated for: ${ingredientSummary}. Targeting ${targetCalories} kcal.`,
       difficulty: 'MEDIUM',
       cooking_time_minutes: 30,
       steps: [
-        `Chuẩn bị nguyên liệu: ${ingredientSummary}.`,
-        'Chế biến theo phương pháp lành mạnh (hấp, luộc, hoặc áp chảo ít dầu).',
-        'Nêm gia vị vừa phải và phục vụ ngay.',
+        `Prepare all ingredients: ${ingredientSummary}.`,
+        'Cook using a healthy method (steaming, boiling, or light stir-fry with minimal oil).',
+        'Season lightly and serve immediately.',
       ],
-      warning: `Không thể tạo công thức chi tiết lúc này. Vui lòng kiểm tra thủ công để đảm bảo phù hợp với ${conditionName}.`,
+      warning: `Could not generate a detailed recipe at this time. Please manually verify that this meal is suitable for: ${conditionName}.`,
     };
   }
 }
