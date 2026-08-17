@@ -15,11 +15,11 @@ function _getGeminiKey() {
   return key;
 }
 
-// Verified models cascade (tested 200 OK)
+// Tier 1 Paid Cascade (Prioritizes Reasoning & Accuracy for Meal/Medical tasks)
 const GEMINI_MODELS = [
-  'gemini-flash-latest',
-  'gemini-flash-lite-latest',
-  'gemini-2.5-flash',
+  'gemini-pro-latest',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
 ];
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -349,7 +349,7 @@ Output ONLY the JSON array. No extra text, no markdown fences.`;
         } catch (err) {
           lastError = err;
           console.warn(`[Gemini suggestRecipes] Attempt ${attempt} failed: ${err.message}`);
-          if (attempt < MAX_RETRIES) {
+          if (attempt < 2) {
             const delay = Math.pow(2, attempt) * 1000;
             await new Promise((resolve) => setTimeout(resolve, delay));
           }

@@ -37,14 +37,14 @@ const AppError             = require('../utils/AppError');
 // Cập nhật lần cuối: 2026-08. Để kiểm tra lại, gọi:
 //   GET https://generativelanguage.googleapis.com/v1beta/models?key=YOUR_KEY
 //
-// Thứ tự cascade:
-//   Tầng 1 — gemini-flash-latest : Stable, tự động cập nhật bản Flash mới nhất
-//   Tầng 2 — gemini-flash-lite-latest : Stable, siêu nhẹ, cực hiếm bị từ chối/nghẽn
-//   Tầng 3 — gemini-2.5-flash : Stable dự phòng đa tầng
+// Thứ tự cascade (Dành cho gói Tier 1 trả phí, API phiên bản 2026):
+//   Tầng 1 — gemini-3.6-flash : Đời mới nhất, thông minh, cực nhanh
+//   Tầng 2 — gemini-3.5-flash : Ổn định
+//   Tầng 3 — gemini-flash-latest : Dự phòng hệ thống
 const GEMINI_MODEL_CASCADE = [
-  'gemini-flash-latest',       // Tầng 1: Ưu tiên — Verified 200 OK
-  'gemini-flash-lite-latest',  // Tầng 2: Fallback — Verified 200 OK
-  'gemini-2.5-flash',          // Tầng 3: Dự phòng — Verified 200 OK
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-flash-latest',
 ];
 
 const GEMINI_BASE_URL    = 'https://generativelanguage.googleapis.com/v1beta/models';
