@@ -1,0 +1,27 @@
+{
+  "name": "wealthy-eater-app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/longntce182041/Wealthy-Eater-app.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/longntce182041/Wealthy-Eater-app/issues"
+  },
+  "homepage": "https://github.com/longntce182041/Wealthy-Eater-app#readme",
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}
