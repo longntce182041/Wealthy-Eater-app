@@ -15,12 +15,13 @@ function _getGeminiKey() {
   return key;
 }
 
-// Models verified at ai.google.dev/gemini-api/docs/models (updated 2026-08)
-const GEMINI_PRO_MODEL   = 'gemini-3.6-flash';    // Stable — replaces gemini-pro-latest (deprecated)
-const GEMINI_FLASH_MODEL = 'gemini-3.5-flash';    // Stable — replaces gemini-flash-latest (deprecated)
-const GEMINI_BASE       = 'https://generativelanguage.googleapis.com/v1beta/models';
-const GEMINI_PRO_URL    = `${GEMINI_BASE}/${GEMINI_PRO_MODEL}:generateContent`;
-const GEMINI_FLASH_URL  = `${GEMINI_BASE}/${GEMINI_FLASH_MODEL}:generateContent`;
+// Verified models cascade (tested 200 OK)
+const GEMINI_MODELS = [
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
+  'gemini-2.5-flash',
+];
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 if (rawGeminiKeys.length === 0) {
   console.error('[GeminiService] CRITICAL: GOOGLE_API_KEY is not set. All Gemini calls will fail.');
@@ -75,7 +76,7 @@ Required JSON schema:
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.3,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
         responseMimeType: 'application/json',
         responseSchema: {
           type: "OBJECT",
@@ -108,47 +109,46 @@ Required JSON schema:
     };
 
     let lastError = null;
-    const MAX_RETRIES = 3;
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const apiKey = _getGeminiKey();
-        if (!apiKey) throw new Error('GOOGLE_API_KEY not configured.');
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
-        let response;
+    for (const model of GEMINI_MODELS) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
         try {
-          response = await fetch(`${GEMINI_PRO_URL}?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(timeoutId);
-        }
+          const apiKey = _getGeminiKey();
+          if (!apiKey) throw new Error('GOOGLE_API_KEY not configured.');
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 20000);
+          let response;
+          try {
+            response = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeoutId);
+          }
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Gemini API error ${response.status}: ${errorText}`);
-        }
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Gemini API error ${response.status} (${model}): ${errorText}`);
+          }
 
-        const data = await response.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+          const data = await response.json();
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
 
-        try {
-          return JSON.parse(rawText);
-        } catch {
-          // If JSON is malformed, break to use fallback
-          break;
-        }
-      } catch (err) {
-        lastError = err;
-        console.warn(`[Gemini API] Attempt ${attempt} failed: ${err.message}`);
-        if (attempt < MAX_RETRIES) {
-          // Exponential backoff: 2s, 4s
-          const delay = Math.pow(2, attempt) * 1000;
-          await new Promise((resolve) => setTimeout(resolve, delay));
+          try {
+            return JSON.parse(rawText);
+          } catch {
+            // If JSON is malformed, break to use next attempt/model
+            break;
+          }
+        } catch (err) {
+          lastError = err;
+          console.warn(`[Gemini API - generateMealPlan] Model ${model} attempt ${attempt} failed: ${err.message}`);
+          if (attempt === 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
         }
       }
     }
@@ -184,19 +184,19 @@ Required JSON schema:
    * @returns {Promise<Array<Object>>}
    */
   async suggestRecipesFromIngredients({
-    ingredients     = [],
-    allergies       = [],
-    dislikes        = [],
+    ingredients = [],
+    allergies = [],
+    dislikes = [],
     medicalCondition = null,
-    dietPreferences  = [],
+    dietPreferences = [],
     cookingConstraints = {},
-    tdee            = null,
-    healthGoal      = null,
+    tdee = null,
+    healthGoal = null,
   }) {
-    const ingredientsStr    = ingredients.length > 0 ? ingredients.slice(0, 20).join(', ') : 'any available basic ingredients';
-    const allergiesStr      = allergies.length > 0 ? allergies.join(', ') : 'None';
-    const dislikesStr       = dislikes.length > 0 ? dislikes.join(', ') : 'None';
-    const preferencesStr    = dietPreferences.length > 0 ? dietPreferences.join(', ') : 'None';
+    const ingredientsStr = ingredients.length > 0 ? ingredients.slice(0, 20).join(', ') : 'any available basic ingredients';
+    const allergiesStr = allergies.length > 0 ? allergies.join(', ') : 'None';
+    const dislikesStr = dislikes.length > 0 ? dislikes.join(', ') : 'None';
+    const preferencesStr = dietPreferences.length > 0 ? dietPreferences.join(', ') : 'None';
 
     // ── Medical condition section ────────────────────────────────────────────
     let medicalSection = 'None';
@@ -208,21 +208,21 @@ Required JSON schema:
       const nc = medicalCondition.nutrient_constraints;
       if (nc && typeof nc === 'object') {
         const lines = [];
-        if (nc.max_sugar_g_per_day  != null) lines.push(`max sugar ${nc.max_sugar_g_per_day}g/day`);
-        if (nc.min_fiber_g_per_day  != null) lines.push(`min fiber ${nc.min_fiber_g_per_day}g/day`);
-        if (nc.carb_ratio_max       != null) lines.push(`carb ratio max ${Math.round(nc.carb_ratio_max * 100)}%`);
-        if (nc.max_sodium_mg_per_day!= null) lines.push(`max sodium ${nc.max_sodium_mg_per_day}mg/day`);
-        if (nc.max_purine === true)           lines.push('avoid high-purine foods');
+        if (nc.max_sugar_g_per_day != null) lines.push(`max sugar ${nc.max_sugar_g_per_day}g/day`);
+        if (nc.min_fiber_g_per_day != null) lines.push(`min fiber ${nc.min_fiber_g_per_day}g/day`);
+        if (nc.carb_ratio_max != null) lines.push(`carb ratio max ${Math.round(nc.carb_ratio_max * 100)}%`);
+        if (nc.max_sodium_mg_per_day != null) lines.push(`max sodium ${nc.max_sodium_mg_per_day}mg/day`);
+        if (nc.max_purine === true) lines.push('avoid high-purine foods');
         if (lines.length > 0) medicalSection += ` [Constraints: ${lines.join(', ')}]`;
       }
     }
 
     // ── Cooking constraints section ─────────────────────────────────────────
     const { skillLevel = null, maxTimeMinutes = null } = cookingConstraints;
-    const difficultyHint  = skillLevel
+    const difficultyHint = skillLevel
       ? `Match difficulty to user's skill level: ${skillLevel}.`
       : '';
-    const timeHint        = maxTimeMinutes
+    const timeHint = maxTimeMinutes
       ? `Total cooking time MUST NOT exceed ${maxTimeMinutes} minutes.`
       : '';
 
@@ -267,113 +267,114 @@ Respond ONLY with a JSON array containing exactly 1 recipe object with these key
 Output ONLY the JSON array. No extra text, no markdown fences.`;
 
     let lastError = null;
-    const MAX_RETRIES = 3;
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const apiKey = _getGeminiKey();
-        if (!apiKey) throw new Error('GOOGLE_API_KEY not configured.');
-        const controller2 = new AbortController();
-        const timeoutId2 = setTimeout(() => controller2.abort(), 30000); // 30s — longer for richer output
-        let response;
+    for (const model of GEMINI_MODELS) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
         try {
-          response = await fetch(`${GEMINI_FLASH_URL}?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              safetySettings: [
-                { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-                { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-              ],
-              generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 4096,
-                responseMimeType: 'application/json',
-                responseSchema: {
-                  type: 'ARRAY',
-                  items: {
-                    type: 'OBJECT',
-                    properties: {
-                      mealName:           { type: 'STRING' },
-                      description:        { type: 'STRING' },
-                      cookingTimeMinutes: { type: 'INTEGER' },
-                      difficulty:         { type: 'STRING' },
-                      cookingSteps:       { type: 'ARRAY', items: { type: 'STRING' } },
-                      healthNote:         { type: 'STRING' },
+          const apiKey = _getGeminiKey();
+          if (!apiKey) throw new Error('GOOGLE_API_KEY not configured.');
+          const controller2 = new AbortController();
+          const timeoutId2 = setTimeout(() => controller2.abort(), 30000); // 30s — longer for richer output
+          let response;
+          try {
+            response = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                safetySettings: [
+                  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+                  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+                  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+                  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+                ],
+                generationConfig: {
+                  temperature: 0.7,
+                  maxOutputTokens: 8192,
+                  responseMimeType: 'application/json',
+                  responseSchema: {
+                    type: 'ARRAY',
+                    items: {
+                      type: 'OBJECT',
+                      properties: {
+                        mealName: { type: 'STRING' },
+                        description: { type: 'STRING' },
+                        cookingTimeMinutes: { type: 'INTEGER' },
+                        difficulty: { type: 'STRING' },
+                        cookingSteps: { type: 'ARRAY', items: { type: 'STRING' } },
+                        healthNote: { type: 'STRING' },
+                      },
+                      required: ['mealName', 'description', 'cookingTimeMinutes', 'difficulty', 'cookingSteps'],
                     },
-                    required: ['mealName', 'description', 'cookingTimeMinutes', 'difficulty', 'cookingSteps'],
                   },
                 },
-              },
-            }),
-            signal: controller2.signal,
-          });
-        } finally {
-          clearTimeout(timeoutId2);
-        }
-
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(`Gemini API HTTP error ${response.status}: ${errText}`);
-        }
-
-        const resData = await response.json();
-
-        const finishReason = resData?.candidates?.[0]?.finishReason;
-        // MAX_TOKENS: response was cut mid-way — retrying with same config won't help.
-        // Fall through to the fallback below instead of wasting 2 more retries.
-        if (finishReason && finishReason !== 'STOP') {
-          if (finishReason === 'MAX_TOKENS') {
-            console.warn('[Gemini suggestRecipes] MAX_TOKENS hit — skipping retries, using fallback.');
-            break; // exit retry loop → use fallback
+              }),
+              signal: controller2.signal,
+            });
+          } finally {
+            clearTimeout(timeoutId2);
           }
-          throw new Error(`Gemini output truncated (finishReason: ${finishReason}). Will retry.`);
-        }
 
-        const rawText = resData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const cleanJsonStr = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanJsonStr);
+          if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Gemini API HTTP error ${response.status} (${model}): ${errText}`);
+          }
 
-        // Normalize: handle single object returned instead of array
-        if (typeof parsed === 'object' && !Array.isArray(parsed) && parsed?.mealName) {
-          return [parsed];
-        }
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
+          const resData = await response.json();
 
-        throw new Error(`Parsed result is not a valid recipe. Received: ${JSON.stringify(parsed).substring(0, 200)}`);
-      } catch (err) {
-        lastError = err;
-        console.warn(`[Gemini suggestRecipes] Attempt ${attempt} failed: ${err.message}`);
-        if (attempt < MAX_RETRIES) {
-          const delay = Math.pow(2, attempt) * 1000;
-          await new Promise((resolve) => setTimeout(resolve, delay));
+          const finishReason = resData?.candidates?.[0]?.finishReason;
+          // MAX_TOKENS: response was cut mid-way — retrying with same config won't help.
+          // Fall through to the fallback below instead of wasting 2 more retries.
+          if (finishReason && finishReason !== 'STOP') {
+            if (finishReason === 'MAX_TOKENS') {
+              console.warn('[Gemini suggestRecipes] MAX_TOKENS hit — skipping retries, using fallback.');
+              break; // exit retry loop → use fallback
+            }
+            throw new Error(`Gemini output truncated (finishReason: ${finishReason}). Will retry.`);
+          }
+
+          const rawText = resData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const cleanJsonStr = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanJsonStr);
+
+          // Normalize: handle single object returned instead of array
+          if (typeof parsed === 'object' && !Array.isArray(parsed) && parsed?.mealName) {
+            return [parsed];
+          }
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+
+          throw new Error(`Parsed result is not a valid recipe. Received: ${JSON.stringify(parsed).substring(0, 200)}`);
+        } catch (err) {
+          lastError = err;
+          console.warn(`[Gemini suggestRecipes] Attempt ${attempt} failed: ${err.message}`);
+          if (attempt < MAX_RETRIES) {
+            const delay = Math.pow(2, attempt) * 1000;
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
         }
       }
     }
 
     // Fallback: return a minimal valid recipe so the endpoint does not 500.
     // This covers MAX_TOKENS (prompt too long for model context) and transient API failures.
-    console.warn('[Gemini suggestRecipes] Using fallback recipe. Last error:', lastError?.message);
-    const safeIngredientStr = ingredients.slice(0, 5).join(', ') || 'available ingredients';
-    return [{
-      mealName: 'Simple Pantry Bowl',
-      description: `A quick, healthy bowl made with ${safeIngredientStr}. Adjust seasoning to taste.`,
-      cookingTimeMinutes: 20,
-      difficulty: 'Easy',
-      cookingSteps: [
-        `Prepare and wash all ingredients: ${safeIngredientStr}.`,
-        'Cook using your preferred method (steam, boil, or light stir-fry).',
-        'Combine in a bowl and season lightly with salt and pepper.',
-        'Serve immediately while warm.',
-      ],
-      healthNote: 'AI suggestion temporarily unavailable. This is a basic fallback recipe — please consult NutriBot for personalized advice.',
-    }];
-  }
+      console.warn('[Gemini suggestRecipes] Using fallback recipe. Last error:', lastError?.message);
+      const safeIngredientStr = ingredients.slice(0, 5).join(', ') || 'available ingredients';
+      return [{
+        mealName: 'Simple Pantry Bowl',
+        description: `A quick, healthy bowl made with ${safeIngredientStr}. Adjust seasoning to taste.`,
+        cookingTimeMinutes: 20,
+        difficulty: 'Easy',
+        cookingSteps: [
+          `Prepare and wash all ingredients: ${safeIngredientStr}.`,
+          'Cook using your preferred method (steam, boil, or light stir-fry).',
+          'Combine in a bowl and season lightly with salt and pepper.',
+          'Serve immediately while warm.',
+        ],
+        healthNote: 'AI suggestion temporarily unavailable. This is a basic fallback recipe — please consult NutriBot for personalized advice.',
+      }];
+    }
 
   /**
    * UC-Regenerate — Generate a meal with full medical condition context.
@@ -399,41 +400,41 @@ Output ONLY the JSON array. No extra text, no markdown fences.`;
    * @returns {Promise<Object>} { dish_name, description, difficulty, cooking_time_minutes, steps[], warning }
    */
   async generateMealWithMedicalContext({
-    ingredientSummary,
-    targetCalories,
-    targetProtein,
-    targetCarbs,
-    targetFat,
-    medicalCondition = null,
-  }) {
-    // ── Build medical condition section of prompt ──────────────────────────
-    let medicalSection = '';
-    let constraintSection = '';
+      ingredientSummary,
+      targetCalories,
+      targetProtein,
+      targetCarbs,
+      targetFat,
+      medicalCondition = null,
+    }) {
+      // ── Build medical condition section of prompt ──────────────────────────
+      let medicalSection = '';
+      let constraintSection = '';
 
-    if (medicalCondition) {
-      medicalSection = `
+      if (medicalCondition) {
+        medicalSection = `
 CLIENT MEDICAL CONDITION (must be strictly followed):
 - ${medicalCondition.name}${medicalCondition.category ? ` (${medicalCondition.category})` : ''}
 - Dietary guideline: "${medicalCondition.dietary_guideline || 'No specific guideline provided.'}"`;
 
-      const nc = medicalCondition.nutrient_constraints;
-      if (nc && typeof nc === 'object') {
-        const constraintLines = [];
-        if (nc.max_sugar_g_per_day != null)   constraintLines.push(`- Max sugar: ${nc.max_sugar_g_per_day}g/day`);
-        if (nc.min_fiber_g_per_day != null)   constraintLines.push(`- Min fiber: ${nc.min_fiber_g_per_day}g/day`);
-        if (nc.carb_ratio_max != null)         constraintLines.push(`- Max carb ratio: ${Math.round(nc.carb_ratio_max * 100)}% of calories`);
-        if (nc.max_sodium_mg_per_day != null)  constraintLines.push(`- Max sodium: ${nc.max_sodium_mg_per_day}mg/day`);
-        if (nc.max_purine === true)            constraintLines.push(`- Avoid high-purine foods`);
+        const nc = medicalCondition.nutrient_constraints;
+        if (nc && typeof nc === 'object') {
+          const constraintLines = [];
+          if (nc.max_sugar_g_per_day != null) constraintLines.push(`- Max sugar: ${nc.max_sugar_g_per_day}g/day`);
+          if (nc.min_fiber_g_per_day != null) constraintLines.push(`- Min fiber: ${nc.min_fiber_g_per_day}g/day`);
+          if (nc.carb_ratio_max != null) constraintLines.push(`- Max carb ratio: ${Math.round(nc.carb_ratio_max * 100)}% of calories`);
+          if (nc.max_sodium_mg_per_day != null) constraintLines.push(`- Max sodium: ${nc.max_sodium_mg_per_day}mg/day`);
+          if (nc.max_purine === true) constraintLines.push(`- Avoid high-purine foods`);
 
-        if (constraintLines.length > 0) {
-          constraintSection = `
+          if (constraintLines.length > 0) {
+            constraintSection = `
 NUTRIENT CONSTRAINTS (pre-calculated by LP Solver — DO NOT modify):
 ${constraintLines.join('\n')}`;
+          }
         }
       }
-    }
 
-    const prompt = `You are a clinical dietitian and professional chef. Your task is to create a recipe from the provided ingredients.
+      const prompt = `You are a clinical dietitian and professional chef. Your task is to create a recipe from the provided ingredients.
 
 INGREDIENTS (quantities pre-calculated by LP Solver — DO NOT add or replace any ingredient):
 ${ingredientSummary}
@@ -461,93 +462,94 @@ Respond ONLY with a valid JSON object matching the schema below. No markdown fen
   "warning": "string or null"
 }`;
 
-    const requestBody = {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 1500,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            dish_name:             { type: 'STRING' },
-            description:           { type: 'STRING' },
-            difficulty:            { type: 'STRING' },
-            cooking_time_minutes:  { type: 'INTEGER' },
-            steps:                 { type: 'ARRAY', items: { type: 'STRING' } },
-            warning:               { type: 'STRING' },
+      const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 2048,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              dish_name: { type: 'STRING' },
+              description: { type: 'STRING' },
+              difficulty: { type: 'STRING' },
+              cooking_time_minutes: { type: 'INTEGER' },
+              steps: { type: 'ARRAY', items: { type: 'STRING' } },
+              warning: { type: 'STRING' },
+            },
+            required: ['dish_name', 'description', 'difficulty', 'cooking_time_minutes', 'steps'],
           },
-          required: ['dish_name', 'description', 'difficulty', 'cooking_time_minutes', 'steps'],
         },
-      },
-      safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-      ],
-    };
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+        ],
+      };
 
-    let lastError = null;
-    const MAX_RETRIES = 3;
+      let lastError = null;
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const apiKey = _getGeminiKey();
-        if (!apiKey) throw new Error('GOOGLE_API_KEY not configured.');
+      for (const model of GEMINI_MODELS) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            const apiKey = _getGeminiKey();
+            if (!apiKey) throw new Error('GOOGLE_API_KEY not configured.');
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000);
-        let response;
-        try {
-          response = await fetch(`${GEMINI_PRO_URL}?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(timeoutId);
-        }
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 25000);
+            let response;
+            try {
+              response = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal,
+              });
+            } finally {
+              clearTimeout(timeoutId);
+            }
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Gemini API error ${response.status}: ${errorText}`);
-        }
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Gemini API error ${response.status} (${model}): ${errorText}`);
+            }
 
-        const data = await response.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-        const parsed = JSON.parse(rawText);
+            const data = await response.json();
+            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+            const parsed = JSON.parse(rawText);
 
-        // Normalize: ensure warning field is null (not missing) if not present
-        if (parsed.warning === undefined) parsed.warning = null;
+            // Normalize: ensure warning field is null (not missing) if not present
+            if (parsed.warning === undefined) parsed.warning = null;
 
-        return parsed;
-      } catch (err) {
-        lastError = err;
-        console.warn(`[Gemini generateMealWithMedicalContext] Attempt ${attempt} failed: ${err.message}`);
-        if (attempt < MAX_RETRIES) {
-          await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+            return parsed;
+          } catch (err) {
+            lastError = err;
+            console.warn(`[Gemini generateMealWithMedicalContext] Model ${model} attempt ${attempt} failed: ${err.message}`);
+            if (attempt === 1) {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+          }
         }
       }
-    }
 
-    console.warn('[Gemini generateMealWithMedicalContext] All retries exhausted. Using fallback.');
-    // Fallback: safe response that does not suggest any changes
-    const conditionName = medicalCondition?.name || 'Unknown';
-    return {
-      dish_name: 'Nutritionally Optimized Meal',
-      description: `A meal calculated for: ${ingredientSummary}. Targeting ${targetCalories} kcal.`,
-      difficulty: 'MEDIUM',
-      cooking_time_minutes: 30,
-      steps: [
-        `Prepare all ingredients: ${ingredientSummary}.`,
-        'Cook using a healthy method (steaming, boiling, or light stir-fry with minimal oil).',
-        'Season lightly and serve immediately.',
-      ],
-      warning: `Could not generate a detailed recipe at this time. Please manually verify that this meal is suitable for: ${conditionName}.`,
-    };
+      console.warn('[Gemini generateMealWithMedicalContext] All retries exhausted. Using fallback.');
+      // Fallback: safe response that does not suggest any changes
+      const conditionName = medicalCondition?.name || 'Unknown';
+      return {
+        dish_name: 'Nutritionally Optimized Meal',
+        description: `A meal calculated for: ${ingredientSummary}. Targeting ${targetCalories} kcal.`,
+        difficulty: 'MEDIUM',
+        cooking_time_minutes: 30,
+        steps: [
+          `Prepare all ingredients: ${ingredientSummary}.`,
+          'Cook using a healthy method (steaming, boiling, or light stir-fry with minimal oil).',
+          'Season lightly and serve immediately.',
+        ],
+        warning: `Could not generate a detailed recipe at this time. Please manually verify that this meal is suitable for: ${conditionName}.`,
+      };
+    }
   }
-}
 
 module.exports = new GeminiService();

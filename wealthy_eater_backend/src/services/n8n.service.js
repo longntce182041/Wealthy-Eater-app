@@ -109,9 +109,11 @@ class N8nService {
   }
 
   async callGeminiVisionFallback(file, apiKey) {
-    // Model verified at ai.google.dev/gemini-api/docs/models
-    const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const models = [
+      process.env.GEMINI_VISION_MODEL || 'gemini-flash-latest',
+      'gemini-flash-lite-latest',
+      'gemini-2.5-flash',
+    ];
 
     const prompt = [
       "You are an elite clinical research dietitian and expert culinary vision assistant.",
@@ -157,19 +159,36 @@ class N8nService {
       },
     };
 
-    const response = await axios.post(url, payload, {
-      timeout: 60000,
-      headers: { "Content-Type": "application/json" },
-    });
+    let lastError = null;
+    let text = null;
 
-    const text =
-      response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      response.data?.candidates?.[0]?.content?.parts
-        ?.map((p) => p.text)
-        .join("\n");
+    for (const model of models) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      try {
+        console.info(`⚡ [Gemini Vision Fallback]: Trying model ${model}...`);
+        const response = await axios.post(url, payload, {
+          timeout: 45000,
+          headers: { "Content-Type": "application/json" },
+        });
+
+        text =
+          response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+          response.data?.candidates?.[0]?.content?.parts
+            ?.map((p) => p.text)
+            .join("\n");
+
+        if (text) {
+          console.info(`✔ [Gemini Vision Fallback]: Success with model ${model}`);
+          break;
+        }
+      } catch (err) {
+        lastError = err;
+        console.warn(`⚠️ [Gemini Vision Fallback]: Model ${model} failed with status ${err.response?.status || err.message}, trying next fallback...`);
+      }
+    }
 
     if (!text) {
-      throw new Error("Gemini returned empty response");
+      throw lastError || new Error("Gemini returned empty response across all models");
     }
 
     let cleanText = text.trim();
