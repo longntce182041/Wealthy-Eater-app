@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import '../../data/models/active_contract_model.dart';
 import '../../core/theme/app_colors.dart';
 import '../providers/consultation_provider.dart';
+import '../providers/auth_provider.dart';
+import '../../core/config/env_config.dart';
+import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'chat_screen.dart';
 
 class MyNutritionistDashboard extends StatefulWidget {
@@ -16,26 +19,44 @@ class MyNutritionistDashboard extends StatefulWidget {
 }
 
 class _MyNutritionistDashboardState extends State<MyNutritionistDashboard> {
-  Timer? _autoRefreshTimer;
+  socket_io.Socket? _socket;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ConsultationProvider>().loadMealPlanRequestStatus();
+      _initSocket();
     });
+  }
 
-    // Auto-refresh (hot reload) request status silently every 5 seconds
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+  void _initSocket() {
+    final token = context.read<AuthProvider>().token;
+    if (token == null) return;
+    
+    final baseUrl = EnvConfig.baseUrl;
+    _socket = socket_io.io(
+      baseUrl,
+      socket_io.OptionBuilder()
+          .setTransports(['websocket', 'polling'])
+          .enableAutoConnect()
+          .setExtraHeaders({'Authorization': 'Bearer $token'})
+          .build(),
+    );
+
+    _socket?.on('meal_plan_status_updated', (data) {
       if (mounted) {
         context.read<ConsultationProvider>().loadMealPlanRequestStatus(silent: true);
       }
     });
+
+    _socket?.connect();
   }
 
   @override
   void dispose() {
-    _autoRefreshTimer?.cancel();
+    _socket?.disconnect();
+    _socket?.dispose();
     super.dispose();
   }
 
