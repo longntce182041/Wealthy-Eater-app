@@ -1,4 +1,5 @@
 const axios = require("axios");
+const geminiService = require("./gemini.service");
 
 class N8nService {
   async triggerTemplateMatch(payload) {
@@ -159,36 +160,16 @@ class N8nService {
       },
     };
 
-    let lastError = null;
-    let text = null;
-
-    for (const model of models) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      try {
-        console.info(`⚡ [Gemini Vision Fallback]: Trying model ${model}...`);
-        const response = await axios.post(url, payload, {
-          timeout: 45000,
-          headers: { "Content-Type": "application/json" },
-        });
-
-        text =
-          response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-          response.data?.candidates?.[0]?.content?.parts
-            ?.map((p) => p.text)
-            .join("\n");
-
-        if (text) {
-          console.info(`✔ [Gemini Vision Fallback]: Success with model ${model}`);
-          break;
-        }
-      } catch (err) {
-        lastError = err;
-        console.warn(`⚠️ [Gemini Vision Fallback]: Model ${model} failed with status ${err.response?.status || err.message}, trying next fallback...`);
-      }
-    }
+    const data = await geminiService.executeWithResilience(models, payload, { timeoutMs: 45000, maxRetriesPerModel: 3 });
+    
+    let text =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      data?.candidates?.[0]?.content?.parts
+        ?.map((p) => p.text)
+        .join("\n");
 
     if (!text) {
-      throw lastError || new Error("Gemini returned empty response across all models");
+      throw new Error("Gemini returned empty response");
     }
 
     let cleanText = text.trim();

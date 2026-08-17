@@ -37,3 +37,6 @@ venv/
 
 # Markdown files
 *GEMINI.md
+
+# n8n workflows
+n8n_*.json
