@@ -77,11 +77,10 @@ function _getHealthyKey() {
   });
 
   if (availableKeys.length === 0) {
-    // If all are locked, reset cooldowns and retry
+    // If all are locked (or only 1 key configured), reset cooldowns immediately
     rawGeminiKeys.forEach((k) => {
-      if (keyStats[k].nextAvailableTime <= now) {
-        keyStats[k].failCount = 0;
-      }
+      keyStats[k].failCount = 0;
+      keyStats[k].nextAvailableTime = 0;
     });
     return rawGeminiKeys[0];
   }
@@ -171,12 +170,10 @@ class GeminiService {
             }
 
             if (response.status === 503 || response.status === 500) {
-              // 503/500: server overload — short wait then retry (transient infrastructure issue)
-              _markKeyFailed(apiKey, response.status);
+              // 503/500: server overload — cascade immediately to next model
               lastError = new Error(errorMsg);
-              console.warn(`[GeminiService] ${errorMsg} — Overloaded. Waiting ${attempt * 2}s...`);
-              await delay(attempt * 2000);
-              continue;
+              console.warn(`[GeminiService] ${errorMsg} — Overloaded. Cascading to next model immediately...`);
+              break;
             }
 
             // 400/404/other: model doesn't support this request → cascade immediately
@@ -252,7 +249,7 @@ Required JSON schema:
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.3,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
         responseMimeType: 'application/json',
         responseSchema: {
           type: "OBJECT",
@@ -285,7 +282,7 @@ Required JSON schema:
     };
 
     try {
-      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 20000, maxRetriesPerModel: 3 });
+      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 60000, maxRetriesPerModel: 3 });
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       return JSON.parse(rawText);
     } catch (err) {
@@ -401,7 +398,7 @@ Output ONLY the JSON array. No extra text, no markdown fences.`;
     };
 
     try {
-      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 20000, maxRetriesPerModel: 2 });
+      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 60000, maxRetriesPerModel: 2 });
       
       const finishReason = data?.candidates?.[0]?.finishReason;
       if (finishReason && finishReason === 'MAX_TOKENS') {
@@ -498,7 +495,7 @@ Respond ONLY with a valid JSON object matching the schema below. No markdown fen
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.3,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
         responseMimeType: 'application/json',
         responseSchema: {
           type: 'OBJECT',
@@ -522,7 +519,7 @@ Respond ONLY with a valid JSON object matching the schema below. No markdown fen
     };
 
     try {
-      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 20000, maxRetriesPerModel: 3 });
+      const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 60000, maxRetriesPerModel: 3 });
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       const parsed = JSON.parse(rawText);
       if (parsed.warning === undefined) parsed.warning = null;

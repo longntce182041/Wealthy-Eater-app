@@ -142,12 +142,54 @@ class N8nService {
       ],
       generationConfig: {
         temperature: 0.2,
+        maxOutputTokens: 4096,
         responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            is_valid_meal: { type: "BOOLEAN" },
+            meal_name: { type: "STRING" },
+            confidence: { type: "NUMBER" },
+            ingredients: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  name: { type: "STRING" },
+                  estimated_amount: { type: "NUMBER" },
+                  estimated_unit: { type: "STRING" },
+                  nutrition: {
+                    type: "OBJECT",
+                    properties: {
+                      kcal: { type: "NUMBER" },
+                      protein: { type: "NUMBER" },
+                      carbs: { type: "NUMBER" },
+                      fats: { type: "NUMBER" },
+                    },
+                    required: ["kcal", "protein", "carbs", "fats"]
+                  }
+                },
+                required: ["name", "estimated_amount", "estimated_unit", "nutrition"]
+              }
+            },
+            totals: {
+              type: "OBJECT",
+              properties: {
+                kcal: { type: "NUMBER" },
+                protein: { type: "NUMBER" },
+                carbs: { type: "NUMBER" },
+                fats: { type: "NUMBER" },
+              },
+              required: ["kcal", "protein", "carbs", "fats"]
+            }
+          },
+          required: ["is_valid_meal", "meal_name", "confidence", "ingredients", "totals"]
+        }
       },
     };
 
     const data = await geminiService.executeWithResilience(models, payload, { 
-      timeoutMs: 40000,  // 40s — meal JSON is complex (per-ingredient nutrition + totals)
+      timeoutMs: 60000,  // 60s
       maxRetriesPerModel: 3 
     });
     

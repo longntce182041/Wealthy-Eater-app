@@ -130,11 +130,24 @@ class PantryService {
           ],
           generationConfig: {
             temperature: 0.2,
+            maxOutputTokens: 4096,
             responseMimeType: "application/json",
+            responseSchema: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  name: { type: "STRING" },
+                  quantity: { type: "NUMBER" },
+                  unit: { type: "STRING" }
+                },
+                required: ["name", "quantity", "unit"]
+              }
+            }
           },
         };
 
-        const data = await geminiService.executeWithResilience(models, requestBody, { timeoutMs: 25000, maxRetriesPerModel: 3 });
+        const data = await geminiService.executeWithResilience(models, requestBody, { timeoutMs: 60000, maxRetriesPerModel: 3 });
         
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!rawText) throw new Error("Empty response from Gemini.");

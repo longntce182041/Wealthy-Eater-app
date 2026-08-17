@@ -510,7 +510,7 @@ Always rely on the data above to personalize your responses. If data is insuffic
     const requestBody = {
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: conversationTurns, // systemInstruction handles context — no redundant prepend needed
-      generationConfig: { temperature: 0.7, maxOutputTokens: 2048, topP: 0.9 },
+      generationConfig: { temperature: 0.7, maxOutputTokens: 4096, topP: 0.9 },
       safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
