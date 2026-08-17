@@ -1,4 +1,5 @@
 {
+  "name": "UC-41 Detect Pantry",
   "nodes": [
     {
       "parameters": {
@@ -10,23 +11,30 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -2400,
-        1472
+        0,
+        0
       ],
       "id": "faa9d5db-578e-4208-b30d-d38e3704ac9c",
       "name": "Receive Refrigerator Image",
-      "webhookId": "uc41-detect-pantry-webhook-id",
-      "retryOnFail": false
+      "webhookId": "uc41-detect-pantry-webhook-id"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "AIzaSyCP5gfUpq_kMQPzG3PcT-W3EH8vs-e8Rgg"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: \"You are an expert food storage inspector. Analyse the provided image of a refrigerator interior. Your goal is to provide a list of raw food ingredients visible.\\n\\nTask:\\n1. Identify raw food items (e.g., 'carrots', 'chicken breast', 'apple', 'milk').\\n2. Strict Noise Filtering: Completely ignore non-food items, containers, packaging, bottles (unless the food itself is a liquid like milk/juice), boxes, plastic bags, or refrigerator shelves. Do not list 'plastic bottle' or 'tupperware'. Only list the food inside if visible, otherwise ignore it.\\n\\nOutput Format:\\nReturn your answer as a raw JSON array of strings only. Do not include any Markdown formatting, code blocks, or explanatory text.\\n\\nExample Output:\\n[\\\"apple\\\", \\\"broccoli\\\", \\\"eggs\\\", \\\"cheddar cheese\\\"]\" }, { inline_data: { mime_type: $json.body.mime_type || 'image/jpeg', data: $json.body.image_base64 } }] }] }) }}",
+        "jsonBody": "={{ JSON.stringify({\n  contents: [\n    {\n      parts: [\n        {\n          text: \"You are an expert food storage inspector. Analyse the provided image of a refrigerator interior. Your goal is to provide a list of raw food ingredients visible.\\n\\nTask:\\n1. Identify raw food items (e.g., 'carrots', 'chicken breast', 'apple', 'milk').\\n2. Strict Noise Filtering: Completely ignore non-food items, containers, packaging, bottles (unless the food itself is a liquid like milk/juice), boxes, plastic bags, or refrigerator shelves. Do not list 'plastic bottle' or 'tupperware'. Only list the food inside if visible, otherwise ignore it.\\n3. Estimate realistic quantities based on visual size.\\n\\nOutput Format:\\nReturn your answer strictly matching the JSON schema.\"\n        },\n        {\n          inline_data: {\n            mime_type: $json.body.mime_type || 'image/jpeg',\n            data: $json.body.image_base64\n          }\n        }\n      ]\n    }\n  ],\n  generationConfig: {\n    responseMimeType: \"application/json\",\n    responseSchema: {\n      type: \"ARRAY\",\n      items: {\n        type: \"OBJECT\",\n        properties: {\n          name: { type: \"STRING\" },\n          quantity: { type: \"NUMBER\" },\n          unit: { type: \"STRING\" }\n        },\n        required: [\"name\", \"quantity\", \"unit\"]\n      }\n    }\n  }\n}) }}",
         "options": {
           "timeout": 30000
         }
@@ -34,34 +42,75 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        -2080,
-        1472
+        250,
+        0
       ],
       "id": "ef96708f-cd61-4cac-9fcf-fe070734e27e",
       "name": "Gemini Vision - Detect Food",
-      "alwaysOutputData": false,
-      "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 3000,
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "GMzlcrYFgk9LQtrI",
-          "name": "Query Auth account"
-        }
-      }
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// UC-41: Parse Gemini Vision response and extract food inventory array\nconst geminiResponse = $input.first().json;\n\n// Navigate Gemini API response structure\nlet aiOutputText = '';\ntry {\n  aiOutputText = geminiResponse.candidates[0].content.parts[0].text;\n} catch (e) {\n  return [{ json: { \n    success: false, \n    p_raw_inventory: [], \n    error: 'Failed to extract text from Gemini response: ' + e.message \n  }}];\n}\n\n// Clean AI output: strip markdown code fences and extra whitespace\nlet foodArray = [];\ntry {\n  const cleanedOutput = aiOutputText\n    .replace(/```json\\s*/gi, '')\n    .replace(/```\\s*/g, '')\n    .replace(/^\\s*\\n/, '')\n    .trim();\n  foodArray = JSON.parse(cleanedOutput);\n  \n  // Validate: ensure it's an array of strings\n  if (!Array.isArray(foodArray)) {\n    foodArray = [String(foodArray)];\n  }\n  foodArray = foodArray\n    .filter(item => typeof item === 'string' && item.trim().length > 0)\n    .map(item => item.trim().toLowerCase());\n    \n} catch (e) {\n  // Fallback: try to extract items with regex if JSON parse fails\n  const matches = aiOutputText.match(/[\"']([^\"']+)[\"']/g);\n  if (matches && matches.length > 0) {\n    foodArray = matches.map(m => m.replace(/[\"']/g, '').trim().toLowerCase());\n  } else {\n    foodArray = ['error_parsing_ai_output'];\n  }\n}\n\n// Pass along user_id from webhook for MongoDB query\nconst userId = $('Receive Refrigerator Image').first().json.body.user_id || '';\n\nreturn [{ \n  json: { \n    success: true,\n    user_id: userId,\n    p_raw_inventory: foodArray,\n    detected_count: foodArray.length,\n    detected_at: new Date().toISOString()\n  } \n}];"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "check-error",
+              "leftValue": "={{ $json.error != undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        500,
+        0
+      ],
+      "id": "if-gemini-error",
+      "name": "Check Gemini Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  message: 'AI Service is temporarily unavailable or failed to process the image.',\n  error_details: $json.error\n}) }}",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        750,
+        200
+      ],
+      "id": "respond-gemini-error",
+      "name": "Respond - Gemini Error"
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const aiOutputText = $input.first().json.candidates[0].content.parts[0].text;\n  const foodArray = JSON.parse(aiOutputText);\n  const userId = $('Receive Refrigerator Image').first().json.body.user_id || '';\n\n  return [{ \n    json: { \n      success: true,\n      user_id: userId,\n      p_raw_inventory: foodArray,\n      detected_count: foodArray.length,\n      detected_at: new Date().toISOString()\n    } \n  }];\n} catch (e) {\n  return [{ json: { success: false, p_raw_inventory: [], error: 'Failed to parse JSON schema output: ' + e.message } }];\n}"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1760,
-        1472
+        750,
+        -100
       ],
       "id": "5e609b77-7d61-4144-a73e-300ea9295474",
-      "name": "Format JSON Array"
+      "name": "Extract JSON Items"
     },
     {
       "parameters": {
@@ -100,41 +149,16 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -1504,
-        1472
+        1000,
+        -100
       ],
       "id": "f95c04f1-f649-4194-b9d1-dc6a0e0bc6b8",
       "name": "Validate Before DB Sync"
     },
     {
       "parameters": {
-        "operation": "update",
-        "collection": "virtual_fridges",
-        "updateKey": "user_id",
-        "options": {
-          "upsert": true
-        }
-      },
-      "type": "n8n-nodes-base.mongoDb",
-      "typeVersion": 1.3,
-      "position": [
-        -1216,
-        1392
-      ],
-      "id": "59410c22-96ef-48b3-8e1b-2044d07b8a04",
-      "name": "Sync to Virtual Fridge",
-      "credentials": {
-        "mongoDb": {
-          "id": "Zghyt3NlT8HiuKH2",
-          "name": "MongoDB account"
-        }
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ success: true, message: 'Pantry inventory detected and synced successfully.', inventory: $('Format JSON Array').first().json.p_raw_inventory, detected_count: $('Format JSON Array').first().json.detected_count, scanned_at: $('Format JSON Array').first().json.detected_at }) }}",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Pantry inventory detected successfully.', inventory: $json.p_raw_inventory, detected_count: $json.detected_count, scanned_at: $json.detected_at }) }}",
         "options": {
           "responseCode": 200
         }
@@ -142,8 +166,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        -960,
-        1392
+        1250,
+        -200
       ],
       "id": "c4642af2-f28a-4531-b18c-7fdaa06d5b63",
       "name": "Respond — Pantry Sync Success"
@@ -151,7 +175,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ success: false, message: 'Validation failed. Ensure user_id is provided and image was processed successfully.', error_details: { user_id: $json.user_id || null, ai_success: $json.success || false } }) }}",
+        "responseBody": "={{ JSON.stringify({ success: false, message: 'Validation failed. Ensure user_id is provided and image was processed successfully.', error_details: { user_id: $json.user_id || null, ai_success: $json.success || false, parsing_error: $json.error } }) }}",
         "options": {
           "responseCode": 400
         }
@@ -159,8 +183,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        -1216,
-        1616
+        1250,
+        0
       ],
       "id": "517ed199-f908-4cd4-abe7-abbd423f6422",
       "name": "Respond — Validation Error"
@@ -182,14 +206,32 @@
       "main": [
         [
           {
-            "node": "Format JSON Array",
+            "node": "Check Gemini Error",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Format JSON Array": {
+    "Check Gemini Error": {
+      "main": [
+        [
+          {
+            "node": "Respond - Gemini Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract JSON Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract JSON Items": {
       "main": [
         [
           {
@@ -204,7 +246,7 @@
       "main": [
         [
           {
-            "node": "Sync to Virtual Fridge",
+            "node": "Respond — Pantry Sync Success",
             "type": "main",
             "index": 0
           }
@@ -217,21 +259,7 @@
           }
         ]
       ]
-    },
-    "Sync to Virtual Fridge": {
-      "main": [
-        [
-          {
-            "node": "Respond — Pantry Sync Success",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
   },
-  "pinData": {},
-  "meta": {
-    "instanceId": "6163bac3f64be333ddc2fa2951d8461213f03dbf48df047d75aaddff96221cf7"
-  }
+  "pinData": {}
 }
