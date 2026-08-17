@@ -30,107 +30,14 @@ const AppError             = require('../utils/AppError');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// ▸ Multi-model cascade: khi model đầu bị 503/429, tự động chuyển sang model tiếp theo
-// trong cùng 1 request — người dùng không bị gián đoạn.
-//
-// Danh sách models được xác minh từ tài liệu chính thức của Google (ai.google.dev/gemini-api/docs/models)
-// Cập nhật lần cuối: 2026-08. Để kiểm tra lại, gọi:
-//   GET https://generativelanguage.googleapis.com/v1beta/models?key=YOUR_KEY
-//
-// Thứ tự cascade (Dành cho gói Tier 1 trả phí, API phiên bản 2026):
-//   Tầng 1 — gemini-3.6-flash : Đời mới nhất, thông minh, cực nhanh
-//   Tầng 2 — gemini-3.5-flash : Ổn định
-//   Tầng 3 — gemini-flash-latest : Dự phòng hệ thống
-const GEMINI_MODEL_CASCADE = [
-  'gemini-3.6-flash',
-  'gemini-3.5-flash',
-  'gemini-flash-latest',
-];
-
-const GEMINI_BASE_URL    = 'https://generativelanguage.googleapis.com/v1beta/models';
+// Constants related to Gemini Cascade have been moved to gemini.service.js
 const MAX_CONTEXT_TURNS  = 20;   // last 20 messages sent to Gemini (10 pairs)
 const MAX_MESSAGES_PER_MINUTE = 10; // soft rate-limit per user
 const MEAL_LOG_DAYS      = 3;    // how many recent days of logs to include
 const WEIGHT_LOG_LIMIT   = 7;    // last N weight logs to show trend
 
-// ── Smart Key Management with Circuit Breaker ─────────────────────────────────
-// Đọc nhiều key từ biến môi trường, phân tách bằng dấu phẩy.
-// Ví dụ: GOOGLE_API_KEYS=key1,key2,key3
-const rawKeys = process.env.GOOGLE_API_KEYS || process.env.GOOGLE_API_KEY || '';
-const GEMINI_KEYS = rawKeys.split(',').map((k) => k.trim()).filter(Boolean);
-
-// Trạng thái sức khoẻ của từng key: { status, cooldownUntil, failCount }
-// status: 'healthy' | 'rate_limited' | 'circuit_open'
-const KEY_COOLDOWN_MS    = 60 * 1000;         // 60s sau khi bị 429
-const CIRCUIT_BREAK_MS   = 5 * 60 * 1000;    // 5 phút khi lỗi liên tiếp >= 3 lần
-const MAX_FAIL_COUNT     = 3;                 // số lần thất bại trước khi circuit open
-
-/**
- * Bảng trạng thái key trong bộ nhớ.
- * Map<keyString, { status, cooldownUntil, failCount }>
- */
-const _keyHealth = new Map();
-
-function _getKeyHealth(key) {
-  if (!_keyHealth.has(key)) {
-    _keyHealth.set(key, { status: 'healthy', cooldownUntil: 0, failCount: 0 });
-  }
-  return _keyHealth.get(key);
-}
-
-/**
- * Đặt trạng thái key sau khi gặp lỗi.
- * @param {string} key
- * @param {429|503|number} statusCode
- */
-function _markKeyFailed(key, statusCode) {
-  const health = _getKeyHealth(key);
-  health.failCount += 1;
-
-  if (statusCode === 429) {
-    health.status = 'rate_limited';
-    health.cooldownUntil = Date.now() + KEY_COOLDOWN_MS;
-    console.warn(`[NutriBot] Key ***${key.slice(-6)} marked rate_limited for ${KEY_COOLDOWN_MS / 1000}s.`);
-  } else if (health.failCount >= MAX_FAIL_COUNT) {
-    health.status = 'circuit_open';
-    health.cooldownUntil = Date.now() + CIRCUIT_BREAK_MS;
-    console.warn(`[NutriBot] Key ***${key.slice(-6)} circuit breaker OPEN for ${CIRCUIT_BREAK_MS / 60000} min.`);
-  }
-}
-
-/** Đặt trạng thái key về healthy sau khi gọi thành công. */
-function _markKeyHealthy(key) {
-  const health = _getKeyHealth(key);
-  health.status = 'healthy';
-  health.failCount = 0;
-  health.cooldownUntil = 0;
-}
-
-/**
- * Trả về một API key đang healthy. Xoay vòng qua danh sách,
- * tự động bỏ qua key đang trong trạng thái lỗi/cooldown.
- * @returns {string|null}
- */
-function getHealthyKey() {
-  if (GEMINI_KEYS.length === 0) return null;
-  const now = Date.now();
-
-  for (let i = 0; i < GEMINI_KEYS.length; i++) {
-    const key = GEMINI_KEYS[i];
-    const health = _getKeyHealth(key);
-
-    // Tự động phục hồi key nếu cooldown đã hết
-    if (health.status !== 'healthy' && now >= health.cooldownUntil) {
-      health.status = 'healthy';
-      health.failCount = 0;
-      console.info(`[NutriBot] Key ***${key.slice(-6)} recovered — status reset to healthy.`);
-    }
-
-    if (health.status === 'healthy') return key;
-  }
-
-  return null; // Tất cả key đều đang trong trạng thái lỗi
-}
+// Centralized Gemini Service is now responsible for API Keys and Circuit Breaker
+const geminiService = require('./gemini.service');
 
 // ── In-memory rate-limit tracker (resets on server restart — acceptable) ──────
 // Map<userId, { count: number, windowStart: number }>
@@ -600,14 +507,6 @@ Always rely on the data above to personalize your responses. If data is insuffic
    * @returns {Promise<string>}
    */
   async _callGemini(systemPrompt, conversationTurns) {
-    if (GEMINI_KEYS.length === 0) {
-      throw new AppError(
-        'Gemini API key is not configured. Please contact the administrator.',
-        502,
-        'GEMINI_API_ERROR'
-      );
-    }
-
     // ── Build Gemini contents (shared across all model attempts) ───────────────
     const hasHistory = conversationTurns.some((t) => t.role === 'model');
 
@@ -638,117 +537,34 @@ Always rely on the data above to personalize your responses. If data is insuffic
       ],
     };
 
-    // ── Multi-Model Cascade ────────────────────────────────────────────────────
-    // Thử lần lượt từng model trong cascade. Nếu model hiện tại trả về
-    // 503 (overloaded) hoặc 429 (rate limit), chuyển sang model tiếp theo.
-    // Chỉ throw lỗi ra ngoài khi TẤT CẢ model trong cascade đều thất bại.
-    let lastError = null;
-
-    for (const modelName of GEMINI_MODEL_CASCADE) {
-      const apiUrl = `${GEMINI_BASE_URL}/${modelName}:generateContent`;
-      const TIMEOUT_MS = 20000; // 20s — đủ thoải mái cho model pro
-
-      // Với mỗi model, thử tối đa 2 lần với key khác nhau
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        const apiKey = getHealthyKey();
-
-        if (!apiKey) {
-          // Tất cả key đang trong trạng thái lỗi — chờ một chút rồi tiếp
-          console.warn('[NutriBot] No healthy API key available. Waiting 2s...');
-          await new Promise((r) => setTimeout(r, 2000));
-          break; // Bỏ qua model này, thử model tiếp theo
-        }
-
-        const controller = new AbortController();
-        const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-        try {
-          console.info(`[NutriBot] Attempting model=${modelName}, key=***${apiKey.slice(-6)}, attempt=${attempt}`);
-
-          const response = await fetch(`${apiUrl}?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-            signal: controller.signal,
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            const errorMsg  = `Gemini HTTP ${response.status} (${modelName}): ${errorText}`;
-
-            if (response.status === 429) {
-              _markKeyFailed(apiKey, 429);
-              lastError = new Error(errorMsg);
-              console.warn(`[NutriBot] ${errorMsg} — rotating key.`);
-              // Thử lại ngay với key tiếp theo (không tăng model)
-              continue;
-            }
-
-            if (response.status === 503 || response.status === 500) {
-              // Model đang quá tải — đánh dấu thất bại nhẹ rồi thử model tiếp
-              _markKeyFailed(apiKey, response.status);
-              lastError = new Error(errorMsg);
-              console.warn(`[NutriBot] ${errorMsg} — cascading to next model.`);
-              break; // Thoát vòng attempt, chuyển sang model tiếp theo
-            }
-
-            // Lỗi khác (400, 401, ...) — không nên retry, throw ngay
-            throw new Error(errorMsg);
-          }
-
-          // ✅ Response thành công
-          const data = await response.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-
-          if (!text) {
-            throw new Error(`Empty response from Gemini (${modelName}).`);
-          }
-
-          // Đánh dấu key healthy sau khi thành công
-          _markKeyHealthy(apiKey);
-          console.info(`[NutriBot] Success with model=${modelName}, key=***${apiKey.slice(-6)}`);
-          return text;
-
-        } catch (err) {
-          clearTimeout(timeoutId);
-          lastError = err;
-
-          if (err.name === 'AbortError') {
-            console.warn(`[NutriBot] model=${modelName} timed out after ${TIMEOUT_MS / 1000}s.`);
-            _markKeyFailed(apiKey, 'timeout');
-            break; // Timeout = model chậm, thử model tiếp theo
-          }
-
-          // Lỗi nghiêm trọng không thể retry
-          if (attempt === 2) break;
-
-          // Chờ ngắn trước khi retry với key khác
-          await new Promise((r) => setTimeout(r, 1000 * attempt));
-          continue;
-        } finally {
-          clearTimeout(timeoutId);
-        }
+    try {
+      // Chatbot cascade favors fast reasoning (flash)
+      const models = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
+      const data = await geminiService.executeWithResilience(models, requestBody, { timeoutMs: 45000, maxRetriesPerModel: 3 });
+      
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (!text) {
+        throw new Error(`Empty response from Gemini.`);
       }
-    }
+      return text;
+    } catch (err) {
+      console.error('[NutriBot] All models in cascade exhausted. Last error:', err.message);
 
-    // Tất cả model trong cascade đều thất bại
-    console.error('[NutriBot] All models in cascade exhausted. Last error:', lastError?.message);
+      const isRateLimit = err.message?.includes('429');
+      if (isRateLimit) {
+        throw new AppError(
+          'NutriBot is busy due to high traffic. Please try again in a few seconds.',
+          429,
+          'RATE_LIMIT_EXCEEDED'
+        );
+      }
 
-    // Phân biệt loại lỗi để trả message phù hợp cho user
-    const isRateLimit = lastError?.message?.includes('429');
-    if (isRateLimit) {
       throw new AppError(
-        'NutriBot is busy due to high traffic. Please try again in a few seconds.',
-        429,
-        'RATE_LIMIT_EXCEEDED'
+        'NutriBot is temporarily unavailable. Please try again later.',
+        502,
+        'GEMINI_API_ERROR'
       );
     }
-
-    throw new AppError(
-      'NutriBot is temporarily unavailable. Please try again later.',
-      502,
-      'GEMINI_API_ERROR'
-    );
   }
 }
 

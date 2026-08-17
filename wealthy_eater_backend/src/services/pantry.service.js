@@ -1,10 +1,10 @@
-const Pantry         = require('../models/Pantry');
-const Ingredient     = require('../models/Ingredient');
-const UserDietary    = require('../models/UserDietary');
-const UserProfile    = require('../models/UserProfile');
-const geminiService  = require('./gemini.service');
-const axios          = require('axios');
-const FormData       = require('form-data');
+const Pantry = require('../models/Pantry');
+const Ingredient = require('../models/Ingredient');
+const UserDietary = require('../models/UserDietary');
+const UserProfile = require('../models/UserProfile');
+const geminiService = require('./gemini.service');
+const axios = require('axios');
+const FormData = require('form-data');
 
 /**
  * Escapes special regex characters to prevent ReDoS attacks.
@@ -97,77 +97,55 @@ class PantryService {
     } catch (error) {
       console.warn('⚠️ [PantryService] n8n scan service failed or offline:', error.message);
 
-      const apiKey = (process.env.GOOGLE_API_KEY || '').split(',')[0].trim();
-      if (apiKey) {
-        console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis for Pantry Scan...");
-        try {
-          const models = [
-            process.env.GEMINI_VISION_MODEL || 'gemini-3.6-flash',
-            'gemini-3.5-flash',
-            'gemini-flash-latest',
-          ];
+      console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis for Pantry Scan...");
+      try {
+        const models = [
+          process.env.GEMINI_VISION_MODEL || 'gemini-3.6-flash',
+          'gemini-3.5-flash',
+          'gemini-flash-latest',
+        ];
 
-          const prompt = [
-            "You are an expert culinary AI assistant.",
-            "Analyze the image of this pantry or fridge and return a list of visible ingredients.",
-            "Output exclusively a minified JSON array of objects without markdown. Each object must have:",
-            '- "name": string (simple, clean ingredient name, e.g., "Egg", "Milk", "Tomato")',
-            '- "quantity": number (estimated realistic amount based on visual size)',
-            '- "unit": string. MUST be exactly one of: "g", "kg", "ml", "l", "pieces", "bunch". Use "pieces" for countable solid items (e.g. eggs, tomatoes) instead of generic terms.'
-          ].join("\\n");
+        const prompt = [
+          "You are an expert culinary AI assistant.",
+          "Analyze the image of this pantry or fridge and return a list of visible ingredients.",
+          "Output exclusively a minified JSON array of objects without markdown. Each object must have:",
+          '- "name": string (simple, clean ingredient name, e.g., "Egg", "Milk", "Tomato")',
+          '- "quantity": number (estimated realistic amount based on visual size)',
+          '- "unit": string. MUST be exactly one of: "g", "kg", "ml", "l", "pieces", "bunch". Use "pieces" for countable solid items (e.g. eggs, tomatoes) instead of generic terms.'
+        ].join("\\n");
 
-          const geminiPayload = {
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  { text: prompt },
-                  {
-                    inline_data: {
-                      mime_type: file.mimetype || "image/jpeg",
-                      data: file.buffer.toString("base64"),
-                    },
+        const requestBody = {
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: prompt },
+                {
+                  inline_data: {
+                    mime_type: file.mimetype || "image/jpeg",
+                    data: file.buffer.toString("base64"),
                   },
-                ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0.2,
-              responseMimeType: "application/json",
+                },
+              ],
             },
-          };
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json",
+          },
+        };
 
-          let rawText = null;
-          let lastGeminiError = null;
+        const data = await geminiService.executeWithResilience(models, requestBody, { timeoutMs: 60000, maxRetriesPerModel: 3 });
+        
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) throw new Error("Empty response from Gemini.");
 
-          for (const model of models) {
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-            try {
-              console.info(`⚡ [Pantry Gemini Fallback]: Trying model ${model}...`);
-              const geminiResponse = await axios.post(geminiUrl, geminiPayload, { timeout: 45000 });
-              rawText = geminiResponse.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (rawText) {
-                console.info(`✔ [Pantry Gemini Fallback]: Success with model ${model}`);
-                break;
-              }
-            } catch (err) {
-              lastGeminiError = err;
-              console.warn(`⚠️ [Pantry Gemini Fallback]: Model ${model} failed with status ${err.response?.status || err.message}, trying next fallback...`);
-            }
-          }
-
-          if (!rawText) throw lastGeminiError || new Error("All fallback models exhausted");
-
-          const cleanJsonStr = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-          rawIngredients = JSON.parse(cleanJsonStr);
-        } catch (geminiError) {
-          console.error('❌ [Gemini Fallback Failed]:', geminiError.message);
-          const AppError = require('../utils/AppError');
-          throw new AppError('Pantry scan service and AI fallback are both unavailable. Please try again.', 503, 'SERVICE_UNAVAILABLE');
-        }
-      } else {
+        const cleanJsonStr = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+        rawIngredients = JSON.parse(cleanJsonStr);
+      } catch (geminiError) {
+        console.error('❌ [Gemini Fallback Failed]:', geminiError.message);
         const AppError = require('../utils/AppError');
-        throw new AppError('Pantry scan service is unavailable and no AI fallback is configured.', 503, 'SERVICE_UNAVAILABLE');
+        throw new AppError('Pantry scan service and AI fallback are both unavailable. Please try again.', 503, 'SERVICE_UNAVAILABLE');
       }
     }
 
@@ -217,8 +195,8 @@ class PantryService {
       Pantry.findOne({ user_id: userId }),
       UserDietary.findOne({ user_id: userId })
         .populate({ path: 'medical_condition_id', select: 'name dietary_guideline nutrient_constraints' })
-        .populate({ path: 'allergies',            select: 'name' })
-        .populate({ path: 'dislike_ingredients',  select: 'name' }),
+        .populate({ path: 'allergies', select: 'name' })
+        .populate({ path: 'dislike_ingredients', select: 'name' }),
       UserProfile.findOne({ user_id: userId }).lean(),
     ]);
 
@@ -232,7 +210,7 @@ class PantryService {
 
     // ── Resolve health constraints ─────────────────────────────────────────
     const allergies = userDietary?.allergies?.map((a) => a.name).filter(Boolean) ?? [];
-    const dislikes  = userDietary?.dislike_ingredients?.map((d) => d.name).filter(Boolean) ?? [];
+    const dislikes = userDietary?.dislike_ingredients?.map((d) => d.name).filter(Boolean) ?? [];
     const dietPreferences = userDietary?.diet_preferences ?? [];
     const medicalCondition = userDietary?.medical_condition_id ?? null; // populated object or null
 
@@ -256,7 +234,7 @@ class PantryService {
 
     // ── Build cooking constraints from profile ─────────────────────────────
     const cookingConstraints = {
-      skillLevel:     userDietary?.cooking_skill_level ?? null,
+      skillLevel: userDietary?.cooking_skill_level ?? null,
       maxTimeMinutes: userDietary?.available_cooking_time ?? null,
     };
 
@@ -266,7 +244,7 @@ class PantryService {
     const healthGoal = userProfile?.health_goal ?? null;
 
     return await geminiService.suggestRecipesFromIngredients({
-      ingredients:        safeIngredients,
+      ingredients: safeIngredients,
       allergies,
       dislikes,
       medicalCondition,
