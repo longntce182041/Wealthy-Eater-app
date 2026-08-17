@@ -117,6 +117,15 @@ class NutritionistController {
 
       const request = await nutritionistService.respondToMealPlanRequest(nutritionistUserId, requestId, status);
 
+      // Emit real-time status update to the user
+      const io = req.app.get('io');
+      if (io && request.user_id) {
+        io.to(request.user_id.toString()).emit('meal_plan_status_updated', {
+          id: request._id,
+          status: request.status,
+        });
+      }
+
       return res.status(200).json({
         success: true,
         data: request,

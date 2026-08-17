@@ -84,6 +84,11 @@ function initSocketIO(httpServer) {
   io.on('connection', (socket) => {
     const userId = socket.data.userId;
     console.log(`[Socket.IO] Client connected: socketId=${socket.id}, userId=${userId}`);
+    
+    // Automatically join the socket to a room identical to their userId for personal notifications
+    if (userId) {
+      socket.join(userId.toString());
+    }
 
     // Rate limiter state per connection
     let lastMessageTime = 0;
