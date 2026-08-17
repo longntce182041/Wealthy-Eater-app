@@ -28,7 +28,7 @@
           "parameters": [
             {
               "name": "key",
-              "value": "apikey"
+              "value": "your-api-key"
             }
           ]
         },
