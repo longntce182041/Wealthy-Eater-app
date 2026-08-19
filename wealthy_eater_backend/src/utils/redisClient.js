@@ -32,6 +32,7 @@ function getRedisClient() {
       enableOfflineQueue: false,
       maxRetriesPerRequest: 1,
       connectTimeout: 3000,
+      retryStrategy: () => null // Stop endless reconnect loop
     });
 
     _client.on('connect', () => {
@@ -41,10 +42,7 @@ function getRedisClient() {
     _client.on('error', (err) => {
       if (_client.status === 'end' || _client.status === 'close') return;
       console.warn('[RedisClient] Redis error (non-fatal):', err.message);
-    });
-
-    _client.on('close', () => {
-      console.warn('[RedisClient] Redis connection closed.');
+      _client.disconnect(); // Disconnect to prevent further spam
     });
   } catch (err) {
     console.warn('[RedisClient] Failed to initialize Redis client:', err.message);

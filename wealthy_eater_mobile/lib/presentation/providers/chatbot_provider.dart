@@ -112,15 +112,9 @@ class ChatbotProvider extends ChangeNotifier {
       final errMsg = mapError(e).message;
       _errorMessage = errMsg;
 
-      // Revert optimistic user message if the API failed
+      // Revert optimistic user message so history stays clean
       _removeMessage(userMsg);
 
-      // Append error as a system-like model message so user sees it in chat
-      _addMessage(ChatbotMessageModel(
-        role:      'model',
-        content:   '⚠️ $errMsg',
-        createdAt: DateTime.now(),
-      ));
       debugPrint('[ChatbotProvider] sendMessage error: $e');
     } finally {
       _isSending = false;

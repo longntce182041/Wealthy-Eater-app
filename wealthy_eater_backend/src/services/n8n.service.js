@@ -1,4 +1,5 @@
 const axios = require("axios");
+const geminiService = require("./gemini.service");
 
 class N8nService {
   async triggerTemplateMatch(payload) {
@@ -84,34 +85,22 @@ class N8nService {
       return dataObj;
     } catch (error) {
       console.warn("⚠️ [n8n Offline or Failed]:", error.message);
-
-      const apiKey = process.env.GOOGLE_API_KEY;
-      if (apiKey) {
-        console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis...");
-        try {
-          return await this.callGeminiVisionFallback(file, apiKey);
-        } catch (geminiError) {
-          console.error("❌ [Gemini Fallback Failed]:", geminiError.message);
-          throw new Error("N8N_AND_GEMINI_FALLBACK_FAILURE");
-        }
+      console.info("⚡ [Gemini Fallback]: Initiating direct Gemini Vision API analysis...");
+      try {
+        // executeWithResilience handles key selection & Circuit Breaker internally
+        return await this.callGeminiVisionFallback(file);
+      } catch (geminiError) {
+        console.error("❌ [Gemini Fallback Failed]:", geminiError.message);
+        throw new Error("N8N_AND_GEMINI_FALLBACK_FAILURE");
       }
-
-      if (error.response) {
-        throw new Error(
-          `N8N_HTTP_${error.response.status}: ${typeof error.response.data === "object"
-            ? JSON.stringify(error.response.data)
-            : error.response.data
-          }`,
-        );
-      }
-      throw new Error("N8N_TIMEOUT_OR_FAILURE");
     }
   }
 
-  async callGeminiVisionFallback(file, apiKey) {
-    // Model verified at ai.google.dev/gemini-api/docs/models
-    const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  async callGeminiVisionFallback(file) {
+    const models = [
+      process.env.GEMINI_VISION_MODEL || 'gemini-3.6-flash',
+      'gemini-3.5-flash',
+    ];
 
     const prompt = [
       "You are an elite clinical research dietitian and expert culinary vision assistant.",
@@ -143,8 +132,8 @@ class N8nService {
           parts: [
             { text: prompt },
             {
-              inline_data: {
-                mime_type: file.mimetype || "image/jpeg",
+              inlineData: {
+                mimeType: file.mimetype || "image/jpeg",
                 data: file.buffer.toString("base64"),
               },
             },
@@ -153,18 +142,60 @@ class N8nService {
       ],
       generationConfig: {
         temperature: 0.2,
+        maxOutputTokens: 4096,
         responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            is_valid_meal: { type: "BOOLEAN" },
+            meal_name: { type: "STRING" },
+            confidence: { type: "NUMBER" },
+            ingredients: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  name: { type: "STRING" },
+                  estimated_amount: { type: "NUMBER" },
+                  estimated_unit: { type: "STRING" },
+                  nutrition: {
+                    type: "OBJECT",
+                    properties: {
+                      kcal: { type: "NUMBER" },
+                      protein: { type: "NUMBER" },
+                      carbs: { type: "NUMBER" },
+                      fats: { type: "NUMBER" },
+                    },
+                    required: ["kcal", "protein", "carbs", "fats"]
+                  }
+                },
+                required: ["name", "estimated_amount", "estimated_unit", "nutrition"]
+              }
+            },
+            totals: {
+              type: "OBJECT",
+              properties: {
+                kcal: { type: "NUMBER" },
+                protein: { type: "NUMBER" },
+                carbs: { type: "NUMBER" },
+                fats: { type: "NUMBER" },
+              },
+              required: ["kcal", "protein", "carbs", "fats"]
+            }
+          },
+          required: ["is_valid_meal", "meal_name", "confidence", "ingredients", "totals"]
+        }
       },
     };
 
-    const response = await axios.post(url, payload, {
-      timeout: 60000,
-      headers: { "Content-Type": "application/json" },
+    const data = await geminiService.executeWithResilience(models, payload, { 
+      timeoutMs: 60000,  // 60s
+      maxRetriesPerModel: 3 
     });
-
-    const text =
-      response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      response.data?.candidates?.[0]?.content?.parts
+    
+    let text =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      data?.candidates?.[0]?.content?.parts
         ?.map((p) => p.text)
         .join("\n");
 

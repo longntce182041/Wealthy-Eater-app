@@ -17,6 +17,7 @@ class UserAiRecipeController {
       const mealName = recipeData.mealName.substring(0, 200);
       const description = recipeData.description ? String(recipeData.description).substring(0, 1000) : '';
       const difficulty = recipeData.difficulty ? String(recipeData.difficulty).substring(0, 50) : '';
+      const healthNote = recipeData.healthNote ? String(recipeData.healthNote).substring(0, 1000) : '';
 
       const existingRecipe = await UserAiRecipe.findOne({ 
         user_id: userId, 
@@ -43,6 +44,7 @@ class UserAiRecipeController {
         description: description,
         cookingTimeMinutes: parseInt(recipeData.cookingTimeMinutes) || 0,
         difficulty: difficulty,
+        healthNote: healthNote,
         cookingSteps: normalizedSteps
       });
 

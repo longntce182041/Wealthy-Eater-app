@@ -20,32 +20,28 @@
 const ChatbotSession = require('../models/ChatbotSession');
 const UserProfile = require('../models/UserProfile');
 const UserDietary = require('../models/UserDietary');
+const ChatbotSession = require('../models/ChatbotSession');
+const UserProfile = require('../models/UserProfile');
+const UserDietary = require('../models/UserDietary');
 const CustomerMealLog = require('../models/CustomerMealLog');
 const ConsultationContract = require('../models/ConsultationContract');
+const WeightLog = require('../models/WeightLog');
+const MealPlan = require('../models/MealPlan');
+const MealPlanItem = require('../models/MealPlanItem');
+const NutritionAssessment = require('../models/NutritionAssessment');
+const AppError = require('../utils/AppError');
 const AppError = require('../utils/AppError');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// ▸ Multi-model cascade: khi model đầu bị 503/429, tự động chuyển sang model tiếp theo
-// trong cùng 1 request — người dùng không bị gián đoạn.
-//
-// Danh sách models được xác minh từ tài liệu chính thức của Google (ai.google.dev/gemini-api/docs/models)
-// Cập nhật lần cuối: 2026-08. Để kiểm tra lại, gọi:
-//   GET https://generativelanguage.googleapis.com/v1beta/models?key=YOUR_KEY
-//
-// Thứ tự cascade:
-//   Tầng 1 — gemini-3.6-flash : Stable, mới nhất, nhanh nhất, ít nghẽn nhất
-//   Tầng 2 — gemini-3.5-flash : Stable, production-grade, hiệu suất rất tốt
-//   Tầng 3 — gemini-3.5-flash-lite : Stable, siêu nhẹ, cực hiếm bị từ chối
-const GEMINI_MODEL_CASCADE = [
-  'gemini-3.6-flash',       // Tầng 1: Ưu tiên — Stable (2026)
-  'gemini-3.5-flash',       // Tầng 2: Fallback — Stable (2026)
-  'gemini-3.5-flash-lite',  // Tầng 3: Dự phòng — Stable, ultra-lightweight
-];
-
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+// Constants related to Gemini Cascade have been moved to gemini.service.js
 const MAX_CONTEXT_TURNS = 20;   // last 20 messages sent to Gemini (10 pairs)
 const MAX_MESSAGES_PER_MINUTE = 10; // soft rate-limit per user
+const MEAL_LOG_DAYS = 3;    // how many recent days of logs to include
+const WEIGHT_LOG_LIMIT = 7;    // last N weight logs to show trend
+
+// Centralized Gemini Service is now responsible for API Keys and Circuit Breaker
+const geminiService = require('./gemini.service');
 const MEAL_LOG_DAYS = 3;    // how many recent days of logs to include
 const MEAL_PLAN_DAYS = 7;    // how many recent meal plan days to include
 
@@ -156,7 +152,7 @@ class UserChatbotService {
 
     if (!context.profile) {
       throw new AppError(
-        'Bạn cần hoàn thiện hồ sơ cá nhân trước khi sử dụng trợ lý AI.',
+        'You need to complete your personal profile before using the AI assistant.',
         400,
         'USER_PROFILE_REQUIRED'
       );
@@ -279,7 +275,7 @@ class UserChatbotService {
 
     if (record.count > MAX_MESSAGES_PER_MINUTE) {
       throw new AppError(
-        `Bạn đang gửi quá nhiều tin nhắn. Vui lòng đợi một chút rồi thử lại.`,
+        `You are sending too many messages. Please wait a moment and try again.`,
         429,
         'RATE_LIMIT_EXCEEDED'
       );
@@ -297,9 +293,23 @@ class UserChatbotService {
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - MEAL_LOG_DAYS);
 
-    const [profile, dietary, recentLogs, activeContract] = await Promise.all([
+    // Find the active meal plan ID first (needed for MealPlanItem sub-query)
+    const activeMealPlan = await MealPlan.findOne({
+      user_id: userId,
+      status: 'PUBLISHED',
+    })
+      .sort({ date: -1 })
+      .lean();
+
+    const [profile, dietary, recentLogs, activeContract, recentWeightLogs, mealPlanItems, nutritionAssessment] = await Promise.all([
       UserProfile.findOne({ user_id: userId }).lean(),
-      UserDietary.findOne({ user_id: userId }).lean(),
+
+      UserDietary.findOne({ user_id: userId })
+        .populate({ path: 'medical_condition_id', select: 'name dietary_guideline' })
+        .populate({ path: 'allergies', select: 'name' })
+        .populate({ path: 'dislike_ingredients', select: 'name' })
+        .lean(),
+
       CustomerMealLog.find({
         user_id: userId,
         create_at: { $gte: threeDaysAgo },
@@ -307,15 +317,43 @@ class UserChatbotService {
         .sort({ create_at: -1 })
         .limit(15)
         .lean(),
+
       ConsultationContract.findOne({
         user_id: userId,
         status: 'active',
       })
         .populate({ path: 'nutritionist_id', select: 'full_name specialization' })
         .lean(),
+
+      // Weight trend: last 7 entries sorted newest first
+      WeightLog.find({ user_id: userId })
+        .sort({ date: -1 })
+        .limit(WEIGHT_LOG_LIMIT)
+        .lean(),
+
+      // Today's meal plan items (if active plan exists)
+      activeMealPlan
+        ? MealPlanItem.find({ meal_plan_id: activeMealPlan._id })
+          .populate({ path: 'recipe_id', select: 'name' })
+          .lean()
+        : Promise.resolve([]),
+
+      // Latest nutritionist assessment for this user
+      NutritionAssessment.findOne({ user_id: userId })
+        .populate({ path: 'nutritionist_id', select: 'full_name' })
+        .sort({ _id: -1 })
+        .lean(),
     ]);
 
-    return { profile, dietary, recentLogs, activeContract };
+    return {
+      profile,
+      dietary,
+      recentLogs,
+      activeContract,
+      recentWeightLogs,
+      activeMealPlan: activeMealPlan ? { ...activeMealPlan, items: mealPlanItems } : null,
+      nutritionAssessment,
+    };
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -361,92 +399,161 @@ class UserChatbotService {
    * system instructions in multi-turn chat.
    */
   _buildSystemPrompt(context) {
-    const { profile, dietary, recentLogs, activeContract } = context;
+    const { profile, dietary, recentLogs, activeContract, recentWeightLogs, activeMealPlan, nutritionAssessment } = context;
 
     // ── Profile block ───────────────────────────────────────────────────────
     const profileBlock = profile
-      ? `USER PROFILE:
+      ? `PERSONAL PROFILE:
 - Full Name: ${this._sanitizeForPrompt(profile.full_name) || 'Not provided'}
 - Age: ${profile.age || 'Unknown'} | Gender: ${profile.gender || 'Unknown'}
 - Height: ${profile.height || '?'} cm | Weight: ${profile.weight || '?'} kg
 - BMI: ${profile.bmi ? profile.bmi.toFixed(1) : 'Not calculated'} | BMR: ${profile.bmr ? Math.round(profile.bmr) : 'Not calculated'} kcal/day
 - TDEE (Total Daily Energy Expenditure): ${profile.tdee ? Math.round(profile.tdee) : 'Not calculated'} kcal/day
 - Health Goal: ${this._sanitizeForPrompt(profile.health_goal) || 'Not set'}`
-      : 'USER PROFILE: User has not updated their profile.';
+      : 'PERSONAL PROFILE: User has not updated their profile.';
+
+    // ── Weight trend block ──────────────────────────────────────────────────
+    let weightTrendBlock = 'WEIGHT HISTORY: No data.';
+    if (recentWeightLogs?.length >= 2) {
+      // logs are sorted newest-first
+      const latest = recentWeightLogs[0];
+      const oldest = recentWeightLogs[recentWeightLogs.length - 1];
+      const delta = (latest.weight - oldest.weight).toFixed(1);
+      const trend = delta > 0 ? `▲ +${delta} kg` : delta < 0 ? `▼ ${delta} kg` : '→ Unchanged';
+      const entries = recentWeightLogs
+        .map((w) => `  • ${new Date(w.date).toLocaleDateString('en-US')}: ${w.weight} kg`)
+        .join('\n');
+      weightTrendBlock = `WEIGHT HISTORY (last ${recentWeightLogs.length} entries — Trend: ${trend}):
+${entries}`;
+    } else if (recentWeightLogs?.length === 1) {
+      weightTrendBlock = `WEIGHT HISTORY: ${recentWeightLogs[0].weight} kg (only 1 entry, trend unknown).`;
+    }
 
     // ── Dietary block ───────────────────────────────────────────────────────
-    let dietaryBlock = 'DIETARY INFO: No data.';
+    let dietaryBlock = 'NUTRITION INFO: No data.';
     if (dietary) {
       const allergies = dietary.allergies?.length
-        ? dietary.allergies.join(', ')
+        ? dietary.allergies.map((a) => a.name).join(', ')
         : 'None';
       const dislikes = dietary.dislike_ingredients?.length
-        ? dietary.dislike_ingredients.join(', ')
+        ? dietary.dislike_ingredients.map((i) => i.name).join(', ')
         : 'None';
       const preferences = dietary.diet_preferences?.length
         ? dietary.diet_preferences.join(', ')
         : 'Unknown';
 
-      dietaryBlock = `DIETARY INFO:
-- ⚠️ ALLERGIES (STRICT — DO NOT SUGGEST): ${allergies}
-- Disliked Ingredients: ${dislikes}
-- Diet Preferences: ${preferences}
-- Cooking Skill Level: ${dietary.cooking_skill_level || 'Unknown'}
-- Available Cooking Time: ${dietary.available_cooking_time ? dietary.available_cooking_time + ' minutes' : 'Unknown'}`;
+      let medicalConditionText = 'None';
+      if (dietary.medical_condition_id) {
+        const mc = dietary.medical_condition_id;
+        medicalConditionText = `${mc.name} (Dietary Guideline: ${mc.dietary_guideline || 'None'})`;
+      }
+
+      dietaryBlock = `NUTRITION INFO:
+- ⚠️ MEDICAL CONDITION (MUST PRIORITIZE): ${medicalConditionText}
+- ⚠️ ALLERGIES (STRICTLY AVOID): ${allergies}
+- Disliked ingredients: ${dislikes}
+- Diet preferences: ${preferences}
+- Activity level: ${dietary.activity_level || 'Not provided'}
+- Cooking skill: ${dietary.cooking_skill_level || 'Unknown'}
+- Max cooking time: ${dietary.available_cooking_time ? dietary.available_cooking_time + ' minutes' : 'Unknown'}`;
     }
 
     // ── Meal log block (last 3 days) ────────────────────────────────────────
     let mealLogBlock = 'RECENT MEAL LOGS: No data.';
     if (recentLogs?.length) {
       const logSummary = recentLogs
-        .slice(0, 8)
+        .slice(0, 10)
         .map(
           (log) =>
             `  • ${log.custom_name || 'Meal'} — ${log.actual_calories} kcal` +
-            (log.actual_protein ? `, ${log.actual_protein}g protein` : '') +
-            (log.deviation_flag ? ' ⚠️ [deviated from goal]' : '')
+            (log.actual_protein ? `, protein ${log.actual_protein}g` : '') +
+            (log.actual_carbs ? `, carbs ${log.actual_carbs}g` : '') +
+            (log.actual_fat ? `, fat ${log.actual_fat}g` : '') +
+            (log.deviation_flag ? ' ⚠️ [off-plan]' : '')
         )
         .join('\n');
 
-      const totalCalories = recentLogs.reduce(
-        (sum, l) => sum + (l.actual_calories || 0),
-        0
-      );
-      mealLogBlock = `RECENT MEAL LOGS (Last ${MEAL_LOG_DAYS} days — ${recentLogs.length} meals, total ${totalCalories} kcal):
+      const totalCalories = recentLogs.reduce((sum, l) => sum + (l.actual_calories || 0), 0);
+      const totalProtein = recentLogs.reduce((sum, l) => sum + (l.actual_protein || 0), 0);
+      const totalCarbs = recentLogs.reduce((sum, l) => sum + (l.actual_carbs || 0), 0);
+      const totalFat = recentLogs.reduce((sum, l) => sum + (l.actual_fat || 0), 0);
+
+      mealLogBlock = `MEAL LOGS PAST ${MEAL_LOG_DAYS} DAYS (${recentLogs.length} meals — Total: ${totalCalories} kcal | Protein: ${totalProtein.toFixed(0)}g | Carbs: ${totalCarbs.toFixed(0)}g | Fat: ${totalFat.toFixed(0)}g):
 ${logSummary}`;
     }
 
+    // ── Active meal plan block ──────────────────────────────────────────────
+    let mealPlanBlock = 'CURRENT MEAL PLAN: No active plan.';
+    if (activeMealPlan?.items?.length) {
+      const planSummary = activeMealPlan.items
+        .slice(0, 10)
+        .map((item) => {
+          const recipeName = item.recipe_id?.name || 'AI Recipe';
+          return `  • [${item.meal_type || 'Meal'}] ${recipeName}` +
+            (item.target_calories ? ` — target ${item.target_calories} kcal` : '');
+        })
+        .join('\n');
+      mealPlanBlock = `CURRENT MEAL PLAN (${activeMealPlan.items.length} meals):
+${planSummary}`;
+    }
+
+    // ── Nutrition assessment block ──────────────────────────────────────────
+    let assessmentBlock = 'NUTRITIONIST ASSESSMENT: No assessment available.';
+    if (nutritionAssessment) {
+      const by = nutritionAssessment.nutritionist_id?.full_name || 'Nutritionist';
+      assessmentBlock = `NUTRITION ASSESSMENT FROM EXPERT (${by}):
+- Diagnosis: ${this._sanitizeForPrompt(nutritionAssessment.diagnosis) || 'None'}
+- Recommendations: ${this._sanitizeForPrompt(nutritionAssessment.recommendations) || 'None'}
+- Notes: ${this._sanitizeForPrompt(nutritionAssessment.notes) || 'None'}`;
+    }
+
     // ── Active contract block ───────────────────────────────────────────────
-    let contractBlock = 'NUTRITIONIST: The user currently has no active consultation contract.';
+    let contractBlock = 'ASSIGNED NUTRITIONIST: The user currently has no active consultation contract.';
     if (activeContract?.nutritionist_id) {
       const n = activeContract.nutritionist_id;
       contractBlock = `ASSIGNED NUTRITIONIST:
 - Name: ${n.full_name || 'Unknown'}
 - Specialization: ${n.specialization || 'General Nutrition'}
-(The user is currently in an active consultation contract)`;
+(The user is currently in a consultation contract with this expert)`;
     }
 
-    return `You are **NutriBot** — the personal AI nutrition assistant for the Wealthy Eater app. You support bilingual communication (English and Vietnamese), but your primary language is English.
-Your tasks are:
-1. Answer questions about nutrition, diets, and meal plans accurately and practically.
-2. Provide personalized advice based on the user's health profile and actual data.
-3. Always respect the ALLERGIES list — DO NOT suggest any ingredients that are in the allergies list.
-4. If the user asks about serious medical issues, advise them to consult a specialist doctor.
-5. Keep answers concise, easy to understand, practical, and friendly. IMPORTANT: Default to English, but reply in the language the user asked in (English or Vietnamese).
+    return `You are **NutriBot** — the personal AI nutrition assistant for the Wealthy Eater app.
 
---- USER DATA (ACTUAL UPDATES) ---
+**LANGUAGE RULE (HIGHEST PRIORITY):**
+- Detect the language the user wrote in and ALWAYS reply in that exact same language.
+- If the user writes in Vietnamese → reply in Vietnamese.
+- If the user writes in English → reply in English.
+- If the user writes in any other language → reply in that language.
+- If the language cannot be determined → default to English.
+- NEVER switch language mid-conversation unless the user switches first.
+
+Your tasks:
+1. Answer questions about nutrition, diets, and meal plans accurately and practically.
+2. Provide personalized advice based on the user's actual health data provided below.
+3. STRICTLY respect the ALLERGIES list — NEVER suggest any ingredient listed there.
+4. ALWAYS follow the dietary guidelines associated with the user's MEDICAL CONDITION.
+5. If the user asks about serious medical issues, advise them to consult a specialist doctor.
+6. Keep answers detailed enough to be useful, easy to understand, practical, and friendly.
+
+--- USER DATA (LIVE CONTEXT) ---
 
 ${profileBlock}
+
+${weightTrendBlock}
 
 ${dietaryBlock}
 
 ${mealLogBlock}
 
+${mealPlanBlock}
+
+${assessmentBlock}
+
 ${contractBlock}
 
 --- END OF DATA ---
 
-Always rely on the above data to personalize your answers. If there is not enough data, answer based on general nutritional principles.`;
+Always rely on the data above to personalize your responses. If data is insufficient, answer based on general nutrition principles.`;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -485,36 +592,10 @@ Always rely on the above data to personalize your answers. If there is not enoug
    * @returns {Promise<string>}
    */
   async _callGemini(systemPrompt, conversationTurns) {
-    if (GEMINI_KEYS.length === 0) {
-      throw new AppError(
-        'Gemini API key is not configured. Please contact the administrator.',
-        502,
-        'GEMINI_API_ERROR'
-      );
-    }
-
-    // ── Build Gemini contents (shared across all model attempts) ───────────────
-    const hasHistory = conversationTurns.some((t) => t.role === 'model');
-
-    let contents;
-    if (!hasHistory && conversationTurns.length === 1) {
-      // First message — prepend system bootstrap as user/model handshake
-      contents = [
-        { role: 'user', parts: [{ text: systemPrompt }] },
-        {
-          role: 'model',
-          parts: [{ text: 'Tôi đã hiểu đầy đủ thông tin của bạn. Tôi là NutriBot, sẵn sàng hỗ trợ bạn với mọi câu hỏi về dinh dưỡng và chế độ ăn uống!' }],
-        },
-        ...conversationTurns,
-      ];
-    } else {
-      contents = conversationTurns;
-    }
-
     const requestBody = {
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents,
-      generationConfig: { temperature: 0.7, maxOutputTokens: 1024, topP: 0.9 },
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: conversationTurns, // systemInstruction handles context — no redundant prepend needed
+      generationConfig: { temperature: 0.7, maxOutputTokens: 4096, topP: 0.9 },
       safetySettings: [
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
@@ -523,117 +604,129 @@ Always rely on the above data to personalize your answers. If there is not enoug
       ],
     };
 
-    // ── Multi-Model Cascade ────────────────────────────────────────────────────
-    // Thử lần lượt từng model trong cascade. Nếu model hiện tại trả về
-    // 503 (overloaded) hoặc 429 (rate limit), chuyển sang model tiếp theo.
-    // Chỉ throw lỗi ra ngoài khi TẤT CẢ model trong cascade đều thất bại.
-    let lastError = null;
+    try {
+      // Chatbot cascade favors fast reasoning (flash)
+      const models = ['gemini-3.6-flash', 'gemini-3.5-flash'];
+      const data = await geminiService.executeWithResilience(models, requestBody, { timeoutMs: 60000, maxRetriesPerModel: 3 });
 
-    for (const modelName of GEMINI_MODEL_CASCADE) {
-      const apiUrl = `${GEMINI_BASE_URL}/${modelName}:generateContent`;
-      const TIMEOUT_MS = 20000; // 20s — đủ thoải mái cho model pro
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (!text) {
+        throw new Error(`Empty response from Gemini.`);
+      }
+      return text;
+    } catch (err) {
+      console.error('[NutriBot] All models in cascade exhausted. Last error:', err.message);
+      // ── Multi-Model Cascade ────────────────────────────────────────────────────
+      // Thử lần lượt từng model trong cascade. Nếu model hiện tại trả về
+      // 503 (overloaded) hoặc 429 (rate limit), chuyển sang model tiếp theo.
+      // Chỉ throw lỗi ra ngoài khi TẤT CẢ model trong cascade đều thất bại.
+      let lastError = null;
 
-      // Với mỗi model, thử tối đa 2 lần với key khác nhau
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        const apiKey = getHealthyKey();
+      for (const modelName of GEMINI_MODEL_CASCADE) {
+        const apiUrl = `${GEMINI_BASE_URL}/${modelName}:generateContent`;
+        const TIMEOUT_MS = 20000; // 20s — đủ thoải mái cho model pro
 
-        if (!apiKey) {
-          // Tất cả key đang trong trạng thái lỗi — chờ một chút rồi tiếp
-          console.warn('[NutriBot] No healthy API key available. Waiting 2s...');
-          await new Promise((r) => setTimeout(r, 2000));
-          break; // Bỏ qua model này, thử model tiếp theo
-        }
+        // Với mỗi model, thử tối đa 2 lần với key khác nhau
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const apiKey = getHealthyKey();
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+          if (!apiKey) {
+            // Tất cả key đang trong trạng thái lỗi — chờ một chút rồi tiếp
+            console.warn('[NutriBot] No healthy API key available. Waiting 2s...');
+            await new Promise((r) => setTimeout(r, 2000));
+            break; // Bỏ qua model này, thử model tiếp theo
+          }
 
-        try {
-          console.info(`[NutriBot] Attempting model=${modelName}, key=***${apiKey.slice(-6)}, attempt=${attempt}`);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-          const response = await fetch(`${apiUrl}?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
-            signal: controller.signal,
-          });
+          try {
+            console.info(`[NutriBot] Attempting model=${modelName}, key=***${apiKey.slice(-6)}, attempt=${attempt}`);
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            const errorMsg = `Gemini HTTP ${response.status} (${modelName}): ${errorText}`;
+            const response = await fetch(`${apiUrl}?key=${apiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+            });
 
-            if (response.status === 429) {
-              _markKeyFailed(apiKey, 429);
-              lastError = new Error(errorMsg);
-              console.warn(`[NutriBot] ${errorMsg} — rotating key.`);
-              // Thử lại ngay với key tiếp theo (không tăng model)
-              continue;
+            if (!response.ok) {
+              const errorText = await response.text();
+              const errorMsg = `Gemini HTTP ${response.status} (${modelName}): ${errorText}`;
+
+              if (response.status === 429) {
+                _markKeyFailed(apiKey, 429);
+                lastError = new Error(errorMsg);
+                console.warn(`[NutriBot] ${errorMsg} — rotating key.`);
+                // Thử lại ngay với key tiếp theo (không tăng model)
+                continue;
+              }
+
+              if (response.status === 503 || response.status === 500) {
+                // Model đang quá tải — đánh dấu thất bại nhẹ rồi thử model tiếp
+                _markKeyFailed(apiKey, response.status);
+                lastError = new Error(errorMsg);
+                console.warn(`[NutriBot] ${errorMsg} — cascading to next model.`);
+                break; // Thoát vòng attempt, chuyển sang model tiếp theo
+              }
+
+              // Lỗi khác (400, 401, ...) — không nên retry, throw ngay
+              throw new Error(errorMsg);
             }
 
-            if (response.status === 503 || response.status === 500) {
-              // Model đang quá tải — đánh dấu thất bại nhẹ rồi thử model tiếp
-              _markKeyFailed(apiKey, response.status);
-              lastError = new Error(errorMsg);
-              console.warn(`[NutriBot] ${errorMsg} — cascading to next model.`);
-              break; // Thoát vòng attempt, chuyển sang model tiếp theo
+            // ✅ Response thành công
+            const data = await response.json();
+            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+            if (!text) {
+              throw new Error(`Empty response from Gemini (${modelName}).`);
             }
 
-            // Lỗi khác (400, 401, ...) — không nên retry, throw ngay
-            throw new Error(errorMsg);
+            // Đánh dấu key healthy sau khi thành công
+            _markKeyHealthy(apiKey);
+            console.info(`[NutriBot] Success with model=${modelName}, key=***${apiKey.slice(-6)}`);
+            return text;
+
+          } catch (err) {
+            clearTimeout(timeoutId);
+            lastError = err;
+
+            if (err.name === 'AbortError') {
+              console.warn(`[NutriBot] model=${modelName} timed out after ${TIMEOUT_MS / 1000}s.`);
+              _markKeyFailed(apiKey, 'timeout');
+              break; // Timeout = model chậm, thử model tiếp theo
+            }
+
+            // Lỗi nghiêm trọng không thể retry
+            if (attempt === 2) break;
+
+            // Chờ ngắn trước khi retry với key khác
+            await new Promise((r) => setTimeout(r, 1000 * attempt));
+            continue;
+          } finally {
+            clearTimeout(timeoutId);
           }
-
-          // ✅ Response thành công
-          const data = await response.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-
-          if (!text) {
-            throw new Error(`Empty response from Gemini (${modelName}).`);
-          }
-
-          // Đánh dấu key healthy sau khi thành công
-          _markKeyHealthy(apiKey);
-          console.info(`[NutriBot] Success with model=${modelName}, key=***${apiKey.slice(-6)}`);
-          return text;
-
-        } catch (err) {
-          clearTimeout(timeoutId);
-          lastError = err;
-
-          if (err.name === 'AbortError') {
-            console.warn(`[NutriBot] model=${modelName} timed out after ${TIMEOUT_MS / 1000}s.`);
-            _markKeyFailed(apiKey, 'timeout');
-            break; // Timeout = model chậm, thử model tiếp theo
-          }
-
-          // Lỗi nghiêm trọng không thể retry
-          if (attempt === 2) break;
-
-          // Chờ ngắn trước khi retry với key khác
-          await new Promise((r) => setTimeout(r, 1000 * attempt));
-          continue;
-        } finally {
-          clearTimeout(timeoutId);
         }
       }
-    }
 
-    // Tất cả model trong cascade đều thất bại
-    console.error('[NutriBot] All models in cascade exhausted. Last error:', lastError?.message);
+      // Tất cả model trong cascade đều thất bại
+      console.error('[NutriBot] All models in cascade exhausted. Last error:', lastError?.message);
 
-    // Phân biệt loại lỗi để trả message phù hợp cho user
-    const isRateLimit = lastError?.message?.includes('429');
-    if (isRateLimit) {
+      const isRateLimit = err.message?.includes('429');
+      if (isRateLimit) {
+        throw new AppError(
+          'NutriBot is busy due to high traffic. Please try again in a few seconds.',
+          429,
+          'RATE_LIMIT_EXCEEDED'
+        );
+      }
+
       throw new AppError(
-        'NutriBot đang bận do lưu lượng cao. Vui lòng thử lại sau vài giây.',
-        429,
-        'RATE_LIMIT_EXCEEDED'
+        'NutriBot is temporarily unavailable. Please try again later.',
+        502,
+        'GEMINI_API_ERROR'
       );
     }
-
-    throw new AppError(
-      'NutriBot tạm thời không khả dụng. Vui lòng thử lại sau.',
-      502,
-      'GEMINI_API_ERROR'
-    );
   }
 }
 
