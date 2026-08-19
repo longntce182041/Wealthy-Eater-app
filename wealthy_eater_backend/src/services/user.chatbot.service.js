@@ -37,7 +37,6 @@ const AppError = require('../utils/AppError');
 // Constants related to Gemini Cascade have been moved to gemini.service.js
 const MAX_CONTEXT_TURNS = 20;   // last 20 messages sent to Gemini (10 pairs)
 const MAX_MESSAGES_PER_MINUTE = 10; // soft rate-limit per user
-const MEAL_LOG_DAYS = 3;    // how many recent days of logs to include
 const WEIGHT_LOG_LIMIT = 7;    // last N weight logs to show trend
 
 // Centralized Gemini Service is now responsible for API Keys and Circuit Breaker

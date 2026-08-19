@@ -33,7 +33,6 @@ const GEMINI_MODELS = [
   'gemini-3.6-flash',
   'gemini-3.5-flash',
 ];
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
 // ── In-Memory Response Cache (demo stability + latency reduction) ────────────────
