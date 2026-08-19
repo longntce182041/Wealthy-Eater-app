@@ -16,11 +16,11 @@ function _getGeminiKey() {
 }
 
 // Models được xác minh tại ai.google.dev/gemini-api/docs/models (cập nhật 2026-08)
-const GEMINI_PRO_MODEL   = 'gemini-3.6-flash';    // Stable — thay thế gemini-pro-latest (đã tắt)
+const GEMINI_PRO_MODEL = 'gemini-3.6-flash';    // Stable — thay thế gemini-pro-latest (đã tắt)
 const GEMINI_FLASH_MODEL = 'gemini-3.5-flash';    // Stable — thay thế gemini-flash-latest (đã tắt)
-const GEMINI_BASE       = 'https://generativelanguage.googleapis.com/v1beta/models';
-const GEMINI_PRO_URL    = `${GEMINI_BASE}/${GEMINI_PRO_MODEL}:generateContent`;
-const GEMINI_FLASH_URL  = `${GEMINI_BASE}/${GEMINI_FLASH_MODEL}:generateContent`;
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GEMINI_PRO_URL = `${GEMINI_BASE}/${GEMINI_PRO_MODEL}:generateContent`;
+const GEMINI_FLASH_URL = `${GEMINI_BASE}/${GEMINI_FLASH_MODEL}:generateContent`;
 
 if (rawGeminiKeys.length === 0) {
   console.error('[GeminiService] CRITICAL: GOOGLE_API_KEY is not set. All Gemini calls will fail.');
@@ -327,11 +327,11 @@ TÌNH TRẠNG SỨC KHỎE CỦA KHÁCH HÀNG (bắt buộc tuân thủ):
       const nc = medicalCondition.nutrient_constraints;
       if (nc && typeof nc === 'object') {
         const constraintLines = [];
-        if (nc.max_sugar_g_per_day != null)   constraintLines.push(`- Giới hạn đường: tối đa ${nc.max_sugar_g_per_day}g/ngày`);
-        if (nc.min_fiber_g_per_day != null)   constraintLines.push(`- Chất xơ tối thiểu: ${nc.min_fiber_g_per_day}g/ngày`);
-        if (nc.carb_ratio_max != null)         constraintLines.push(`- Tỉ lệ calo từ carb: tối đa ${Math.round(nc.carb_ratio_max * 100)}%`);
-        if (nc.max_sodium_mg_per_day != null)  constraintLines.push(`- Natri: tối đa ${nc.max_sodium_mg_per_day}mg/ngày`);
-        if (nc.max_purine === true)            constraintLines.push(`- Hạn chế thực phẩm có hàm lượng purine cao`);
+        if (nc.max_sugar_g_per_day != null) constraintLines.push(`- Giới hạn đường: tối đa ${nc.max_sugar_g_per_day}g/ngày`);
+        if (nc.min_fiber_g_per_day != null) constraintLines.push(`- Chất xơ tối thiểu: ${nc.min_fiber_g_per_day}g/ngày`);
+        if (nc.carb_ratio_max != null) constraintLines.push(`- Tỉ lệ calo từ carb: tối đa ${Math.round(nc.carb_ratio_max * 100)}%`);
+        if (nc.max_sodium_mg_per_day != null) constraintLines.push(`- Natri: tối đa ${nc.max_sodium_mg_per_day}mg/ngày`);
+        if (nc.max_purine === true) constraintLines.push(`- Hạn chế thực phẩm có hàm lượng purine cao`);
 
         if (constraintLines.length > 0) {
           constraintSection = `
@@ -378,19 +378,19 @@ Trả lời CHỈ bằng JSON hợp lệ theo schema sau, KHÔNG có markdown co
         responseSchema: {
           type: 'OBJECT',
           properties: {
-            dish_name:             { type: 'STRING' },
-            description:           { type: 'STRING' },
-            difficulty:            { type: 'STRING' },
-            cooking_time_minutes:  { type: 'INTEGER' },
-            steps:                 { type: 'ARRAY', items: { type: 'STRING' } },
-            warning:               { type: 'STRING' },
+            dish_name: { type: 'STRING' },
+            description: { type: 'STRING' },
+            difficulty: { type: 'STRING' },
+            cooking_time_minutes: { type: 'INTEGER' },
+            steps: { type: 'ARRAY', items: { type: 'STRING' } },
+            warning: { type: 'STRING' },
           },
           required: ['dish_name', 'description', 'difficulty', 'cooking_time_minutes', 'steps'],
         },
       },
       safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
       ],

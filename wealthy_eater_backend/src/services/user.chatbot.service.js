@@ -17,12 +17,12 @@
  *  - SESSION_NOT_FOUND      — internal; resolved by auto-creating a new one
  */
 
-const ChatbotSession  = require('../models/ChatbotSession');
-const UserProfile     = require('../models/UserProfile');
-const UserDietary     = require('../models/UserDietary');
+const ChatbotSession = require('../models/ChatbotSession');
+const UserProfile = require('../models/UserProfile');
+const UserDietary = require('../models/UserDietary');
 const CustomerMealLog = require('../models/CustomerMealLog');
 const ConsultationContract = require('../models/ConsultationContract');
-const AppError        = require('../utils/AppError');
+const AppError = require('../utils/AppError');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -43,11 +43,11 @@ const GEMINI_MODEL_CASCADE = [
   'gemini-3.5-flash-lite',  // Tầng 3: Dự phòng — Stable, ultra-lightweight
 ];
 
-const GEMINI_BASE_URL    = 'https://generativelanguage.googleapis.com/v1beta/models';
-const MAX_CONTEXT_TURNS  = 20;   // last 20 messages sent to Gemini (10 pairs)
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const MAX_CONTEXT_TURNS = 20;   // last 20 messages sent to Gemini (10 pairs)
 const MAX_MESSAGES_PER_MINUTE = 10; // soft rate-limit per user
-const MEAL_LOG_DAYS      = 3;    // how many recent days of logs to include
-const MEAL_PLAN_DAYS     = 7;    // how many recent meal plan days to include
+const MEAL_LOG_DAYS = 3;    // how many recent days of logs to include
+const MEAL_PLAN_DAYS = 7;    // how many recent meal plan days to include
 
 // ── Smart Key Management with Circuit Breaker ─────────────────────────────────
 // Đọc nhiều key từ biến môi trường, phân tách bằng dấu phẩy.
@@ -57,9 +57,9 @@ const GEMINI_KEYS = rawKeys.split(',').map((k) => k.trim()).filter(Boolean);
 
 // Trạng thái sức khoẻ của từng key: { status, cooldownUntil, failCount }
 // status: 'healthy' | 'rate_limited' | 'circuit_open'
-const KEY_COOLDOWN_MS    = 60 * 1000;         // 60s sau khi bị 429
-const CIRCUIT_BREAK_MS   = 5 * 60 * 1000;    // 5 phút khi lỗi liên tiếp >= 3 lần
-const MAX_FAIL_COUNT     = 3;                 // số lần thất bại trước khi circuit open
+const KEY_COOLDOWN_MS = 60 * 1000;         // 60s sau khi bị 429
+const CIRCUIT_BREAK_MS = 5 * 60 * 1000;    // 5 phút khi lỗi liên tiếp >= 3 lần
+const MAX_FAIL_COUNT = 3;                 // số lần thất bại trước khi circuit open
 
 /**
  * Bảng trạng thái key trong bộ nhớ.
@@ -516,8 +516,8 @@ Always rely on the above data to personalize your answers. If there is not enoug
       contents,
       generationConfig: { temperature: 0.7, maxOutputTokens: 1024, topP: 0.9 },
       safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
         { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
       ],
@@ -545,7 +545,7 @@ Always rely on the above data to personalize your answers. If there is not enoug
         }
 
         const controller = new AbortController();
-        const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS);
+        const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
         try {
           console.info(`[NutriBot] Attempting model=${modelName}, key=***${apiKey.slice(-6)}, attempt=${attempt}`);
@@ -559,7 +559,7 @@ Always rely on the above data to personalize your answers. If there is not enoug
 
           if (!response.ok) {
             const errorText = await response.text();
-            const errorMsg  = `Gemini HTTP ${response.status} (${modelName}): ${errorText}`;
+            const errorMsg = `Gemini HTTP ${response.status} (${modelName}): ${errorText}`;
 
             if (response.status === 429) {
               _markKeyFailed(apiKey, 429);
