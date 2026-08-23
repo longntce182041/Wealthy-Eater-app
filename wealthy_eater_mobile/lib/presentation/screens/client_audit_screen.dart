@@ -615,7 +615,7 @@ class _ClientAuditScreenState extends State<ClientAuditScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        isEaten ? "Đã ăn" : "Chưa ăn",
+                        isEaten ? "Logged" : "Not Logged",
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
