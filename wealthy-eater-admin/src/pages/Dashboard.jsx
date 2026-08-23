@@ -184,9 +184,6 @@ export default function Dashboard() {
         />
       </section>
 
-      {/* COMPONENT CON UC56 - System Statistics */}
-      <SystemStatsSection />
-
       {/* Recipes Table Section */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">

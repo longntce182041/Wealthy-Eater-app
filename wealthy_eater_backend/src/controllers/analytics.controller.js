@@ -37,14 +37,17 @@ exports.evaluateExpertPerformance = async (req, res, next) => {
   try {
     const { startDate, endDate } = req.query;
 
-    // Mặc định lấy thống kê trong vòng 30 ngày
-    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const end = endDate ? new Date(endDate) : new Date();
-    
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
+    let start = null;
+    let end = null;
 
-    // Gọi tầng nghiệp vụ tính toán hiệu suất
+    if (startDate && endDate) {
+      start = new Date(startDate);
+      end = new Date(endDate);
+
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+    }
+
     const performanceData = await analyticsService.getExpertPerformanceData(start, end);
 
     return res.status(200).json({
@@ -52,9 +55,18 @@ exports.evaluateExpertPerformance = async (req, res, next) => {
       message: "Expert performance evaluation report generated successfully",
       data: performanceData
     });
+
   } catch (error) {
-    console.error("Error in evaluateExpertPerformance controller:", error);
-    return next(new AppError("Internal Server Error", 500, null, { error: error.message }));
+    console.error("❌ UC-58 CONTROLLER ERROR:", error);
+
+    return next(
+      new AppError(
+        "Internal Server Error",
+        500,
+        null,
+        { error: error.message }
+      )
+    );
   }
 };
 

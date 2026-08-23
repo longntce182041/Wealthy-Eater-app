@@ -1,6 +1,6 @@
-//UC58 - Expert Performance Evaluation Component for Admin Dashboard
+// UC58 - Expert Performance Evaluation Component for Admin Dashboard
 import { useState, useEffect, useCallback } from "react";
-import { Search, Star, Users, UserPlus, AlertTriangle, TrendingUp } from "lucide-react";
+import { Search, Star, Users, UserPlus, TrendingUp, DollarSign } from "lucide-react";
 import apiClient from "../services/api"; 
 import { toast } from "react-hot-toast";
 import { DataTable, DataTableRow, DataTableCell } from "./ui/DataTable";
@@ -19,7 +19,6 @@ export default function ExpertPerformanceSection({ startDate, endDate }) {
   const fetchExpertPerformance = useCallback(async () => {
     setLoading(true);
     try {
-      // 🎯 Gọi đúng tiền tố URL khớp với API phân hệ admin của bạn
       const res = await apiClient.get('/admin/analytics/expert-performance', {
         params: { startDate, endDate }
       });
@@ -40,8 +39,13 @@ export default function ExpertPerformanceSection({ startDate, endDate }) {
 
   const filteredExperts = experts.filter(expert => 
     expert.email?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+    expert.name?.toLowerCase().includes(searchKeyword.toLowerCase()) ||
     expert.expertId?.toLowerCase().includes(searchKeyword.toLowerCase())
   );
+
+  const formatVND = (value) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value || 0);
+  };
 
   const renderStars = (rating) => {
     const stars = [];
@@ -66,14 +70,14 @@ export default function ExpertPerformanceSection({ startDate, endDate }) {
     <div className="expert-kpi-container" style={{ marginTop: '40px' }}>
       <hr style={{ borderColor: 'var(--border)', marginBottom: '30px' }} />
       
-      <div className="analytics-header" style={{ marginBottom: '20px' }}>
+      <div className="analytics-header" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h3 style={{ color: 'var(--text-h)', margin: 0, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <TrendingUp style={{ color: 'var(--primary)', width: '20px', height: '20px' }} />
             Expert Performance Evaluation (KPI)
           </h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '4px 0 0 0' }}>
-            Monitor and evaluate nutritionist consultation effectiveness & customer diet adherence.
+            Monitor nutritionist active clients, rental acquisition, satisfaction ratings, and net revenue payouts.
           </p>
         </div>
 
@@ -81,7 +85,7 @@ export default function ExpertPerformanceSection({ startDate, endDate }) {
           <Search className="search-icon" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'var(--text-muted)' }} />
           <input
             type="text"
-            placeholder="Search expert by email..."
+            placeholder="Search expert by email or name..."
             value={searchKeyword}
             onChange={(e) => setSearchKeyword(e.target.value)}
             style={{
@@ -99,14 +103,14 @@ export default function ExpertPerformanceSection({ startDate, endDate }) {
       </div>
 
       <DataTable
-        headers={["Expert Account", "Active Clients", "New Rentals", "Satisfaction Rating", "Client Deviation Rate"]}
+        headers={["Expert Account", "Active Clients", "New Rentals", "Satisfaction Rating", "Total Payout"]}
         emptyState={
           <tr>
             <td colSpan="5" className="p-0">
               {loading ? (
                 <LoadingState text="Calculating expert performance KPI pipelines..." />
               ) : (
-                <EmptyState icon={Users} title="No expert data found" description="There are no active contracts or log metrics available for the selected period." />
+                <EmptyState icon={Users} title="No expert data found" description="There are no active contracts or metrics available for the selected period." />
               )}
             </td>
           </tr>
@@ -116,7 +120,7 @@ export default function ExpertPerformanceSection({ startDate, endDate }) {
           <DataTableRow key={expert.expertId}>
             <DataTableCell>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontWeight: '600', color: 'var(--text-h)' }}>{expert.email.split('@')[0]}</span>
+                <span style={{ fontWeight: '600', color: 'var(--text-h)' }}>{expert.name || expert.email.split('@')[0]}</span>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{expert.email}</span>
               </div>
             </DataTableCell>
@@ -142,25 +146,10 @@ export default function ExpertPerformanceSection({ startDate, endDate }) {
             </DataTableCell>
 
             <DataTableCell>
-              <div style={{ width: '100%', maxWidth: '160px' }}>
-                <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', fontSize: '0.75rem', marginBottom: '4px', width: '100%' }}>
-                  <span style={{ fontWeight: '600', color: expert.deviationRate > 25 ? '#ef4444' : '#10b981', marginRight: '8px' }}>
-                    {expert.deviationRate}%
-                  </span>
-                  {expert.deviationRate > 25 && (
-                    <AlertTriangle style={{ width: '14px', height: '14px', color: '#ef4444', display: 'inline' }} title="High deviation detected!" />
-                  )}
-                </div>
-                <div style={{ width: '100%', backgroundColor: 'var(--border)', height: '6px', borderRadius: '9999px', overflow: 'hidden' }}>
-                  <div 
-                    style={{ 
-                      height: '100%', 
-                      backgroundColor: expert.deviationRate > 25 ? '#ef4444' : '#10b981',
-                      width: `${Math.min(expert.deviationRate, 100)}%`,
-                      transition: 'width 0.5s ease-in-out'
-                    }}
-                  ></div>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontWeight: '700', color: '#059669', fontSize: '0.9rem' }}>
+                  {formatVND(expert.totalPayout)}
+                </span>
               </div>
             </DataTableCell>
           </DataTableRow>
