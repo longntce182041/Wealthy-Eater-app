@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://wealthy-eater-app.onrender.com',
+        target: 'https://wealthy-eater-app-be.onrender.com',
         changeOrigin: true,
         // 🔥 THÊM CẤU HÌNH NÀY: Cho phép truyền dữ liệu dung lượng lớn qua proxy của Vite không giới hạn
         configure: (proxy, _options) => {

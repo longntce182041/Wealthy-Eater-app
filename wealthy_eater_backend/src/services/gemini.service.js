@@ -10,20 +10,6 @@
 // Key management — designed for 1 paid Tier 1 key (or multiple keys if GOOGLE_API_KEYS is comma-separated).
 // Paid Tier 1 has very high RPM/TPM — 429 is rare. Cooldowns are kept short to avoid app downtime.
 const rawGeminiKeys = (process.env.GOOGLE_API_KEYS || process.env.GOOGLE_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean);
-let _geminiKeyIndex = 0;
-function _getGeminiKey() {
-  if (rawGeminiKeys.length === 0) return null;
-  const key = rawGeminiKeys[_geminiKeyIndex];
-  _geminiKeyIndex = (_geminiKeyIndex + 1) % rawGeminiKeys.length;
-  return key;
-}
-
-// Models được xác minh tại ai.google.dev/gemini-api/docs/models (cập nhật 2026-08)
-const GEMINI_PRO_MODEL = 'gemini-3.6-flash';    // Stable — thay thế gemini-pro-latest (đã tắt)
-const GEMINI_FLASH_MODEL = 'gemini-3.5-flash';    // Stable — thay thế gemini-flash-latest (đã tắt)
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const GEMINI_PRO_URL = `${GEMINI_BASE}/${GEMINI_PRO_MODEL}:generateContent`;
-const GEMINI_FLASH_URL = `${GEMINI_BASE}/${GEMINI_FLASH_MODEL}:generateContent`;
 
 if (rawGeminiKeys.length === 0) {
   console.error('[GeminiService] CRITICAL: GOOGLE_API_KEY is not set. All Gemini calls will fail.');
@@ -33,6 +19,7 @@ const GEMINI_MODELS = [
   'gemini-3.6-flash',
   'gemini-3.5-flash',
 ];
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
 // ── In-Memory Response Cache (demo stability + latency reduction) ────────────────
