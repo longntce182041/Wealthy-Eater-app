@@ -154,6 +154,7 @@ class DietAuditService {
       .populate({ path: "recipe_id", model: "Recipe" })
       .lean();
 
+      // Tính ngày trong kế hoạch dựa theo ngày bắt đầu của MealPlan
       let planDayNumber = 1;
       if (anyMealPlan.date) {
         const planStart = new Date(anyMealPlan.date);
@@ -163,22 +164,35 @@ class DietAuditService {
         planDayNumber = diffDays >= 0 ? (diffDays % 7) + 1 : 1;
       }
 
-      const dayItems = allPlanItems.filter((item) => {
+      // 1. Ưu tiên lọc theo số ngày trong chu kỳ kế hoạch (Plan Day 1 -> 7)
+      let dayItems = allPlanItems.filter((item) => {
         const itemDay = item.day_of_week != null ? item.day_of_week : item.dayOfWeek;
-        if (itemDay == null) return true;
-        if (typeof itemDay === "string") {
-          return itemDay.toLowerCase() === currentDayName.toLowerCase() || itemDay === `${isoDay}` || itemDay === `${planDayNumber}`;
-        }
-        return itemDay === isoDay || itemDay === planDayNumber || itemDay === startOfDay.getDay();
+        return itemDay === planDayNumber || itemDay === `${planDayNumber}`;
       });
 
-      targetPlanItems = dayItems.length > 0 ? dayItems : (allPlanItems.length <= 7 ? allPlanItems : allPlanItems.slice(0, 3));
+      // 2. Nếu không khớp theo Plan Day, thử lọc theo ISO weekday (1=Mon..7=Sun) hoặc Tên Thứ (Sunday..)
+      if (dayItems.length === 0) {
+        dayItems = allPlanItems.filter((item) => {
+          const itemDay = item.day_of_week != null ? item.day_of_week : item.dayOfWeek;
+          if (typeof itemDay === "string") {
+            return itemDay.toLowerCase() === currentDayName.toLowerCase();
+          }
+          return itemDay === isoDay || itemDay === startOfDay.getDay();
+        });
+      }
+
+      // 3. Nếu các items không có day_of_week, lấy 3 món đầu tiên đại diện cho 1 ngày
+      if (dayItems.length === 0 && allPlanItems.length > 0) {
+        dayItems = allPlanItems.slice(0, 3);
+      }
+
+      targetPlanItems = dayItems;
     }
 
     // 3. Móc nối dữ liệu Nhật ký ăn uống thực tế (Actual Log) trong ngày hôm đó
     const actualLogs = await CustomerMealLog.find({
       user_id: userId,
-      create_at: { $gte: startOfDay, $lte: endOfDay }
+      create_at: { $gte: startOfDay, $lte: endOfDay },
     })
     .populate({ path: "recipe_id", model: "Recipe" })
     .lean();
@@ -188,22 +202,32 @@ class DietAuditService {
 
     for (const item of targetPlanItems) {
       const targetNutr = await getItemTargetNutrition(item);
+      const rawMealType = item.meal_type || item.mealPeriod || "Meal";
+      const mealTypeFormatted = rawMealType.charAt(0).toUpperCase() + rawMealType.slice(1).toLowerCase();
 
       const matchedLogIndex = actualLogs.findIndex((log) => {
         if (log._matched) return false;
+        // 1. Khớp chính xác qua ID món trong kế hoạch
         if (log.meal_plan_item_id && log.meal_plan_item_id.toString() === item._id.toString()) {
           return true;
         }
+        // 2. Khớp qua Recipe ID nếu không phải AI_GENERATED
         const itemRecId = (item.recipe_id?._id || item.recipe_id || item.recipeId?._id || item.recipeId)?.toString();
         const logRecId = (log.recipe_id?._id || log.recipe_id)?.toString();
         if (itemRecId && logRecId && itemRecId !== "AI_GENERATED" && itemRecId === logRecId) {
           return true;
         }
+        // 3. Khớp qua Loại bữa ăn (Breakfast, Lunch, Dinner, Snack)
+        const logMealType = (log.meal_type || log.mealPeriod || '').toLowerCase();
+        if (logMealType && logMealType === rawMealType.toLowerCase()) {
+          return true;
+        }
+        // 4. Khớp qua tên món ăn (Custom name)
+        if (log.custom_name && targetNutr.recipeName && log.custom_name.toLowerCase() === targetNutr.recipeName.toLowerCase()) {
+          return true;
+        }
         return false;
       });
-
-      const rawMealType = item.meal_type || item.mealPeriod || "Meal";
-      const mealTypeFormatted = rawMealType.charAt(0).toUpperCase() + rawMealType.slice(1).toLowerCase();
 
       if (matchedLogIndex !== -1) {
         const matchedLog = actualLogs[matchedLogIndex];
