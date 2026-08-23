@@ -109,6 +109,7 @@ class NutritionistProvider extends ChangeNotifier {
     required int serviceFee,
     required String fullName,
     required String specialization,
+    String? about,
     File? certificateFile,
     String? certificateUrl,
   }) async {
@@ -123,6 +124,7 @@ class NutritionistProvider extends ChangeNotifier {
         serviceFee: serviceFee,
         fullName: fullName,
         specialization: specialization,
+        about: about,
         certificateFile: certificateFile,
         certificateUrl: certificateUrl,
       );

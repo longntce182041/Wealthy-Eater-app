@@ -22,6 +22,7 @@ class _EditNutritionistProfileScreenState
 
   final TextEditingController _fullNameCtrl = TextEditingController();
   final TextEditingController _specializationCtrl = TextEditingController();
+  final TextEditingController _aboutCtrl = TextEditingController();
   final TextEditingController _professionalTitleCtrl = TextEditingController();
   final TextEditingController _licenseNumberCtrl = TextEditingController();
   final TextEditingController _consultationFeeCtrl = TextEditingController();
@@ -36,6 +37,7 @@ class _EditNutritionistProfileScreenState
 
     _fullNameCtrl.text = profile['full_name']?.toString() ?? '';
     _specializationCtrl.text = profile['specialization']?.toString() ?? '';
+    _aboutCtrl.text = profile['about']?.toString() ?? '';
     _professionalTitleCtrl.text = profile['professional_title']?.toString() ?? '';
     _licenseNumberCtrl.text = profile['license_number']?.toString() ?? '';
 
@@ -52,6 +54,7 @@ class _EditNutritionistProfileScreenState
   void dispose() {
     _fullNameCtrl.dispose();
     _specializationCtrl.dispose();
+    _aboutCtrl.dispose();
     _professionalTitleCtrl.dispose();
     _licenseNumberCtrl.dispose();
     _consultationFeeCtrl.dispose();
@@ -79,6 +82,7 @@ class _EditNutritionistProfileScreenState
     final success = await provider.updateMyProfile(
       fullName: _fullNameCtrl.text.trim(),
       specialization: _specializationCtrl.text.trim(),
+      about: _aboutCtrl.text.trim(),
       professionalTitle: _professionalTitleCtrl.text.trim(),
       licenseNumber: _licenseNumberCtrl.text.trim(),
       serviceFee: parsedFee,
@@ -204,6 +208,25 @@ class _EditNutritionistProfileScreenState
                   if (val == null || val.trim().isEmpty) return 'Specialization is required';
                   return null;
                 },
+              ),
+              const SizedBox(height: 16),
+
+              // About / Bio field
+              TextFormField(
+                controller: _aboutCtrl,
+                maxLines: 4,
+                minLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'About / Bio',
+                  hintText: 'Share a brief introduction about your background, nutrition philosophy, and experience...',
+                  alignLabelWithHint: true,
+                  prefixIcon: Padding(
+                    padding: EdgeInsets.only(bottom: 48),
+                    child: Icon(Icons.info_outline),
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                ),
               ),
               const SizedBox(height: 16),
 

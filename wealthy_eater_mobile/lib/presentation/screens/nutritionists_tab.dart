@@ -347,9 +347,11 @@ class _NutritionistsTabState extends State<NutritionistsTab> {
                               ],
                             ),
                             const SizedBox(height: 14),
-                            // Default bio/description when none is provided
+                            // Bio/description from database
                             Text(
-                              'Certified professional ready to guide you towards a healthier lifestyle through custom meal plans and expert nutrition advice.',
+                              doc.about != null && doc.about!.trim().isNotEmpty
+                                  ? doc.about!.trim()
+                                  : 'Certified professional ready to guide you towards a healthier lifestyle through custom meal plans and expert nutrition advice.',
                               style: TextStyle(
                                 color: Colors.grey.shade600,
                                 fontSize: 12,

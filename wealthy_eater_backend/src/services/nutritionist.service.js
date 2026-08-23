@@ -160,6 +160,9 @@ class NutritionistService {
       certification_url: certificate.url,
       certificate_public_id: certificate.publicId,
       service_fee: payload.serviceFee,
+      full_name: payload.fullName || "",
+      specialization: payload.specialization || "",
+      about: payload.about || "",
       approval_status: "PENDING",
       average_rating: 5.0,
     });

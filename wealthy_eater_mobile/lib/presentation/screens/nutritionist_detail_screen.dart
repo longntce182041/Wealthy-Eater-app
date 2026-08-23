@@ -115,9 +115,11 @@ class NutritionistDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Certified professional ready to guide you towards a healthier lifestyle through custom meal plans and expert nutrition advice.',
+              nutritionist.about != null && nutritionist.about!.trim().isNotEmpty
+                  ? nutritionist.about!.trim()
+                  : 'Certified professional ready to guide you towards a healthier lifestyle through custom meal plans and expert nutrition advice.',
               style: TextStyle(
-                color: Colors.grey.shade600,
+                color: Colors.grey.shade700,
                 fontSize: 14,
                 height: 1.6,
               ),
