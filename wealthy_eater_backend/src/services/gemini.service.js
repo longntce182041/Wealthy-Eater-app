@@ -91,7 +91,7 @@ function _markKeyFailed(key, reason) {
   if (!keyStats[key]) return;
   const now = Date.now();
   keyStats[key].failCount += 1;
-  
+
   if (reason === 429) {
     // Paid Tier 1: 429 is transient — use short 10s cooldown instead of 60s
     // to avoid locking the only key for a long time.
@@ -148,7 +148,7 @@ class GeminiService {
 
         try {
           console.info(`[GeminiService] Model=${model}, Attempt=${attempt}/${maxRetriesPerModel}`);
-          
+
           const response = await fetch(`${apiUrl}?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -196,7 +196,7 @@ class GeminiService {
           if (err.name === 'AbortError') {
             // TIMEOUT: do NOT retry the same slow model — cascade immediately to next model.
             // Retrying a timed-out model wastes seconds; the next model is a better bet.
-            console.warn(`[GeminiService] Model=${model} timed out after ${timeoutMs/1000}s. Cascading to next model...`);
+            console.warn(`[GeminiService] Model=${model} timed out after ${timeoutMs / 1000}s. Cascading to next model...`);
             _markKeyFailed(apiKey, 'timeout');
             break; // ← KEY CHANGE: was `continue` (retry same model), now cascades immediately
           }
@@ -209,7 +209,7 @@ class GeminiService {
         }
       }
     }
-    
+
     throw lastError || new Error('All models in cascade failed.');
   }
 
@@ -399,12 +399,12 @@ Output ONLY the JSON array. No extra text, no markdown fences.`;
 
     try {
       const data = await this.executeWithResilience(GEMINI_MODELS, requestBody, { timeoutMs: 60000, maxRetriesPerModel: 2 });
-      
+
       const finishReason = data?.candidates?.[0]?.finishReason;
       if (finishReason && finishReason === 'MAX_TOKENS') {
-         throw new Error(`Gemini output truncated (MAX_TOKENS).`);
+        throw new Error(`Gemini output truncated (MAX_TOKENS).`);
       }
-      
+
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       const cleanJsonStr = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
       const parsed = JSON.parse(cleanJsonStr);
