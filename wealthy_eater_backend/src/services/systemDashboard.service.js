@@ -4,16 +4,20 @@ const Transaction = require('../models/Transaction');
  * UC-56: Thống kê chỉ số dòng tiền GMV thời gian thực cho System Dashboard
  */
 exports.getRealTimeSystemStats = async (start, end) => {
-  const stats = await Transaction.aggregate([
+  // Bỏ bớt bước $match lọc ngày, hoặc chỉ match nếu start/end được truyền lên cụ thể
+  const matchStage = (start && end) ? [
     {
-      // 🎯 SỬA TẠI ĐÂY: Dùng toán tử $or để quét sạch cả 2 cách đặt tên "createdAt" và "create_at"
       $match: {
         $or: [
           { createdAt: { $gte: start, $lte: end } },
           { create_at: { $gte: start, $lte: end } }
         ]
       }
-    },
+    }
+  ] : [];
+
+  const stats = await Transaction.aggregate([
+    ...matchStage, // Nếu không truyền start/end sẽ lấy ALL-TIME
     {
       $group: {
         _id: null,
@@ -23,7 +27,7 @@ exports.getRealTimeSystemStats = async (start, end) => {
             $cond: [{ $in: ["$status", ["PAID", "PENDING"]] }, "$amount_gross", 0]
           }
         },
-        // 2. Tính tổng doanh thu phí sàn phát sinh từ tất cả đơn để lên biểu đồ
+        // 2. Tính tổng doanh thu phí sàn
         platformRevenue: {
           $sum: {
             $cond: [{ $in: ["$status", ["PAID", "PENDING"]] }, "$platform_fee", 0]

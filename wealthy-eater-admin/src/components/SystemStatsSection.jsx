@@ -15,16 +15,10 @@ export default function SystemStatsSection() {
     invoiceSuccessRate: 0
   });
 
-  // Mặc định thống kê 30 ngày gần nhất quy đổi chuỗi ngày thuần túy YYYY-MM-DD
-  const [startDate] = useState(() => 
-    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  );
-  const [endDate] = useState(() => new Date().toISOString().split('T')[0]);
-
   const fetchSystemStatistics = useCallback(async () => {
     setLoading(true);
     try {
-      // Gọi API không truyền param động để Backend tự lấy khoảng dữ liệu mẫu tháng 06/2026 chuẩn như Postman
+      // Gọi API trực tiếp không kèm query param để lấy tổng All-Time
       const res = await apiClient.get('/admin/system-dashboard/system-statistics');
       if (res.data?.success) {
         setStats(res.data.data);

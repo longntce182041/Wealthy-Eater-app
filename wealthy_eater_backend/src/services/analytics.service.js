@@ -3,6 +3,7 @@ const AuditLog = require('../models/AuditLog');
 const CustomerMealLog = require('../models/CustomerMealLog');
 const ConsultationContract = require('../models/ConsultationContract');
 const Transaction = require('../models/Transaction');
+const Nutritionist = require('../models/Nutritionist');
 
 /**
  * Hàm xử lý gom cụm dữ liệu phân tích tăng trưởng khách hàng (UC-57)
@@ -101,71 +102,108 @@ exports.getCustomerGrowthData = async (start, end) => {
 };
 
 // UC-58: Evaluate Expert Performance
-  exports.getExpertPerformanceData = async (start, end) => {
-  // Bước 1: Lấy danh sách tất cả chuyên gia dinh dưỡng trong hệ thống
-  const nutritionists = await User.find({ role: 'nutritionist' }, '_id email').lean();
+exports.getExpertPerformanceData = async (start, end) => {
+  // 1. LẤY USER NUTRITIONIST
+  const nutritionists = await User.find(
+    { role: "nutritionist" },
+    "_id email fullName name"
+  ).lean();
+
+  // 2. LẤY NUTRITIONIST PROFILE
+  const profiles = await Nutritionist.find({}).lean();
+
+  // 3. LẤY CONSULTATION CONTRACT
+  const contracts = await ConsultationContract.find({}).lean();
+
+  // 4. LẤY TRANSACTIONS
+  const transactions = await Transaction.find({}).lean();
 
   const performanceReport = [];
 
+  // 5. XỬ LÝ TỪNG NUTRITIONIST
   for (const expert of nutritionists) {
-    // 1. Tính số khách đang phụ trách hiện tại (status là active)
-    const activeCustomersCount = await ConsultationContract.countDocuments({
-      nutritionist_id: expert._id,
-      status: 'active'
-    });
+    const userIdStr = expert._id.toString();
 
-    // 2. Tính số lượt thuê mới trong khoảng thời gian lọc (đựa vào create_at)
-    const newRentalsCount = await ConsultationContract.countDocuments({
-      nutritionist_id: expert._id,
-      create_at: { $gte: start, $lte: end }
-    });
+    // TÌM PROFILE
+    const profile = profiles.find(
+      p => p.user_id?.toString() === userIdStr
+    );
 
-    // 3. Lấy danh sách ID của tất cả khách hàng đã/đang liên kết với chuyên gia này
-    const linkedContracts = await ConsultationContract.find({ nutritionist_id: expert._id }, 'user_id').lean();
-    const customerIds = [...new Set(linkedContracts.map(c => c.user_id))];
+    const profileIdStr = profile ? profile._id.toString() : null;
 
-    // 4. Tính toán Tỷ lệ khách ăn lệch chuẩn (Deviation Rate) từ bảng CustomerMealLog
-    let deviationRate = 0;
-    if (customerIds.length > 0) {
-      const mealLogStats = await CustomerMealLog.aggregate([
-        {
-          $match: {
-            user_id: { $in: customerIds },
-            create_at: { $gte: start, $lte: end }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalLogs: { $sum: 1 },
-            deviationLogs: {
-              $sum: { $cond: { if: { $eq: ["$deviation_flag", true] }, then: 1, else: 0 } }
-            }
-          }
-        }
-      ]);
-
-      if (mealLogStats.length > 0 && mealLogStats[0].totalLogs > 0) {
-        deviationRate = (mealLogStats[0].deviationLogs / mealLogStats[0].totalLogs) * 100;
-      }
+    // CÁC ID CÓ THỂ ĐƯỢC DÙNG TRONG CONTRACT
+    const validExpertIds = [userIdStr];
+    if (profileIdStr) {
+      validExpertIds.push(profileIdStr);
     }
 
-    // 5. Tính điểm Rating trung bình giả lập 
-    // (Logic: Tạm thời lấy ngẫu nhiên từ 4.2 -> 5.0 để UI hiển thị đẹp mắt, thay thế bằng db thật khi bổ sung bảng Review)
-    const mockRating = (4 + Math.random() * 1).toFixed(1);
+    // MATCH CONTRACT
+    const matchedContracts = contracts.filter(c => {
+      if (!c.nutritionist_id) return false;
+      return validExpertIds.includes(c.nutritionist_id.toString());
+    });
 
+    // ACTIVE CLIENTS
+    const activeContracts = matchedContracts.filter(c => {
+      const status = c.status?.toString().toLowerCase().trim();
+      return status === "active";
+    });
+    const activeCustomersCount = activeContracts.length;
+
+    // NEW RENTALS
+    const newRentalContracts = matchedContracts.filter(c => {
+      const contractDate = new Date(c.create_at || c.createdAt);
+      if (!start || !end) return true;
+      return contractDate >= start && contractDate <= end;
+    });
+    const newRentalsCount = newRentalContracts.length;
+
+    // TRANSACTION / PAYOUT
+    const contractIds = matchedContracts.map(c => c._id.toString());
+    let totalPayout = 0;
+
+    if (contractIds.length > 0) {
+      const matchCondition = {
+        consultation_contracts_id_fk: { $in: contractIds },
+        status: "PAID"
+      };
+
+      if (start && end) {
+        matchCondition.createdAt = {
+          $gte: start,
+          $lte: end
+        };
+      }
+
+      const matchedTransactions = await Transaction.find(matchCondition).lean();
+
+      totalPayout = matchedTransactions.reduce(
+        (sum, tx) => sum + Number(tx.expert_payout || 0),
+        0
+      );
+    }
+
+    // RATING
+    const rating = profile?.average_rating ?? 0;
+
+    // RESULT
     performanceReport.push({
-      expertId: expert._id,
+      expertId: userIdStr,
       email: expert.email,
+      name:
+        profile?.full_name ||
+        expert.fullName ||
+        expert.name ||
+        expert.email,
       activeCustomers: activeCustomersCount,
       newRentals: newRentalsCount,
-      averageRating: parseFloat(mockRating),
-      deviationRate: parseFloat(deviationRate.toFixed(2)) // Làm tròn 2 chữ số thập phân
+      totalPayout: totalPayout,
+      averageRating: Number(rating)
     });
   }
 
   return performanceReport;
-  };
+};
 
   // UC-59: Audit Financial Trends
   exports.getAdminFinancialTrendsData = async (start, end) => {

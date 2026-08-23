@@ -5,9 +5,9 @@ exports.getSystemStatistics = async (req, res, next) => {
   try {
     const { startDate, endDate } = req.query;
 
-    // 🎯 CHUẨN HÓA: Ép cứng chuỗi ISO Z để Node.js/MongoDB không tự ý trừ hoặc cộng lệch múi giờ local hệ điều hành
-    const start = startDate ? new Date(`${startDate}T00:00:00.000Z`) : new Date("2026-06-01T00:00:00.000Z");
-    const end = endDate ? new Date(`${endDate}T23:59:59.999Z`) : new Date("2026-06-30T23:59:59.999Z");
+    // Nếu không truyền query param thì gán null để lấy All-Time (toàn bộ dữ liệu)
+    const start = startDate ? new Date(`${startDate}T00:00:00.000Z`) : null;
+    const end = endDate ? new Date(`${endDate}T23:59:59.999Z`) : null;
 
     const systemStats = await systemDashboardService.getRealTimeSystemStats(start, end);
 
