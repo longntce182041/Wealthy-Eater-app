@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../core/error/app_error.dart';
 import '../../core/network/api_client.dart';
@@ -87,13 +88,29 @@ class NutritionistService {
     required String specialization,
     String? about,
     File? certificateFile,
+    Uint8List? certificateBytes,
+    String? certificateFileName,
     String? certificateUrl,
   }) async {
     try {
       dynamic data;
       Map<String, dynamic>? headers;
 
-      if (certificateFile != null) {
+      if (certificateBytes != null && certificateFileName != null) {
+        data = FormData.fromMap({
+          'professionalTitle': professionalTitle,
+          'licenseNumber': licenseNumber,
+          'serviceFee': serviceFee,
+          'fullName': fullName,
+          'specialization': specialization,
+          'about': ?about,
+          'certificateFile': MultipartFile.fromBytes(
+            certificateBytes,
+            filename: certificateFileName,
+          ),
+        });
+        headers = {'Content-Type': 'multipart/form-data'};
+      } else if (certificateFile != null) {
         data = FormData.fromMap({
           'professionalTitle': professionalTitle,
           'licenseNumber': licenseNumber,

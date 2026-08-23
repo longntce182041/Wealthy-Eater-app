@@ -202,16 +202,82 @@ class _NutritionistProfileTabState extends State<NutritionistProfileTab> {
   }
 
   Future<void> _viewCertificate(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+    if (url.trim().isEmpty) return;
+    String sanitized = url.trim();
+    if (!sanitized.startsWith('http://') && !sanitized.startsWith('https://')) {
+      sanitized = 'https://$sanitized';
+    }
+    final uri = Uri.parse(sanitized);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open certificate URL')),
+          );
+        }
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open certificate URL')),
+          SnackBar(content: Text('Error opening certificate: $e')),
         );
       }
     }
+  }
+
+  void _showCertificateImageDialog(String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              padding: const EdgeInsets.all(8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: InteractiveViewer(
+                  maxScale: 4.0,
+                  minScale: 0.8,
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (ctx, child, progress) {
+                      if (progress == null) return child;
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(48.0),
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
+                      );
+                    },
+                    errorBuilder: (ctx, err, stack) => const Padding(
+                      padding: EdgeInsets.all(32.0),
+                      child: Text(
+                        'Unable to render certificate image.',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(dialogCtx),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -506,7 +572,7 @@ class _NutritionistProfileTabState extends State<NutritionistProfileTab> {
                 ),
                 const SizedBox(height: 16),
 
-                // ── Certification URL ──
+                // ── Certification URL & Preview ──
                 _buildSectionCard(
                   title: 'Certification Verification',
                   icon: Icons.verified_outlined,
@@ -519,6 +585,77 @@ class _NutritionistProfileTabState extends State<NutritionistProfileTab> {
                     ),
                     const SizedBox(height: 12),
                     if (certificationUrl.isNotEmpty) ...[
+                      // If it is an image or Cloudinary asset, show visual thumbnail preview
+                      if (certificationUrl.toLowerCase().endsWith('.jpg') ||
+                          certificationUrl.toLowerCase().endsWith('.jpeg') ||
+                          certificationUrl.toLowerCase().endsWith('.png') ||
+                          certificationUrl.toLowerCase().endsWith('.webp') ||
+                          certificationUrl.contains('cloudinary.com') ||
+                          certificationUrl.contains('/image/')) ...[
+                        GestureDetector(
+                          onTap: () => _showCertificateImageDialog(certificationUrl),
+                          child: Container(
+                            width: double.infinity,
+                            height: 180,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(
+                                    certificationUrl,
+                                    fit: BoxFit.cover,
+                                    loadingBuilder: (ctx, child, progress) {
+                                      if (progress == null) return child;
+                                      return const Center(
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      );
+                                    },
+                                    errorBuilder: (ctx, err, stack) => Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.description_outlined, size: 36, color: primaryColor),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            'Certificate Document Attached',
+                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 8,
+                                    right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.7),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.zoom_in, color: Colors.white, size: 14),
+                                          SizedBox(width: 4),
+                                          Text('Tap to zoom', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
@@ -540,7 +677,7 @@ class _NutritionistProfileTabState extends State<NutritionistProfileTab> {
                             TextButton.icon(
                               onPressed: () => _viewCertificate(certificationUrl),
                               icon: const Icon(Icons.open_in_new, size: 14),
-                              label: const Text('View', style: TextStyle(fontSize: 12)),
+                              label: const Text('Open URL', style: TextStyle(fontSize: 12)),
                             ),
                           ],
                         ),
