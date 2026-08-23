@@ -149,13 +149,9 @@ class DietAuditService {
 
     if (anyMealPlan) {
       const allPlanItems = await MealPlanItem.find({
-        $or: [
-          { meal_plan_id: anyMealPlan._id },
-          { planId: anyMealPlan._id }
-        ]
+        meal_plan_id: anyMealPlan._id,
       })
       .populate({ path: "recipe_id", model: "Recipe" })
-      .populate({ path: "recipeId", model: "Recipe" })
       .lean();
 
       let planDayNumber = 1;
