@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/env_config.dart';
 import 'session_expired_notifier.dart';
@@ -214,31 +215,44 @@ class _FallbackInterceptor extends Interceptor {
   @override
   Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
     final options = err.requestOptions;
-    final isDeployedUrl = options.baseUrl.contains('onrender.com');
+    final isDeployedUrl = options.baseUrl.contains('onrender.com') ||
+        options.uri.toString().contains('onrender.com');
+
+    final statusCode = err.response?.statusCode;
+    final isServerError = statusCode != null && statusCode >= 500;
 
     final isNetworkOrServerError = err.type == DioExceptionType.connectionTimeout ||
         err.type == DioExceptionType.sendTimeout ||
         err.type == DioExceptionType.receiveTimeout ||
         err.type == DioExceptionType.connectionError ||
         err.type == DioExceptionType.unknown ||
-        (err.response != null && err.response!.statusCode! >= 500);
+        isServerError;
 
     if (isDeployedUrl && isNetworkOrServerError && _localBaseUrl.isNotEmpty) {
+      debugPrint('[ApiClient] Deployed backend error (${err.type} | HTTP $statusCode). Falling back to local backend: $_localBaseUrl${options.path}');
       try {
+        dynamic requestData = options.data;
+        if (requestData is FormData) {
+          requestData = requestData.clone();
+        }
+
         final fallbackOptions = options.copyWith(
           baseUrl: _localBaseUrl,
+          data: requestData,
         );
 
         final localDio = Dio(BaseOptions(
           baseUrl: _localBaseUrl,
           connectTimeout: const Duration(seconds: 5),
           receiveTimeout: Duration(milliseconds: EnvConfig.receiveTimeout),
-          headers: options.headers,
+          headers: Map<String, dynamic>.from(options.headers),
         ));
 
         final response = await localDio.fetch(fallbackOptions);
+        debugPrint('[ApiClient] Local backend fallback succeeded: ${response.statusCode}');
         return handler.resolve(response);
-      } catch (_) {
+      } catch (fallbackError) {
+        debugPrint('[ApiClient] Local backend fallback also failed: $fallbackError');
         // Fallback failed as well, proceed with original error
       }
     }

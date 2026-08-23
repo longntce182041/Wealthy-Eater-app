@@ -5,9 +5,9 @@ import 'package:flutter/foundation.dart';
 enum Environment { dev, staging, prod }
 
 class EnvConfig {
-  static Environment environment = Environment.dev;
+  static Environment environment = Environment.prod;
 
-  static const String deployedBaseUrl = 'http://10.0.2.2:5000';
+  static const String deployedBaseUrl = 'https://wealthy-eater-app-be.onrender.com';
 
   static String get localBaseUrl {
     if (kIsWeb) return 'http://localhost:5000';
