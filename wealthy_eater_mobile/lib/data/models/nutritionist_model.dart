@@ -5,6 +5,7 @@ class NutritionistModel {
   final int serviceFee;
   final double averageRating;
   final String? certificationUrl;
+  final String? about;
 
   NutritionistModel({
     required this.id,
@@ -13,6 +14,7 @@ class NutritionistModel {
     required this.serviceFee,
     required this.averageRating,
     this.certificationUrl,
+    this.about,
   });
 
   factory NutritionistModel.fromJson(Map<String, dynamic> json) {
@@ -23,6 +25,7 @@ class NutritionistModel {
       serviceFee: json['service_fee'] ?? 0,
       averageRating: (json['average_rating'] ?? 0).toDouble(),
       certificationUrl: json['certification_url'],
+      about: json['about']?.toString(),
     );
   }
 

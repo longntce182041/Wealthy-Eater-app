@@ -649,28 +649,80 @@ class UserConsultationService {
   // ─────────────────────────────────────────────────────────────────────────────
 
   /**
-   * Return a single transaction detail for the user
+   * Return a single transaction detail for the user (supports both client and nutritionist)
    */
   async getTransactionDetail(userId, transactionId) {
-    const transaction = await Transaction.findOne({
-      _id: transactionId,
-      user_id: userId,
-    })
+    let transaction = await Transaction.findById(transactionId)
       .populate({
         path: "consultation_contracts_id_fk",
-        select: "nutritionist_id status create_at",
+        select: "user_id nutritionist_id status create_at package_type expire_at",
         populate: {
           path: "nutritionist_id",
           model: "Nutritionist",
           select:
-            "full_name specialization service_fee certification_url average_rating",
+            "user_id full_name specialization service_fee certification_url average_rating",
         },
       })
       .lean();
 
+    // Fallback: If not found by Transaction ID, check if a Contract ID was passed
+    if (!transaction) {
+      transaction = await Transaction.findOne({
+        consultation_contracts_id_fk: transactionId,
+      })
+        .populate({
+          path: "consultation_contracts_id_fk",
+          select: "user_id nutritionist_id status create_at package_type expire_at",
+          populate: {
+            path: "nutritionist_id",
+            model: "Nutritionist",
+            select:
+              "user_id full_name specialization service_fee certification_url average_rating",
+          },
+        })
+        .lean();
+    }
+
     if (!transaction) {
       throw new AppError("Transaction not found.", 404);
     }
+
+    // Authorization check: User can view if they are:
+    // 1. The client who created the transaction
+    // 2. The nutritionist assigned to the consultation contract
+    // 3. An admin
+    const contract = transaction.consultation_contracts_id_fk;
+    const isCustomer =
+      transaction.user_id?.toString() === userId?.toString() ||
+      contract?.user_id?.toString() === userId?.toString();
+
+    let isNutritionist = false;
+    if (contract?.nutritionist_id) {
+      const nutrObj = contract.nutritionist_id;
+      if (
+        nutrObj.user_id?.toString() === userId?.toString() ||
+        nutrObj._id?.toString() === userId?.toString()
+      ) {
+        isNutritionist = true;
+      } else {
+        const nutritionistDoc = await Nutritionist.findOne({ user_id: userId }).lean();
+        if (
+          nutritionistDoc &&
+          (nutrObj._id?.toString() === nutritionistDoc._id?.toString() ||
+            nutrObj.toString() === nutritionistDoc._id?.toString())
+        ) {
+          isNutritionist = true;
+        }
+      }
+    }
+
+    if (!isCustomer && !isNutritionist) {
+      const user = await User.findById(userId).lean();
+      if (user && user.role !== "admin") {
+        throw new AppError("You do not have permission to view this transaction.", 403);
+      }
+    }
+
     return transaction;
   }
 

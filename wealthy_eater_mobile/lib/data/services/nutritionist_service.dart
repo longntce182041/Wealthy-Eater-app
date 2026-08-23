@@ -85,6 +85,7 @@ class NutritionistService {
     required int serviceFee,
     required String fullName,
     required String specialization,
+    String? about,
     File? certificateFile,
     String? certificateUrl,
   }) async {
@@ -99,6 +100,7 @@ class NutritionistService {
           'serviceFee': serviceFee,
           'fullName': fullName,
           'specialization': specialization,
+          'about': ?about,
           'certificateFile': await MultipartFile.fromFile(
             certificateFile.path,
             filename: certificateFile.path.split('/').last,
@@ -112,6 +114,7 @@ class NutritionistService {
           'serviceFee': serviceFee,
           'fullName': fullName,
           'specialization': specialization,
+          'about': ?about,
           if (certificateUrl != null && certificateUrl.isNotEmpty)
             'certificateUrl': certificateUrl,
         };

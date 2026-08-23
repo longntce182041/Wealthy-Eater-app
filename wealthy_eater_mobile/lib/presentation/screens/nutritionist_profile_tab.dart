@@ -287,6 +287,7 @@ class _NutritionistProfileTabState extends State<NutritionistProfileTab> {
         final fullName = profile['full_name']?.toString() ?? 'New Expert';
         final professionalTitle = profile['professional_title']?.toString() ?? 'Nutritionist';
         final specialization = profile['specialization']?.toString() ?? 'General Dietetics';
+        final about = profile['about']?.toString() ?? '';
         final serviceFee = (profile['service_fee'] as num?)?.toInt() ?? 0;
         final licenseNumber = profile['license_number']?.toString() ?? 'VN-PENDING';
         final approvalStatus = profile['approval_status']?.toString() ?? 'PENDING';
@@ -466,6 +467,27 @@ class _NutritionistProfileTabState extends State<NutritionistProfileTab> {
                   ],
                 ),
                 const SizedBox(height: 16),
+
+                // ── About / Biography ──
+                if (about.trim().isNotEmpty) ...[
+                  _buildSectionCard(
+                    title: 'About / Biography',
+                    icon: Icons.person_pin_outlined,
+                    primaryColor: primaryColor,
+                    children: [
+                      const SizedBox(height: 4),
+                      Text(
+                        about.trim(),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 // ── Professional Qualifications ──
                 _buildSectionCard(
