@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -28,6 +29,8 @@ class _EditNutritionistProfileScreenState
   final TextEditingController _consultationFeeCtrl = TextEditingController();
 
   File? _certificateFile;
+  Uint8List? _certificateBytes;
+  String? _certificateFileName;
   String? _certificateUrl;
 
   @override
@@ -87,6 +90,8 @@ class _EditNutritionistProfileScreenState
       licenseNumber: _licenseNumberCtrl.text.trim(),
       serviceFee: parsedFee,
       certificateFile: _certificateFile,
+      certificateBytes: _certificateBytes,
+      certificateFileName: _certificateFileName,
       certificateUrl: _certificateUrl,
     );
 
@@ -293,13 +298,26 @@ class _EditNutritionistProfileScreenState
                 onFileSelected: (file) {
                   setState(() {
                     _certificateFile = file;
-                    _certificateUrl = null;
+                    if (file != null) {
+                      _certificateUrl = null;
+                    }
+                  });
+                },
+                onBytesSelected: (bytes, name) {
+                  setState(() {
+                    _certificateBytes = bytes;
+                    _certificateFileName = name;
+                    if (bytes != null) {
+                      _certificateUrl = null;
+                    }
                   });
                 },
                 onUrlSelected: (url) {
                   setState(() {
                     _certificateUrl = url;
                     _certificateFile = null;
+                    _certificateBytes = null;
+                    _certificateFileName = null;
                   });
                 },
               ),

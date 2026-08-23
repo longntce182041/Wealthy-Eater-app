@@ -111,6 +111,8 @@ class NutritionistProvider extends ChangeNotifier {
     required String specialization,
     String? about,
     File? certificateFile,
+    Uint8List? certificateBytes,
+    String? certificateFileName,
     String? certificateUrl,
   }) async {
     _isLoadingProfile = true;
@@ -126,6 +128,8 @@ class NutritionistProvider extends ChangeNotifier {
         specialization: specialization,
         about: about,
         certificateFile: certificateFile,
+        certificateBytes: certificateBytes,
+        certificateFileName: certificateFileName,
         certificateUrl: certificateUrl,
       );
       _myProfile = updated;

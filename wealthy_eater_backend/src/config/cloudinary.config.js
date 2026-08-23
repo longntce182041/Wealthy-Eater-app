@@ -137,48 +137,51 @@ const extractCloudinaryPublicId = (url) => {
 };
 
 function uploadNutritionistCertificate(file, certificateUrl) {
+  // 1. If a file was uploaded, always process and upload to Cloudinary
+  if (file?.buffer) {
+    if (!cloudName || !apiKey || !apiSecret) {
+      throw new AppError("Cloudinary configuration is missing", 500);
+    }
+
+    const resourceType = file.mimetype === "application/pdf" ? "raw" : "image";
+
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "WealthyEater/nutritionists/certificates",
+          resource_type: resourceType,
+        },
+        (error, result) => {
+          if (error || !result) {
+            console.error("Cloudinary certificate upload error:", error);
+            return reject(new AppError("Failed to upload certificate file", 502));
+          }
+
+          return resolve({
+            url: result.secure_url,
+            publicId: result.public_id,
+            uploadMethod: "file",
+          });
+        },
+      );
+
+      Readable.from(file.buffer).pipe(uploadStream);
+    });
+  }
+
+  // 2. If no file, use provided certificateUrl
   if (certificateUrl) {
     if (typeof certificateUrl !== "string" || !certificateUrl.trim()) {
       throw new AppError("Invalid certificate URL", 400);
     }
     return Promise.resolve({
-      url: certificateUrl,
-      publicId: null,
+      url: certificateUrl.trim(),
+      publicId: extractCloudinaryPublicId(certificateUrl),
       uploadMethod: "url",
     });
   }
 
-  if (!cloudName || !apiKey || !apiSecret) {
-    throw new AppError("Cloudinary configuration is missing", 500);
-  }
-
-  if (!file?.buffer) {
-    throw new AppError("Certificate file or URL is required", 400);
-  }
-
-  const resourceType = file.mimetype === "application/pdf" ? "raw" : "image";
-
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: "WealthyEater/nutritionists/certificates",
-        resource_type: resourceType,
-      },
-      (error, result) => {
-        if (error || !result) {
-          return reject(new AppError("Failed to upload certificate file", 502));
-        }
-
-        return resolve({
-          url: result.secure_url,
-          publicId: result.public_id,
-          uploadMethod: "file",
-        });
-      },
-    );
-
-    Readable.from(file.buffer).pipe(uploadStream);
-  });
+  throw new AppError("Certificate file or URL is required", 400);
 }
 
 // 🟢 3. EXPORT CÁC BIẾN ĐÃ ĐƯỢC KHAI BÁO
